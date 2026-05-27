@@ -748,7 +748,7 @@ export const xpToNextLevel = (total: number) => POINTS_PER_LEVEL - xpInLevel(tot
 export function emptyStudentData(): StudentData {
   return {
     chart: { days: [], status: "draft" },
-    progress: { currentDay: 1, completed: [] },
+    progress: { currentDay: 1 },
     overrides: [],
     attempts: [],
     mainsScores: [],
@@ -791,29 +791,40 @@ export const SEED_USERS: User[] = [
   },
 ];
 
-const fullChart = (topicIds: string[]): DaySlot[] => topicIds.map((id) => {
-  const t = findTopic(id);
-  return { subjectId: t!.subject.id, topicId: id };
-});
+/** Build a chart where a given day index has multiple topics. */
+const multiChart = (rows: string[][]): DaySlot[][] => rows.map((ids) =>
+  ids.map((id) => {
+    const t = findTopic(id);
+    return { subjectId: t!.subject.id, topicId: id };
+  })
+);
 
 export function seedStudentData(): Record<string, StudentData> {
   // Aamir: chart approved, day 4 in progress, mixed accuracy across concepts.
-  const aamirChart = fullChart([
-    "mauryan-raj", "pratiharas", "chauhans", "mewar", "1857-raj",
-    "preamble", "fund-rights", "dpsp",
+  // Day 2 is a multi-topic day to demo the new feature.
+  const aamirChart = multiChart([
+    ["mauryan-raj"],
+    ["pratiharas", "chauhans"], // multi-topic day
+    ["mewar"],
+    ["1857-raj"],
+    ["preamble"],
+    ["fund-rights"],
+    ["dpsp"],
+    ["phys-div"],
   ]);
   const aamir: StudentData = {
     chart: { days: aamirChart, status: "approved", submittedAt: ms(12), decidedAt: ms(11) },
-    progress: { currentDay: 4, completed: [1, 2, 3] },
+    progress: { currentDay: 4 },
     overrides: [],
     attempts: [
-      { day: 1, score: 87, when: ms(10), byConcept: { "guerrilla-strategy": { right: 2, wrong: 0 }, "tribal-alliance": { right: 1, wrong: 1 }, "haldighati-facts": { right: 2, wrong: 0 } } },
-      { day: 2, score: 73, when: ms(7),  byConcept: { "mughal-expansion": { right: 1, wrong: 2 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 0, wrong: 2 } } },
-      { day: 2, score: 91, when: ms(7),  byConcept: { "mughal-expansion": { right: 2, wrong: 1 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 2, wrong: 0 } } },
-      { day: 3, score: 84, when: ms(4),  byConcept: { "chittor-sieges": { right: 2, wrong: 0 }, "fortification": { right: 1, wrong: 1 }, "pratap-allies": { right: 2, wrong: 0 } } },
-      { day: 4, score: 68, when: ms(1),  byConcept: { "subsidiary-alliance": { right: 1, wrong: 2 }, "symbolic-resistance": { right: 0, wrong: 2 }, "dewair": { right: 2, wrong: 0 } } },
+      { day: 1, topicId: "mauryan-raj", score: 87, when: ms(10), byConcept: { "guerrilla-strategy": { right: 2, wrong: 0 }, "tribal-alliance": { right: 1, wrong: 1 }, "haldighati-facts": { right: 2, wrong: 0 } } },
+      { day: 2, topicId: "pratiharas",  score: 73, when: ms(7),  byConcept: { "mughal-expansion": { right: 1, wrong: 2 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 0, wrong: 2 } } },
+      { day: 2, topicId: "pratiharas",  score: 91, when: ms(7),  byConcept: { "mughal-expansion": { right: 2, wrong: 1 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 2, wrong: 0 } } },
+      { day: 2, topicId: "chauhans",    score: 84, when: ms(6),  byConcept: { "chittor-sieges": { right: 2, wrong: 0 }, "fortification": { right: 1, wrong: 1 }, "pratap-allies": { right: 2, wrong: 0 } } },
+      { day: 3, topicId: "mewar",       score: 84, when: ms(4),  byConcept: { "chittor-sieges": { right: 2, wrong: 0 }, "fortification": { right: 1, wrong: 1 }, "pratap-allies": { right: 2, wrong: 0 } } },
+      { day: 4, topicId: "1857-raj",    score: 68, when: ms(1),  byConcept: { "subsidiary-alliance": { right: 1, wrong: 2 }, "symbolic-resistance": { right: 0, wrong: 2 }, "dewair": { right: 2, wrong: 0 } } },
     ],
-    mainsScores: [{ day: 3, score: 71, when: ms(4) }],
+    mainsScores: [{ day: 3, topicId: "mewar", score: 71, when: ms(4) }],
     points: {
       total: 380,
       history: [
@@ -833,14 +844,18 @@ export function seedStudentData(): Record<string, StudentData> {
     lastActivityAt: ms(1),
   };
 
-  // Neha: just submitted chart, waiting for mentor approval.
-  const nehaChart = fullChart([
-    "phys-div", "rivers", "climate", "soils", "minerals",
-    "preamble", "fund-rights",
+  // Neha: just submitted chart, waiting for mentor approval. Day 1 doubles up.
+  const nehaChart = multiChart([
+    ["phys-div", "rivers"],
+    ["climate"],
+    ["soils"],
+    ["minerals"],
+    ["preamble"],
+    ["fund-rights"],
   ]);
   const neha: StudentData = {
     chart: { days: nehaChart, status: "pending_approval", submittedAt: ms(0) },
-    progress: { currentDay: 1, completed: [] },
+    progress: { currentDay: 1 },
     overrides: [],
     attempts: [],
     mainsScores: [],

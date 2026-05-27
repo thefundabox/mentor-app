@@ -11,7 +11,7 @@ export function TopBar() {
       setRoute("mentor");
     } else {
       const s = getStudent(currentUser.id);
-      if (s.chart.status === "draft" && s.chart.days.filter(Boolean).length === 0) setRoute("onboarding");
+      if (s.chart.status === "draft" && s.chart.days.filter((d) => d.length > 0).length === 0) setRoute("onboarding");
       else if (s.chart.status === "pending_approval" || s.chart.status === "changes_requested") setRoute("approval_gate");
       else setRoute("home");
     }

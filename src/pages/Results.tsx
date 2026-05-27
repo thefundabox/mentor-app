@@ -1,26 +1,35 @@
 import { useAppState } from "@/hooks/useAppState";
-import { conceptLabel } from "@/data";
+import { conceptLabel, findTopic } from "@/data";
 import { Button } from "@/components/ui/button";
-import { Trophy, Sparkles, ArrowRight, Star, Zap } from "lucide-react";
+import { Trophy, Sparkles, ArrowRight, Star, Zap, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ResultsProps { dayNum: number; }
 
 export function Results({ dayNum }: ResultsProps) {
-  const { currentUser, getStudent, lastResult, setRoute, setAttemptSeed, setActiveDay, addOverride } = useAppState();
+  const { currentUser, getStudent, lastResult, setRoute, setAttemptSeed, setActiveDay, setActiveTopicId, addOverride, topicCleared } = useAppState();
   if (!currentUser || !lastResult) return null;
-  const student = getStudent(currentUser.id);
+  const user = currentUser;
+  const student = getStudent(user.id);
+  const topicsInDay = student.chart.days[dayNum - 1] || [];
 
+  const topicInfo = findTopic(lastResult.topicId);
   const hasOverride = student.overrides.some((o) => o.day === dayNum && o.status === "approved");
   const passed = lastResult.score >= 80 || hasOverride;
+  const dayCleared = lastResult.dayClearedNow || topicsInDay.every((t) => topicCleared(user.id, dayNum, t.topicId));
+  const nextTopic = topicsInDay.find((t) => !topicCleared(user.id, dayNum, t.topicId));
 
-  const handleContinue = () => { setActiveDay(null); setRoute("home"); };
+  const handleBackToPath = () => { setActiveDay(null); setActiveTopicId(null); setRoute("home"); };
+  const handleNextTopic = () => {
+    if (nextTopic) { setActiveTopicId(nextTopic.topicId); setRoute("topic"); }
+    else handleBackToPath();
+  };
   const handleRetry = () => { setAttemptSeed((s: number) => s + 7); setRoute("quiz"); };
   const handleRequestOverride = () => {
     if (student.overrides.some((o) => o.day === dayNum && o.status === "pending")) return;
     const dayAttempts = student.attempts.filter((a) => a.day === dayNum);
     const bestScore = dayAttempts.length ? Math.max(...dayAttempts.map((a) => a.score)) : 0;
-    addOverride(currentUser.id, {
+    addOverride(user.id, {
       id: Date.now(), day: dayNum, status: "pending",
       attempts: dayAttempts.length, bestScore,
     });
@@ -36,21 +45,32 @@ export function Results({ dayNum }: ResultsProps) {
           {passed ? <Trophy className="w-12 h-12" /> : <Sparkles className="w-12 h-12" />}
         </div>
 
-        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Day {dayNum} result</div>
+        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+          Day {dayNum}{topicInfo ? ` · ${topicInfo.topic.name}` : ""}
+        </div>
         <div className={`text-6xl font-bold mt-2 ${passed ? "text-emerald-600" : "text-amber-600"}`}>{lastResult.score}%</div>
         <div className="text-slate-500 mt-1">{lastResult.correct} of {lastResult.total} correct</div>
 
         <h2 className="text-2xl font-bold text-slate-900 mt-6">
-          {passed ? `Day ${dayNum + 1} unlocked!` : "Not quite there yet"}
+          {!passed ? "Not quite there yet"
+            : dayCleared ? `Day ${dayNum + 1} unlocked!`
+            : "Topic cleared"}
         </h2>
 
         <p className="text-slate-600 mt-2 max-w-md mx-auto">
-          {passed
-            ? hasOverride && lastResult.score < 80
-              ? "Your mentor granted an override — continue when ready."
-              : "You cleared the 80% threshold. The next day is now available on your path."
-            : "Retry with a fresh question set, or ask your mentor for an override if you've already tried multiple times."}
+          {!passed
+            ? "Retry with a fresh question set, or ask your mentor for an override if you've already tried multiple times."
+            : dayCleared
+              ? "You've cleared every topic for this day. The next day is now available on your path."
+              : `${lastResult.topicsRemainingInDay} topic${lastResult.topicsRemainingInDay === 1 ? "" : "s"} left on Day ${dayNum} before it unlocks.`}
         </p>
+
+        {passed && !dayCleared && nextTopic && (
+          <div className="mt-4 inline-flex items-center gap-2 text-xs text-slate-500">
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+            Next up: <strong className="text-slate-800">{findTopic(nextTopic.topicId)?.topic.name}</strong>
+          </div>
+        )}
 
         {passed && lastResult.pointsAwarded && lastResult.pointsAwarded > 0 && (
           <motion.div
@@ -66,7 +86,7 @@ export function Results({ dayNum }: ResultsProps) {
             <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
               {lastResult.firstTry ? (
                 <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Cleared on first try!</span>
-              ) : "Day cleared"}
+              ) : "Topic cleared"}
             </div>
             <div className="text-[10px] text-amber-700">
               {lastResult.firstTry ? "100 pts for the clear + 50 first-try bonus" : "100 pts for the clear"}
@@ -88,15 +108,17 @@ export function Results({ dayNum }: ResultsProps) {
         )}
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          {passed ? (
-            <Button onClick={handleContinue}>Continue to Day {dayNum + 1} <ArrowRight className="w-4 h-4" /></Button>
-          ) : (
+          {!passed ? (
             <>
               <Button onClick={handleRetry}>Retry — fresh questions</Button>
               <Button variant="secondary" onClick={handleRequestOverride}>Request mentor override</Button>
             </>
+          ) : dayCleared ? (
+            <Button onClick={handleBackToPath}>Continue to Day {dayNum + 1} <ArrowRight className="w-4 h-4" /></Button>
+          ) : (
+            <Button onClick={handleNextTopic}>Next topic <ArrowRight className="w-4 h-4" /></Button>
           )}
-          <Button variant="ghost" onClick={handleContinue}>Back to path</Button>
+          <Button variant="ghost" onClick={handleBackToPath}>Back to path</Button>
         </div>
       </div>
     </div>

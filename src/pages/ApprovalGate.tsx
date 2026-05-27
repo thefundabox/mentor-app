@@ -51,26 +51,34 @@ export function ApprovalGate() {
 
       <div className="mt-8 bg-white rounded-2xl border border-slate-200 p-5">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Your submitted plan</h2>
-        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
-          {s.chart.days.map((slot, i) => {
-            const info = slot ? findTopic(slot.topicId) : null;
-            return (
-              <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg odd:bg-slate-50">
-                <div className="text-xs font-semibold text-slate-500 w-12">Day {i + 1}</div>
-                {info ? (
-                  <>
-                    <span className="text-lg">{info.subject.icon}</span>
-                    <div className="text-sm">
-                      <div className="text-slate-500 text-xs">{info.subject.name}</div>
-                      <div className="font-semibold text-slate-900">{info.topic.name}</div>
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-400 italic">unscheduled</span>
-                )}
+        <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+          {s.chart.days.map((topics, i) => (
+            <div key={i} className="flex items-start gap-3 py-2 px-3 rounded-lg odd:bg-slate-50">
+              <div className="text-xs font-semibold text-slate-500 w-12 pt-1">
+                Day {i + 1}
+                {topics.length > 1 && <div className="text-[10px] uppercase font-bold text-indigo-600">×{topics.length}</div>}
               </div>
-            );
-          })}
+              {topics.length === 0 ? (
+                <span className="text-xs text-slate-400 italic">unscheduled</span>
+              ) : (
+                <div className="flex-1 space-y-1">
+                  {topics.map((t) => {
+                    const info = findTopic(t.topicId);
+                    if (!info) return null;
+                    return (
+                      <div key={t.topicId} className="flex items-center gap-2">
+                        <span className="text-base">{info.subject.icon}</span>
+                        <div className="text-sm">
+                          <span className="text-slate-500 text-xs">{info.subject.name} · </span>
+                          <span className="font-semibold text-slate-900">{info.topic.name}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -30,12 +30,21 @@ function buildAttempt(topicId: string, seed: number): Question[] {
 }
 
 export function QuizScreen({ dayNum }: QuizScreenProps) {
-  const { currentUser, getStudent, attemptSeed, setRoute, setLastResult, finishQuiz } = useAppState();
+  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
-  const slot = student.chart.days[dayNum - 1];
-  if (!slot) return null;
+  const topicsInDay = student.chart.days[dayNum - 1] || [];
+
+  const resolvedTopicId = activeTopicId && topicsInDay.some((t) => t.topicId === activeTopicId)
+    ? activeTopicId
+    : (topicsInDay.find((t) => !topicCleared(user.id, dayNum, t.topicId))?.topicId
+       || topicsInDay[0]?.topicId
+       || null);
+
+  const slot = topicsInDay.find((t) => t.topicId === resolvedTopicId);
+  if (!slot || !resolvedTopicId) return null;
+  const topicId: string = resolvedTopicId;
 
   const questions = useMemo(() => buildAttempt(slot.topicId, attemptSeed), [slot.topicId, attemptSeed]);
 
@@ -86,16 +95,19 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
         if (a.correct) c.right += 1; else c.wrong += 1;
         byConcept[a.concept] = c;
       });
-      const attemptsForDay = student.attempts.filter((a) => a.day === dayNum).length;
-      const isFirstTry = attemptsForDay === 0;
+      const attemptsForTopic = student.attempts.filter((a) => a.day === dayNum && a.topicId === topicId).length;
+      const isFirstTry = attemptsForTopic === 0;
       const score = Math.round((correctCount / total) * 100);
-      const pointsAwarded = finishQuiz(user.id, { day: dayNum, score, when: Date.now(), byConcept });
+      const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, { day: dayNum, topicId: topicId, score, when: Date.now(), byConcept });
       const result: QuizResult = {
         score, correct: correctCount, total,
         missedConcepts: [...new Set(newAnswers.filter((a) => !a.correct).map((a) => a.concept))],
         byConcept,
         pointsAwarded,
         firstTry: isFirstTry,
+        topicId: topicId,
+        dayClearedNow,
+        topicsRemainingInDay,
       };
       setLastResult(result);
       setRoute("results");

@@ -16,14 +16,25 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared } = useAppState();
   if (!currentUser) return null;
-  const student = getStudent(currentUser.id);
-  const slot = student.chart.days[dayNum - 1];
+  const user = currentUser;
+  const student = getStudent(user.id);
+  const topicsInDay = student.chart.days[dayNum - 1] || [];
+
+  // Resolve which topic the user is on. Fall back to the first un-cleared one,
+  // or the first topic if all are cleared.
+  const resolvedTopicId = activeTopicId && topicsInDay.some((t) => t.topicId === activeTopicId)
+    ? activeTopicId
+    : (topicsInDay.find((t) => !topicCleared(user.id, dayNum, t.topicId))?.topicId
+       || topicsInDay[0]?.topicId
+       || null);
+
+  const slot = topicsInDay.find((t) => t.topicId === resolvedTopicId);
   const [tab, setTab] = useState("notes");
   const [uploaded, setUploaded] = useState<string | null>(null);
 
-  if (!slot) return null;
+  if (!slot || !resolvedTopicId) return null;
 
   const info = findTopic(slot.topicId);
   const notes = topicNotes(slot.topicId);
@@ -33,8 +44,15 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
     (o) => o.day === dayNum && o.status === "approved"
   );
 
+  const pickTopic = (tid: string) => {
+    if (tid === resolvedTopicId) return;
+    setActiveTopicId(tid);
+    setTab("notes");
+  };
+
   const handleStartQuiz = () => {
     setAttemptSeed((s: number) => s + 7);
+    setActiveTopicId(resolvedTopicId);
     setRoute("quiz");
   };
 
@@ -45,7 +63,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
     if (student.overrides.some((o) => o.day === activeDay && o.status === "pending")) return;
     const dayAttempts = student.attempts.filter((a) => a.day === activeDay);
     const bestScore = dayAttempts.length ? Math.max(...dayAttempts.map((a) => a.score)) : 0;
-    addOverride(currentUser.id, {
+    addOverride(user.id, {
       id: Date.now(), day: activeDay, status: "pending",
       attempts: dayAttempts.length, bestScore,
     });
@@ -78,6 +96,32 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           </h1>
         </div>
       </div>
+
+      {topicsInDay.length > 1 && (
+        <div className="mb-5 p-3 rounded-2xl bg-indigo-50/60 border border-indigo-100">
+          <div className="text-[10px] uppercase font-bold text-indigo-700 mb-2 tracking-wide">
+            Day {dayNum} has {topicsInDay.length} topics · clear each to unlock day {dayNum + 1}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {topicsInDay.map((t) => {
+              const ti = findTopic(t.topicId);
+              if (!ti) return null;
+              const cleared = topicCleared(user.id, dayNum, t.topicId);
+              const active = t.topicId === resolvedTopicId;
+              return (
+                <button key={t.topicId} onClick={() => pickTopic(t.topicId)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition ${
+                    active ? "bg-white border-indigo-400 text-indigo-700 font-semibold shadow-sm"
+                    : cleared ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                    : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+                  }`}>
+                  {cleared ? "✓" : "○"} {ti.topic.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Tab Bar */}
       <div className="flex gap-1 border-b border-slate-200 mb-6">
@@ -123,7 +167,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
             />
           )}
           {tab === "pyqs" && <PYQsTab />}
-          {tab === "mains" && <MainsTab dayNum={dayNum} />}
+          {tab === "mains" && <MainsTab dayNum={dayNum} topicId={resolvedTopicId} />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -326,7 +370,7 @@ function PYQCard({ pyq }: { pyq: (typeof PYQS_MEWAR)[0] }) {
 }
 
 // --- Mains Tab ---
-function MainsTab({ dayNum }: { dayNum: number }) {
+function MainsTab({ dayNum, topicId }: { dayNum: number; topicId: string }) {
   const [mainsAnswer, setMainsAnswer] = useState("");
   const [mainsResult, setMainsResult] = useState<{
     score: number;
@@ -343,7 +387,7 @@ function MainsTab({ dayNum }: { dayNum: number }) {
     const score = Math.round((hits.length / MAINS_PROMPT.rubric.length) * 100);
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     setMainsResult({ score, hits, missed, words: wordCount });
-    if (currentUser) addMainsScore(currentUser.id, { day: dayNum, score, when: Date.now() });
+    if (currentUser) addMainsScore(currentUser.id, { day: dayNum, topicId, score, when: Date.now() });
   };
 
   const wordCount = mainsAnswer.trim().split(/\s+/).filter(Boolean).length;

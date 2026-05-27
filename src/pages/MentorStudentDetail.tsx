@@ -15,8 +15,10 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const [feedback, setFeedback] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
 
+  const { completedDays, topicCleared } = useAppState();
   if (!user) return null;
 
+  const cleared = completedDays(studentId);
   const analytics = useMemo(() => strengthsAndWeaknesses(s.attempts), [s.attempts]);
   const chartData = useMemo(() =>
     analytics.all.map((c) => ({
@@ -36,7 +38,7 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
   );
 
   const totalDays = s.chart.days.length;
-  const completed = s.progress.completed.length;
+  const completed = cleared.length;
   const pendingOverrides = s.overrides.filter((o) => o.status === "pending");
 
   const back = () => { setViewingStudentId(null); setRoute("mentor"); };
@@ -203,31 +205,50 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
         <div className="px-5 py-3 border-b border-slate-200">
           <h2 className="font-semibold text-slate-900">Prep chart ({totalDays} days)</h2>
         </div>
-        <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
-          {s.chart.days.map((slot, i) => {
+        <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto">
+          {s.chart.days.map((topics, i) => {
             const day = i + 1;
-            const info = slot ? findTopic(slot.topicId) : null;
-            const isDone = s.progress.completed.includes(day);
+            const isDone = cleared.includes(day);
             const attemptsThisDay = s.attempts.filter((a) => a.day === day);
             const isStuck = attemptsThisDay.length >= 2 && !isDone;
             return (
-              <div key={i} className={`px-5 py-3 flex items-center gap-3 ${isDone ? "bg-emerald-50/30" : isStuck ? "bg-amber-50/30" : ""}`}>
-                <div className="w-10 text-center text-xs font-semibold text-slate-500">D{day}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-slate-900 truncate">
-                    {info ? info.topic.name : <span className="italic text-slate-400">unscheduled</span>}
-                  </div>
-                  <div className="text-xs text-slate-500">{info ? info.subject.name : "—"}</div>
+              <div key={i} className={`px-5 py-3 flex items-start gap-3 ${isDone ? "bg-emerald-50/30" : isStuck ? "bg-amber-50/30" : ""}`}>
+                <div className="w-10 text-center text-xs font-semibold text-slate-500 pt-1">
+                  D{day}
+                  {topics.length > 1 && <div className="text-[10px] uppercase font-bold text-indigo-600">×{topics.length}</div>}
                 </div>
-                <div className="text-right text-xs">
-                  {attemptsThisDay.length > 0 && (
-                    <>
-                      <div className="font-medium text-slate-700">{attemptsThisDay.length} attempt{attemptsThisDay.length > 1 ? "s" : ""}</div>
-                      <div className="text-slate-500">best {Math.max(...attemptsThisDay.map((a) => a.score))}%</div>
-                    </>
+                <div className="flex-1 min-w-0">
+                  {topics.length === 0 ? (
+                    <span className="text-sm italic text-slate-400">unscheduled</span>
+                  ) : (
+                    <div className="space-y-1">
+                      {topics.map((t) => {
+                        const info = findTopic(t.topicId);
+                        if (!info) return null;
+                        const tCleared = topicCleared(studentId, day, t.topicId);
+                        const tAttempts = attemptsThisDay.filter((a) => a.topicId === t.topicId);
+                        return (
+                          <div key={t.topicId} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm">{tCleared ? "✓" : "○"}</span>
+                              <span className="text-base">{info.subject.icon}</span>
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-900 truncate">{info.topic.name}</div>
+                                <div className="text-[11px] text-slate-500">{info.subject.name}</div>
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex-shrink-0">
+                              {tAttempts.length > 0 ? `${tAttempts.length} att · best ${Math.max(...tAttempts.map(a => a.score))}%` : ""}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                  {isStuck && <div className="text-amber-700 font-semibold mt-1">⚠ stuck</div>}
-                  {isDone && <div className="text-emerald-700 font-semibold mt-1">✓ cleared</div>}
+                </div>
+                <div className="text-right text-xs flex-shrink-0">
+                  {isStuck && <div className="text-amber-700 font-semibold">⚠ stuck</div>}
+                  {isDone && <div className="text-emerald-700 font-semibold">✓ day cleared</div>}
                 </div>
               </div>
             );

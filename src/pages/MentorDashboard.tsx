@@ -101,16 +101,17 @@ export function MentorDashboard() {
 }
 
 function StudentRow({ userId, name, email, onOpen }: { userId: string; name: string; email: string; onOpen: () => void }) {
-  const { getStudent, levelInfo } = useAppState();
+  const { getStudent, levelInfo, completedDays } = useAppState();
   const s = getStudent(userId);
   const info = levelInfo(userId);
   const totalDays = s.chart.days.length || 1;
-  const completed = s.progress.completed.length;
+  const cleared = completedDays(userId);
+  const completed = cleared.length;
   const pct = Math.round((completed / totalDays) * 100);
 
   const attemptsByDay: Record<number, number> = {};
   s.attempts.forEach((a) => { attemptsByDay[a.day] = (attemptsByDay[a.day] || 0) + 1; });
-  const stuck = Object.entries(attemptsByDay).some(([d, c]) => c >= 2 && !s.progress.completed.includes(Number(d)));
+  const stuck = Object.entries(attemptsByDay).some(([d, c]) => c >= 2 && !cleared.includes(Number(d)));
 
   const statusBadge = (() => {
     switch (s.chart.status) {

@@ -21,7 +21,7 @@ function AppContent() {
     if (!currentUser) { setRoute("landing"); return; }
     if (currentUser.role === "mentor") { setRoute("mentor"); return; }
     const s = getStudent(currentUser.id);
-    if (!s || s.chart.days.filter(Boolean).length === 0) { setRoute("onboarding"); return; }
+    if (!s || s.chart.days.filter((d) => d.length > 0).length === 0) { setRoute("onboarding"); return; }
     if (s.chart.status === "draft") { setRoute("onboarding"); return; }
     if (s.chart.status === "pending_approval" || s.chart.status === "changes_requested") {
       setRoute("approval_gate"); return;

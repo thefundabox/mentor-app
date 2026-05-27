@@ -54,6 +54,7 @@ export interface ConceptStat {
 
 export interface Attempt {
   day: number;
+  topicId: string;
   score: number;
   when: number;
   byConcept?: Record<string, ConceptStat>;
@@ -61,6 +62,7 @@ export interface Attempt {
 
 export interface MainsScore {
   day: number;
+  topicId: string;
   score: number;
   when: number;
 }
@@ -73,17 +75,20 @@ export interface QuizResult {
   byConcept?: Record<string, ConceptStat>;
   pointsAwarded?: number;
   firstTry?: boolean;
+  topicId: string;
+  dayClearedNow?: boolean;
+  topicsRemainingInDay?: number;
 }
 
 export interface Progress {
   currentDay: number;
-  completed: number[];
 }
 
 export type ChartStatus = "draft" | "pending_approval" | "approved" | "changes_requested";
 
 export interface ChartState {
-  days: (DaySlot | null)[];
+  /** Each day holds 0..N topics. An empty array means an unscheduled day. */
+  days: DaySlot[][];
   status: ChartStatus;
   submittedAt?: number;
   decidedAt?: number;
@@ -154,6 +159,7 @@ export interface AppState {
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
+  activeTopicId: string | null;
   attemptSeed: number;
   lastResult: QuizResult | null;
   /** When mentor is viewing a specific student */

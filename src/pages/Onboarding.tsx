@@ -7,7 +7,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppState } from "@/hooks/useAppState";
 import { SUBJECTS, findTopic } from "@/data";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, GripVertical, Send, AlertCircle } from "lucide-react";
+import { ArrowRight, GripVertical, Send, AlertCircle, X } from "lucide-react";
 import type { DaySlot, ChartState } from "@/types";
 
 interface OnboardingProps {
@@ -22,7 +22,7 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
   const isResubmit = currentChart.status === "changes_requested";
 
   const [days, setDays] = useState(
-    Math.max(currentChart.days.filter(Boolean).length || 15, 15)
+    Math.max(currentChart.days.length || 15, 15)
   );
   const [activeDrag, setActiveDrag] = useState<{
     subjectId: string; topicId: string; topicName: string; subjectName: string; icon: string; color: string;
@@ -30,13 +30,13 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  function ensureDays(n: number): (DaySlot | null)[] {
-    const next = [...currentChart.days];
-    while (next.length < n) next.push(null);
+  function ensureDays(n: number): DaySlot[][] {
+    const next = currentChart.days.map((arr) => [...arr]);
+    while (next.length < n) next.push([]);
     return next.slice(0, n);
   }
 
-  function writeChart(days: (DaySlot | null)[], status?: ChartState["status"]) {
+  function writeChart(days: DaySlot[][], status?: ChartState["status"]) {
     setChart(studentId, { ...currentChart, days, status: status ?? "draft" });
   }
 
@@ -60,33 +60,36 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
       let idx = startIdx;
       for (const t of subject.topics) {
         if (idx >= days) break;
-        while (idx < days && next[idx] !== null) idx++;
-        if (idx >= days) break;
-        next[idx] = { subjectId: subject.id, topicId: t.id };
+        // each day in auto-fill mode lands one topic per slot
+        next[idx] = [{ subjectId: subject.id, topicId: t.id }];
         idx++;
       }
       writeChart(next);
     } else {
       const dayIdx = parseInt(overId.replace("day-", ""));
       const next = ensureDays(days);
-      next[dayIdx] = { subjectId: dragData.subjectId, topicId: dragData.topicId };
+      // avoid duplicate of same topic in same day
+      if (!next[dayIdx].some((t) => t.topicId === dragData.topicId)) {
+        next[dayIdx] = [...next[dayIdx], { subjectId: dragData.subjectId, topicId: dragData.topicId }];
+      }
       writeChart(next);
     }
   }
 
-  function clearDay(i: number) {
+  function removeTopic(dayIdx: number, topicId: string) {
     const next = ensureDays(days);
-    next[i] = null;
+    next[dayIdx] = next[dayIdx].filter((t) => t.topicId !== topicId);
     writeChart(next);
   }
 
   function autoFillSubject(subj: (typeof SUBJECTS)[0]) {
     const next = ensureDays(days);
-    let i = next.findIndex((x) => x === null);
+    // place each topic in the first empty day
+    let i = next.findIndex((slot) => slot.length === 0);
     for (const t of subj.topics) {
       if (i < 0 || i >= days) break;
-      next[i] = { subjectId: subj.id, topicId: t.id };
-      i = next.findIndex((x, k) => k > i && x === null);
+      next[i] = [{ subjectId: subj.id, topicId: t.id }];
+      i = next.findIndex((slot, k) => k > i && slot.length === 0);
     }
     writeChart(next);
   }
@@ -97,11 +100,10 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
     writeChart(ensureDays(newDays));
   }
 
-  const filled = ensureDays(days).filter(Boolean).length;
+  const filled = ensureDays(days).filter((d) => d.length > 0).length;
 
   const handleSubmit = () => {
     if (byMentor) {
-      // Mentor editing — finalize directly (and approve)
       setChart(studentId, { ...currentChart, days: ensureDays(days), status: "approved", decidedAt: Date.now() });
       approveChart(studentId);
       setViewingStudentId(studentId);
@@ -122,8 +124,9 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
           {byMentor ? "Mentor edit" : isResubmit ? "Address mentor feedback" : "Build your prep chart"}
         </h1>
         <p className="text-slate-600 mt-2 max-w-2xl">
-          Drag any subject or topic into a day. Drag an entire subject to seed a sequence,
-          or pick individual topics in your preferred order. {byMentor ? "You'll approve on save." : "Your mentor will approve before you start."}
+          Drag any subject or topic into a day. <strong>You can stack multiple topics into the same day</strong> —
+          you'll need to clear each topic's quiz to unlock the next day.
+          {byMentor ? " You'll approve on save." : " Your mentor will approve before you start."}
         </p>
 
         {isResubmit && currentChart.feedback && (
@@ -173,11 +176,10 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
                 <button onClick={() => adjustDays(5)} className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition">+</button>
               </div>
             </div>
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-              {ensureDays(days).map((slot, i) => {
-                const info = slot ? findTopic(slot.topicId) : null;
-                return <DroppableDaySlot key={i} index={i} info={info} onClear={() => clearDay(i)} />;
-              })}
+            <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+              {ensureDays(days).map((topics, i) => (
+                <DroppableDaySlot key={i} index={i} topics={topics} onRemove={(tid) => removeTopic(i, tid)} />
+              ))}
             </div>
           </div>
         </div>
@@ -242,36 +244,56 @@ function DraggableTopic({ subject, topic }: { subject: (typeof SUBJECTS)[0]; top
   );
 }
 
-function DroppableDaySlot({ index, info, onClear }: {
+function DroppableDaySlot({ index, topics, onRemove }: {
   index: number;
-  info: { subject: (typeof SUBJECTS)[0]; topic: { id: string; name: string } } | null;
-  onClear: () => void;
+  topics: DaySlot[];
+  onRemove: (topicId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day-${index}` });
+  const hasMulti = topics.length > 1;
   return (
     <div ref={setNodeRef}
-      className={`group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed transition ${
-        info ? "bg-white border-transparent shadow-sm"
+      className={`group rounded-xl border-2 border-dashed transition ${
+        topics.length > 0
+          ? isOver ? "border-indigo-400 bg-indigo-50/30 shadow-sm" : "border-transparent bg-white shadow-sm"
           : isOver ? "border-indigo-400 bg-indigo-50/50"
-          : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
+                   : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
       }`}>
-      <div className="w-12 text-center text-xs font-semibold text-slate-500 flex-shrink-0">
-        Day<br /><span className="text-slate-900 text-base">{index + 1}</span>
-      </div>
-      {info ? (
-        <div className="flex-1 flex items-center justify-between min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-xl flex-shrink-0">{info.subject.icon}</span>
-            <div className="min-w-0">
-              <div className="text-sm text-slate-500 truncate">{info.subject.name}</div>
-              <div className="font-semibold text-slate-900 truncate">{info.topic.name}</div>
-            </div>
-          </div>
-          <button onClick={onClear} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 px-2 py-1 text-xs transition flex-shrink-0">remove</button>
+      <div className="flex items-stretch gap-3 p-3">
+        <div className="w-12 flex-shrink-0 flex flex-col items-center justify-center text-xs font-semibold text-slate-500">
+          Day
+          <span className="text-slate-900 text-base">{index + 1}</span>
+          {hasMulti && (
+            <span className="mt-1 text-[10px] uppercase font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
+              ×{topics.length}
+            </span>
+          )}
         </div>
-      ) : (
-        <div className="text-slate-400 text-sm italic">Drop a topic here</div>
-      )}
+        {topics.length > 0 ? (
+          <div className="flex-1 space-y-1.5 min-w-0">
+            {topics.map((t) => {
+              const info = findTopic(t.topicId);
+              if (!info) return null;
+              return (
+                <div key={t.topicId} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-lg flex-shrink-0">{info.subject.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-slate-500 truncate">{info.subject.name}</div>
+                      <div className="text-sm font-semibold text-slate-900 truncate">{info.topic.name}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => onRemove(t.topicId)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition flex-shrink-0" title="remove">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center text-slate-400 text-sm italic">Drop a topic here (or stack several)</div>
+        )}
+      </div>
     </div>
   );
 }

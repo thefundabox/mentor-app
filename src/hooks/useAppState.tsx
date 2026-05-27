@@ -10,29 +10,33 @@ import type {
 } from "@/types";
 
 interface AppContextValue extends AppState {
-  // session
   currentUser: User | null;
   loginAs: (role: Role, email: string, name: string) => void;
   logout: () => void;
   setLoginRoleIntent: (role: Role | null) => void;
   setRoute: (route: Route) => void;
   setActiveDay: (day: number | null) => void;
+  setActiveTopicId: (topicId: string | null) => void;
   setAttemptSeed: (seed: number | ((prev: number) => number)) => void;
   setLastResult: (result: QuizResult | null) => void;
   setViewingStudentId: (id: string | null) => void;
   resetAll: () => void;
 
-  // student-data accessors
   getStudent: (studentId: string) => StudentData;
   setChart: (studentId: string, chart: ChartState) => void;
   submitChartForApproval: (studentId: string) => void;
   approveChart: (studentId: string) => void;
   requestChartChanges: (studentId: string, feedback?: string) => void;
-  finishQuiz: (studentId: string, attempt: Attempt) => number;
+  finishQuiz: (studentId: string, attempt: Attempt) => { pointsAwarded: number; dayClearedNow: boolean; topicsRemainingInDay: number };
   addOverride: (studentId: string, override: Override) => void;
   updateOverride: (studentId: string, override: Override) => void;
   addMainsScore: (studentId: string, score: MainsScore) => void;
   markPyqReviewed: (studentId: string, label: string) => void;
+
+  // multi-topic helpers
+  topicCleared: (studentId: string, day: number, topicId: string) => boolean;
+  dayCleared: (studentId: string, day: number) => boolean;
+  completedDays: (studentId: string) => number[];
 
   students: User[];
   levelInfo: (studentId: string) => { level: number; xpInLevel: number; xpToNextLevel: number; total: number };
@@ -41,15 +45,17 @@ interface AppContextValue extends AppState {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useLocalStorage<User[]>("v2_users", SEED_USERS);
-  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v2_studentData", seedStudentData());
-  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v2_currentUserId", null);
-  const [route, setRoute] = useLocalStorage<Route>("v2_route", "auto");
-  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v2_loginRoleIntent", null);
-  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v2_activeDay", null);
-  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v2_attemptSeed", 1);
-  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v2_lastResult", null);
-  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v2_viewingStudentId", null);
+  // v3 keys — schema changed from single-topic to multi-topic days; ignore old data.
+  const [users, setUsers] = useLocalStorage<User[]>("v3_users", SEED_USERS);
+  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v3_studentData", seedStudentData());
+  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v3_currentUserId", null);
+  const [route, setRoute] = useLocalStorage<Route>("v3_route", "auto");
+  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v3_loginRoleIntent", null);
+  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v3_activeDay", null);
+  const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v3_activeTopicId", null);
+  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v3_attemptSeed", 1);
+  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v3_lastResult", null);
+  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v3_viewingStudentId", null);
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -86,9 +92,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentUserId(null);
     setRoute("landing");
     setActiveDay(null);
+    setActiveTopicId(null);
     setLastResult(null);
     setViewingStudentId(null);
-  }, [setCurrentUserId, setRoute, setActiveDay, setLastResult, setViewingStudentId]);
+  }, [setCurrentUserId, setRoute, setActiveDay, setActiveTopicId, setLastResult, setViewingStudentId]);
 
   const resetAll = useCallback(() => {
     if (confirm("Reset all local data and start over?")) {
@@ -97,7 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /* ---------- student data helpers ---------- */
+  /* ---------- student data ---------- */
 
   const getStudent = useCallback((id: string): StudentData => {
     return studentData[id] || emptyStudentData();
@@ -136,25 +143,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchStudent(id, (s) => ({ ...s, chart: { ...s.chart, status: "changes_requested", decidedAt: Date.now(), feedback } }));
   }, [patchStudent]);
 
+  /* ---------- multi-topic completion helpers ---------- */
+
+  const isTopicClearedFor = (s: StudentData, day: number, topicId: string): boolean => {
+    const hasOverride = s.overrides.some((o) => o.day === day && o.status === "approved");
+    if (hasOverride) return true;
+    return s.attempts.some((a) => a.day === day && a.topicId === topicId && a.score >= 80);
+  };
+
+  const isDayClearedFor = (s: StudentData, day: number): boolean => {
+    const topics = s.chart.days[day - 1];
+    if (!topics || topics.length === 0) return false;
+    return topics.every((t) => isTopicClearedFor(s, day, t.topicId));
+  };
+
+  const topicCleared = useCallback((id: string, day: number, topicId: string) => {
+    return isTopicClearedFor(getStudent(id), day, topicId);
+  }, [getStudent]);
+
+  const dayCleared = useCallback((id: string, day: number) => {
+    return isDayClearedFor(getStudent(id), day);
+  }, [getStudent]);
+
+  const completedDays = useCallback((id: string) => {
+    const s = getStudent(id);
+    const out: number[] = [];
+    for (let d = 1; d <= s.chart.days.length; d++) {
+      if (isDayClearedFor(s, d)) out.push(d);
+    }
+    return out;
+  }, [getStudent]);
+
   const finishQuiz = useCallback((id: string, attempt: Attempt) => {
     let pointsAwarded = 0;
+    let dayClearedNow = false;
+    let topicsRemainingInDay = 0;
+
     patchStudent(id, (s) => {
-      const attemptsForDay = s.attempts.filter((a) => a.day === attempt.day);
-      const isFirstTry = attemptsForDay.length === 0;
+      const attemptsForTopic = s.attempts.filter((a) => a.day === attempt.day && a.topicId === attempt.topicId);
+      const isFirstTry = attemptsForTopic.length === 0;
+      const wasTopicCleared = isTopicClearedFor(s, attempt.day, attempt.topicId);
+      const wasDayCleared = isDayClearedFor(s, attempt.day);
       const passed = attempt.score >= 80
         || s.overrides.some((o) => o.day === attempt.day && o.status === "approved");
 
       let next: StudentData = { ...s, attempts: [...s.attempts, attempt] };
 
-      if (passed) {
-        next = {
-          ...next,
-          progress: {
-            ...next.progress,
-            completed: Array.from(new Set([...next.progress.completed, attempt.day])),
-            currentDay: Math.max(next.progress.currentDay, attempt.day + 1),
-          },
-        };
+      if (passed && !wasTopicCleared) {
         next = awardPoints(next, "quiz_pass", POINTS.QUIZ_PASS, { day: attempt.day });
         pointsAwarded += POINTS.QUIZ_PASS;
         if (isFirstTry && attempt.score >= 80) {
@@ -162,9 +197,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           pointsAwarded += POINTS.FIRST_TRY_BONUS;
         }
       }
+
+      const nowDayCleared = isDayClearedFor(next, attempt.day);
+      dayClearedNow = !wasDayCleared && nowDayCleared;
+      const topicsInDay = next.chart.days[attempt.day - 1] || [];
+      topicsRemainingInDay = topicsInDay.filter((t) => !isTopicClearedFor(next, attempt.day, t.topicId)).length;
+
+      if (nowDayCleared) {
+        next = { ...next, progress: { ...next.progress, currentDay: Math.max(next.progress.currentDay, attempt.day + 1) } };
+      }
       return next;
     });
-    return pointsAwarded;
+    return { pointsAwarded, dayClearedNow, topicsRemainingInDay };
   }, [patchStudent]);
 
   const addOverride = useCallback((id: string, override: Override) => {
@@ -194,12 +238,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     users, currentUserId, studentData,
-    loginRoleIntent, route, activeDay, attemptSeed, lastResult, viewingStudentId,
+    loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students,
-    loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setAttemptSeed, setLastResult,
+    loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     finishQuiz, addOverride, updateOverride, addMainsScore, markPyqReviewed,
+    topicCleared, dayCleared, completedDays,
     levelInfo,
   };
 
