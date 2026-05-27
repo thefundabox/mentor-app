@@ -1,4 +1,4 @@
-import type { Subject, Question, PYQ, MainsPrompt } from "@/types";
+import type { Subject, Question, PYQ, MainsPrompt, User, StudentData, DaySlot } from "@/types";
 
 export const SUBJECTS: Subject[] = [
   {
@@ -703,3 +703,157 @@ export function shuffle<T>(arr: T[], seed?: number): T[] {
   }
   return a;
 }
+
+/* ==================== CONCEPT LABELS (for analytics) ==================== */
+// Human-readable labels for the concept tags used in the question pool.
+// Used by the mentor dashboard to surface strong/weak areas.
+export const CONCEPT_LABELS: Record<string, string> = {
+  "guerrilla-strategy": "Guerrilla strategy",
+  "tribal-alliance": "Tribal alliances",
+  "rajput-economy": "Rajput political economy",
+  "symbolic-resistance": "Symbolic legitimacy",
+  "mughal-expansion": "Mughal expansion",
+  "subsidiary-alliance": "Subsidiary alliance",
+  "fortification": "Fortifications",
+  "haldighati-facts": "Haldighati (1576)",
+  "chittor-sieges": "Sieges of Chittor",
+  "kumbha-works": "Rana Kumbha's works",
+  "pratap-allies": "Pratap's allies",
+  "khanwa": "Battle of Khanwa",
+  "udaipur-founding": "Founding of Udaipur",
+  "dewair": "Battle of Dewair",
+};
+
+export const conceptLabel = (id: string) => CONCEPT_LABELS[id] || id;
+
+/* ==================== POINTS CONSTANTS ==================== */
+
+export const POINTS = {
+  QUIZ_PASS: 100,        // ≥80% on a day's quiz
+  FIRST_TRY_BONUS: 50,   // cleared on first attempt
+  MAINS_SUBMIT: 25,      // submitted a mains answer
+  PYQ_REVIEW: 10,        // revealed a PYQ explanation
+  CHART_APPROVED: 20,    // mentor approved the prep chart
+  STREAK_3: 30,          // 3-day streak
+  STREAK_7: 100,         // 7-day streak
+};
+
+export const POINTS_PER_LEVEL = 500;
+export const levelFromPoints = (total: number) => Math.floor(total / POINTS_PER_LEVEL) + 1;
+export const xpInLevel = (total: number) => total % POINTS_PER_LEVEL;
+export const xpToNextLevel = (total: number) => POINTS_PER_LEVEL - xpInLevel(total);
+
+/* ==================== SEED USERS & STUDENT DATA ==================== */
+
+export function emptyStudentData(): StudentData {
+  return {
+    chart: { days: [], status: "draft" },
+    progress: { currentDay: 1, completed: [] },
+    overrides: [],
+    attempts: [],
+    mainsScores: [],
+    points: { total: 0, history: [] },
+    pyqsReviewed: [],
+  };
+}
+
+const ms = (daysAgo: number) => Date.now() - daysAgo * 86400000;
+
+// One mentor + two demo students with realistic-looking progress so the
+// mentor dashboard is meaningful on first load.
+const MENTOR_ID = "u_mentor_priya";
+const STUDENT_AAMIR = "u_student_aamir";
+const STUDENT_NEHA  = "u_student_neha";
+
+export const SEED_USERS: User[] = [
+  {
+    id: MENTOR_ID,
+    email: "priya.mentor@example.com",
+    name: "Priya Sharma",
+    role: "mentor",
+    createdAt: ms(60),
+  },
+  {
+    id: STUDENT_AAMIR,
+    email: "aamir.parwez@gmail.com",
+    name: "Aamir Parwez",
+    role: "student",
+    mentorId: MENTOR_ID,
+    createdAt: ms(20),
+  },
+  {
+    id: STUDENT_NEHA,
+    email: "neha.j@example.com",
+    name: "Neha Joshi",
+    role: "student",
+    mentorId: MENTOR_ID,
+    createdAt: ms(15),
+  },
+];
+
+const fullChart = (topicIds: string[]): DaySlot[] => topicIds.map((id) => {
+  const t = findTopic(id);
+  return { subjectId: t!.subject.id, topicId: id };
+});
+
+export function seedStudentData(): Record<string, StudentData> {
+  // Aamir: chart approved, day 4 in progress, mixed accuracy across concepts.
+  const aamirChart = fullChart([
+    "mauryan-raj", "pratiharas", "chauhans", "mewar", "1857-raj",
+    "preamble", "fund-rights", "dpsp",
+  ]);
+  const aamir: StudentData = {
+    chart: { days: aamirChart, status: "approved", submittedAt: ms(12), decidedAt: ms(11) },
+    progress: { currentDay: 4, completed: [1, 2, 3] },
+    overrides: [],
+    attempts: [
+      { day: 1, score: 87, when: ms(10), byConcept: { "guerrilla-strategy": { right: 2, wrong: 0 }, "tribal-alliance": { right: 1, wrong: 1 }, "haldighati-facts": { right: 2, wrong: 0 } } },
+      { day: 2, score: 73, when: ms(7),  byConcept: { "mughal-expansion": { right: 1, wrong: 2 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 0, wrong: 2 } } },
+      { day: 2, score: 91, when: ms(7),  byConcept: { "mughal-expansion": { right: 2, wrong: 1 }, "kumbha-works": { right: 2, wrong: 0 }, "khanwa": { right: 2, wrong: 0 } } },
+      { day: 3, score: 84, when: ms(4),  byConcept: { "chittor-sieges": { right: 2, wrong: 0 }, "fortification": { right: 1, wrong: 1 }, "pratap-allies": { right: 2, wrong: 0 } } },
+      { day: 4, score: 68, when: ms(1),  byConcept: { "subsidiary-alliance": { right: 1, wrong: 2 }, "symbolic-resistance": { right: 0, wrong: 2 }, "dewair": { right: 2, wrong: 0 } } },
+    ],
+    mainsScores: [{ day: 3, score: 71, when: ms(4) }],
+    points: {
+      total: 380,
+      history: [
+        { id: 1, when: ms(11), kind: "chart_approved", amount: 20 },
+        { id: 2, when: ms(10), kind: "quiz_pass", amount: 100, meta: { day: 1 } },
+        { id: 3, when: ms(10), kind: "first_try_bonus", amount: 50, meta: { day: 1 } },
+        { id: 4, when: ms(7),  kind: "quiz_pass", amount: 100, meta: { day: 2 } },
+        { id: 5, when: ms(4),  kind: "quiz_pass", amount: 100, meta: { day: 3 } },
+        { id: 6, when: ms(4),  kind: "mains_submit", amount: 25, meta: { day: 3 } },
+        { id: 7, when: ms(4),  kind: "first_try_bonus", amount: 50, meta: { day: 3 } },
+        { id: 8, when: ms(4),  kind: "pyq_review", amount: 10, meta: { label: "RAS 2018" } },
+        { id: 9, when: ms(4),  kind: "pyq_review", amount: 10, meta: { label: "RAS 2016" } },
+        { id: 10, when: ms(4), kind: "pyq_review", amount: 10, meta: { label: "RAS 2013" } },
+      ],
+    },
+    pyqsReviewed: ["RAS 2018", "RAS 2016", "RAS 2013"],
+    lastActivityAt: ms(1),
+  };
+
+  // Neha: just submitted chart, waiting for mentor approval.
+  const nehaChart = fullChart([
+    "phys-div", "rivers", "climate", "soils", "minerals",
+    "preamble", "fund-rights",
+  ]);
+  const neha: StudentData = {
+    chart: { days: nehaChart, status: "pending_approval", submittedAt: ms(0) },
+    progress: { currentDay: 1, completed: [] },
+    overrides: [],
+    attempts: [],
+    mainsScores: [],
+    points: { total: 0, history: [] },
+    pyqsReviewed: [],
+    lastActivityAt: ms(0),
+  };
+
+  return {
+    [STUDENT_AAMIR]: aamir,
+    [STUDENT_NEHA]: neha,
+  };
+}
+
+export const DEFAULT_MENTOR_ID = MENTOR_ID;
+

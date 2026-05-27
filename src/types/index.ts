@@ -47,10 +47,16 @@ export interface Override {
   bestScore: number;
 }
 
+export interface ConceptStat {
+  right: number;
+  wrong: number;
+}
+
 export interface Attempt {
   day: number;
   score: number;
   when: number;
+  byConcept?: Record<string, ConceptStat>;
 }
 
 export interface MainsScore {
@@ -64,6 +70,9 @@ export interface QuizResult {
   correct: number;
   total: number;
   missedConcepts: string[];
+  byConcept?: Record<string, ConceptStat>;
+  pointsAwarded?: number;
+  firstTry?: boolean;
 }
 
 export interface Progress {
@@ -71,37 +80,82 @@ export interface Progress {
   completed: number[];
 }
 
-export type Route = "auto" | "onboarding" | "home" | "topic" | "quiz" | "results" | "mentor";
+export type ChartStatus = "draft" | "pending_approval" | "approved" | "changes_requested";
+
+export interface ChartState {
+  days: (DaySlot | null)[];
+  status: ChartStatus;
+  submittedAt?: number;
+  decidedAt?: number;
+  feedback?: string;
+}
+
+export type PointKind =
+  | "quiz_pass"
+  | "first_try_bonus"
+  | "mains_submit"
+  | "pyq_review"
+  | "chart_approved"
+  | "streak_bonus";
+
+export interface PointEvent {
+  id: number;
+  when: number;
+  kind: PointKind;
+  amount: number;
+  meta?: { day?: number; label?: string };
+}
+
+export interface PointsState {
+  total: number;
+  history: PointEvent[];
+}
 
 export type Role = "student" | "mentor";
 
-export interface AppState {
+export interface User {
+  id: string;
+  email: string;
+  name: string;
   role: Role;
-  chart: (DaySlot | null)[];
+  /** For students: id of their mentor */
+  mentorId?: string;
+  createdAt: number;
+}
+
+export interface StudentData {
+  chart: ChartState;
   progress: Progress;
   overrides: Override[];
   attempts: Attempt[];
   mainsScores: MainsScore[];
+  points: PointsState;
+  pyqsReviewed: string[];
+  lastActivityAt?: number;
+}
+
+export type Route =
+  | "auto"
+  | "landing"
+  | "login"
+  | "onboarding"
+  | "approval_gate"
+  | "home"
+  | "topic"
+  | "quiz"
+  | "results"
+  | "mentor"
+  | "mentor_student";
+
+export interface AppState {
+  users: User[];
+  currentUserId: string | null;
+  studentData: Record<string, StudentData>;
+  loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
   attemptSeed: number;
   lastResult: QuizResult | null;
+  /** When mentor is viewing a specific student */
+  viewingStudentId: string | null;
 }
-
-export type AppAction =
-  | { type: "SET_ROLE"; payload: Role }
-  | { type: "SET_CHART"; payload: (DaySlot | null)[] }
-  | { type: "SET_PROGRESS"; payload: Progress }
-  | { type: "SET_OVERRIDES"; payload: Override[] }
-  | { type: "SET_ATTEMPTS"; payload: Attempt[] }
-  | { type: "SET_MAINS_SCORES"; payload: MainsScore[] }
-  | { type: "SET_ROUTE"; payload: Route }
-  | { type: "SET_ACTIVE_DAY"; payload: number | null }
-  | { type: "SET_ATTEMPT_SEED"; payload: number }
-  | { type: "SET_LAST_RESULT"; payload: QuizResult | null }
-  | { type: "ADD_ATTEMPT"; payload: Attempt }
-  | { type: "ADD_OVERRIDE"; payload: Override }
-  | { type: "UPDATE_OVERRIDE"; payload: Override }
-  | { type: "ADD_MAINS_SCORE"; payload: MainsScore }
-  | { type: "COMPLETE_DAY"; payload: { day: number; nextDay: number } }
-  | { type: "RESET" };

@@ -16,9 +16,10 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { chart, setRoute, setAttemptSeed, overrides, addOverride, attempts, activeDay } =
-    useAppState();
-  const slot = chart[dayNum - 1];
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay } = useAppState();
+  if (!currentUser) return null;
+  const student = getStudent(currentUser.id);
+  const slot = student.chart.days[dayNum - 1];
   const [tab, setTab] = useState("notes");
   const [uploaded, setUploaded] = useState<string | null>(null);
 
@@ -28,32 +29,25 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   const notes = topicNotes(slot.topicId);
   if (!info) return null;
 
-  const hasOverride = overrides.some(
+  const hasOverride = student.overrides.some(
     (o) => o.day === dayNum && o.status === "approved"
   );
 
   const handleStartQuiz = () => {
-    setAttemptSeed((s) => s + 7);
+    setAttemptSeed((s: number) => s + 7);
     setRoute("quiz");
   };
 
-  const handleBack = () => {
-    setRoute("home");
-  };
+  const handleBack = () => { setRoute("home"); };
 
   const handleRequestOverride = () => {
     if (!activeDay) return;
-    if (overrides.some((o) => o.day === activeDay && o.status === "pending")) return;
-    const dayAttempts = attempts.filter((a) => a.day === activeDay);
-    const bestScore = dayAttempts.length
-      ? Math.max(...dayAttempts.map((a) => a.score))
-      : 0;
-    addOverride({
-      id: Date.now(),
-      day: activeDay,
-      status: "pending",
-      attempts: dayAttempts.length,
-      bestScore,
+    if (student.overrides.some((o) => o.day === activeDay && o.status === "pending")) return;
+    const dayAttempts = student.attempts.filter((a) => a.day === activeDay);
+    const bestScore = dayAttempts.length ? Math.max(...dayAttempts.map((a) => a.score)) : 0;
+    addOverride(currentUser.id, {
+      id: Date.now(), day: activeDay, status: "pending",
+      attempts: dayAttempts.length, bestScore,
     });
     alert("Override request sent to your mentor.");
   };
@@ -300,6 +294,12 @@ function PYQsTab() {
 
 function PYQCard({ pyq }: { pyq: (typeof PYQS_MEWAR)[0] }) {
   const [open, setOpen] = useState(false);
+  const { currentUser, markPyqReviewed } = useAppState();
+
+  const reveal = () => {
+    setOpen(true);
+    if (currentUser) markPyqReviewed(currentUser.id, pyq.year);
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-5">
@@ -307,10 +307,10 @@ function PYQCard({ pyq }: { pyq: (typeof PYQS_MEWAR)[0] }) {
       <div className="text-slate-800 mb-3">{pyq.q}</div>
       {!open ? (
         <button
-          onClick={() => setOpen(true)}
+          onClick={reveal}
           className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition"
         >
-          Reveal answer
+          Reveal answer (+10 XP)
         </button>
       ) : (
         <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
@@ -334,20 +334,16 @@ function MainsTab({ dayNum }: { dayNum: number }) {
     missed: string[];
     words: number;
   } | null>(null);
-  const { addMainsScore } = useAppState();
+  const { currentUser, addMainsScore } = useAppState();
 
   const evaluateMains = () => {
     const text = mainsAnswer.toLowerCase();
-    const hits = MAINS_PROMPT.rubric.filter((k) =>
-      text.includes(k.toLowerCase())
-    );
-    const missed = MAINS_PROMPT.rubric.filter(
-      (k) => !text.includes(k.toLowerCase())
-    );
+    const hits = MAINS_PROMPT.rubric.filter((k) => text.includes(k.toLowerCase()));
+    const missed = MAINS_PROMPT.rubric.filter((k) => !text.includes(k.toLowerCase()));
     const score = Math.round((hits.length / MAINS_PROMPT.rubric.length) * 100);
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     setMainsResult({ score, hits, missed, words: wordCount });
-    addMainsScore({ day: dayNum, score, when: Date.now() });
+    if (currentUser) addMainsScore(currentUser.id, { day: dayNum, score, when: Date.now() });
   };
 
   const wordCount = mainsAnswer.trim().split(/\s+/).filter(Boolean).length;
