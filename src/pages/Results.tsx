@@ -1,0 +1,168 @@
+import { useAppState } from "@/hooks/useAppState";
+import { Button } from "@/components/ui/button";
+import { Trophy, Sparkles, ArrowRight } from "lucide-react";
+
+interface ResultsProps {
+  dayNum: number;
+}
+
+export function Results({ dayNum }: ResultsProps) {
+  const {
+    lastResult,
+    overrides,
+    setRoute,
+    setAttemptSeed,
+    setActiveDay,
+    addOverride,
+    attempts,
+  } = useAppState();
+
+  if (!lastResult) return null;
+
+  const hasOverride = overrides.some(
+    (o) => o.day === dayNum && o.status === "approved"
+  );
+  const passed = lastResult.score >= 80 || hasOverride;
+
+  const handleContinue = () => {
+    setActiveDay(null);
+    setRoute("home");
+  };
+
+  const handleRetry = () => {
+    setAttemptSeed((s) => s + 7);
+    setRoute("quiz");
+  };
+
+  const handleRequestOverride = () => {
+    if (overrides.some((o) => o.day === dayNum && o.status === "pending"))
+      return;
+    const dayAttempts = attempts.filter((a) => a.day === dayNum);
+    const bestScore = dayAttempts.length
+      ? Math.max(...dayAttempts.map((a) => a.score))
+      : 0;
+    addOverride({
+      id: Date.now(),
+      day: dayNum,
+      status: "pending",
+      attempts: dayAttempts.length,
+      bestScore,
+    });
+    alert("Override request sent to your mentor.");
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-12 relative">
+      {passed && <Confetti />}
+
+      <div className="text-center">
+        <div
+          className={`inline-flex items-center justify-center w-24 h-24 rounded-full mb-4 ${
+            passed
+              ? "bg-emerald-100 text-emerald-600"
+              : "bg-amber-100 text-amber-600"
+          }`}
+        >
+          {passed ? (
+            <Trophy className="w-12 h-12" />
+          ) : (
+            <Sparkles className="w-12 h-12" />
+          )}
+        </div>
+
+        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+          Day {dayNum} result
+        </div>
+
+        <div
+          className={`text-6xl font-bold mt-2 ${
+            passed ? "text-emerald-600" : "text-amber-600"
+          }`}
+        >
+          {lastResult.score}%
+        </div>
+
+        <div className="text-slate-500 mt-1">
+          {lastResult.correct} of {lastResult.total} correct
+        </div>
+
+        <h2 className="text-2xl font-bold text-slate-900 mt-6">
+          {passed ? `Day ${dayNum + 1} unlocked!` : "Not quite there yet"}
+        </h2>
+
+        <p className="text-slate-600 mt-2 max-w-md mx-auto">
+          {passed
+            ? hasOverride && lastResult.score < 80
+              ? "Your mentor granted an override — continue when ready."
+              : "You cleared the 80% threshold. The next day is now available on your path."
+            : "Retry with a fresh question set, or ask your mentor for an override if you've already tried multiple times."}
+        </p>
+
+        {lastResult.missedConcepts && lastResult.missedConcepts.length > 0 && (
+          <div className="mt-6 text-left p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="text-xs font-semibold uppercase text-slate-500 mb-2">
+              Concepts to revisit
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {lastResult.missedConcepts.map((c) => (
+                <span
+                  key={c}
+                  className="text-xs px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-700"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          {passed ? (
+            <Button onClick={handleContinue}>
+              Continue to Day {dayNum + 1}{" "}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          ) : (
+            <>
+              <Button onClick={handleRetry}>
+                Retry — fresh questions
+              </Button>
+              <Button variant="secondary" onClick={handleRequestOverride}>
+                Request mentor override
+              </Button>
+            </>
+          )}
+          <Button variant="ghost" onClick={handleContinue}>
+            Back to path
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Confetti Component ---
+function Confetti() {
+  const pieces = Array.from({ length: 24 });
+  const colors = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#0ea5e9"];
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 h-24 overflow-visible">
+      {pieces.map((_, i) => (
+        <span
+          key={i}
+          className="absolute w-2 h-3 rounded-sm"
+          style={{
+            left: `${(i / pieces.length) * 100}%`,
+            top: "0",
+            backgroundColor: colors[i % colors.length],
+            animation: `confettiFall 1.6s ease-out forwards`,
+            animationDelay: `${(i % 6) * 80}ms`,
+            transform: `rotate(${i * 30}deg)`,
+            opacity: 0.9,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
