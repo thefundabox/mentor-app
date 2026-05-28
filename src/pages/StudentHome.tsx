@@ -1,11 +1,11 @@
 import { useAppState } from "@/hooks/useAppState";
-import { findTopic } from "@/data";
 import { Button } from "@/components/ui/button";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
-  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval } = useAppState();
+  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive } = useAppState();
+  const findTopic = findTopicLive;
   if (!currentUser) return null;
 
   const user = currentUser;

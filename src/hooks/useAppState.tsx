@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import { useLocalStorage } from "./useLocalStorage";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
-  POINTS, levelFromPoints, xpInLevel, xpToNextLevel,
+  POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
+  SubjectCatalogEntry,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -42,23 +43,40 @@ interface AppContextValue extends AppState {
   completedDays: (studentId: string) => number[];
 
   students: User[];
+  mentors: User[];
   levelInfo: (studentId: string) => { level: number; xpInLevel: number; xpToNextLevel: number; total: number };
+
+  // subject catalog (admin-managed)
+  /** Resolve a topic against the runtime catalog (admin edits are reflected). */
+  findTopicLive: (topicId: string) => { subject: SubjectCatalogEntry; topic: { id: string; name: string } } | null;
+  setSubjects: (next: SubjectCatalogEntry[]) => void;
+  upsertSubject: (s: SubjectCatalogEntry) => void;
+  archiveSubject: (subjectId: string) => void;
+  upsertTopic: (subjectId: string, topic: { id: string; name: string }) => void;
+  removeTopic: (subjectId: string, topicId: string) => void;
+
+  // user/admin ops
+  addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
+  assignStudentToMentor: (studentId: string, mentorId: string) => void;
+  setAdminTab: (tab: "people" | "catalog" | "stats") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // v3 keys — schema changed from single-topic to multi-topic days; ignore old data.
-  const [users, setUsers] = useLocalStorage<User[]>("v4_users", SEED_USERS);
-  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v4_studentData", seedStudentData());
-  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v4_currentUserId", null);
-  const [route, setRoute] = useLocalStorage<Route>("v4_route", "auto");
-  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v4_loginRoleIntent", null);
-  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v4_activeDay", null);
-  const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v4_activeTopicId", null);
-  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v4_attemptSeed", 1);
-  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v4_lastResult", null);
-  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v4_viewingStudentId", null);
+  const [users, setUsers] = useLocalStorage<User[]>("v5_users", SEED_USERS);
+  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v5_studentData", seedStudentData());
+  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v5_currentUserId", null);
+  const [route, setRoute] = useLocalStorage<Route>("v5_route", "auto");
+  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v5_loginRoleIntent", null);
+  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v5_activeDay", null);
+  const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v5_activeTopicId", null);
+  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v5_attemptSeed", 1);
+  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v5_lastResult", null);
+  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
+  const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -66,6 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const students = useMemo(() => users.filter((u) => u.role === "student"), [users]);
+  const mentors = useMemo(() => users.filter((u) => u.role === "mentor"), [users]);
 
   /* ---------- session ---------- */
 
@@ -264,10 +283,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { total, level: levelFromPoints(total), xpInLevel: xpInLevel(total), xpToNextLevel: xpToNextLevel(total) };
   }, [getStudent]);
 
+  /* ---------- subject catalog (admin) ---------- */
+
+  const findTopicLive = useCallback((topicId: string) => {
+    for (const s of subjects) {
+      const t = s.topics.find((t) => t.id === topicId);
+      if (t) return { subject: s, topic: t };
+    }
+    return null;
+  }, [subjects]);
+
+  const upsertSubject = useCallback((s: SubjectCatalogEntry) => {
+    setSubjects((prev) => {
+      const i = prev.findIndex((x) => x.id === s.id);
+      if (i < 0) return [...prev, s];
+      const next = [...prev]; next[i] = s; return next;
+    });
+  }, [setSubjects]);
+
+  const archiveSubject = useCallback((subjectId: string) => {
+    setSubjects((prev) => prev.map((s) => s.id === subjectId ? { ...s, archived: true } : s));
+  }, [setSubjects]);
+
+  const upsertTopic = useCallback((subjectId: string, topic: { id: string; name: string }) => {
+    setSubjects((prev) => prev.map((s) => {
+      if (s.id !== subjectId) return s;
+      const i = s.topics.findIndex((t) => t.id === topic.id);
+      if (i < 0) return { ...s, topics: [...s.topics, topic] };
+      const topics = [...s.topics]; topics[i] = topic;
+      return { ...s, topics };
+    }));
+  }, [setSubjects]);
+
+  const removeTopic = useCallback((subjectId: string, topicId: string) => {
+    setSubjects((prev) => prev.map((s) => s.id !== subjectId ? s : { ...s, topics: s.topics.filter((t) => t.id !== topicId) }));
+  }, [setSubjects]);
+
+  /* ---------- user ops (admin) ---------- */
+
+  const addUser = useCallback((u: Omit<User, "id" | "createdAt"> & { id?: string }) => {
+    const created: User = { id: u.id || `u_${u.role}_${Date.now()}`, createdAt: Date.now(), ...u } as User;
+    setUsers((prev) => [...prev, created]);
+    if (created.role === "student") {
+      setStudentData((prev) => prev[created.id] ? prev : { ...prev, [created.id]: emptyStudentData() });
+    }
+    return created;
+  }, [setUsers, setStudentData]);
+
+  const assignStudentToMentor = useCallback((studentId: string, mentorId: string) => {
+    setUsers((prev) => prev.map((u) => u.id === studentId && u.role === "student" ? { ...u, mentorId } : u));
+  }, [setUsers]);
+
   const value: AppContextValue = {
-    users, currentUserId, studentData,
+    users, currentUserId, studentData, subjects, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
-    currentUser, students,
+    currentUser, students, mentors,
     loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
@@ -275,6 +345,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     finishQuiz, addOverride, updateOverride, addMainsScore, markPyqReviewed,
     topicCleared, dayCleared, completedDays,
     levelInfo,
+    findTopicLive,
+    setSubjects, upsertSubject, archiveSubject, upsertTopic, removeTopic,
+    addUser, assignStudentToMentor, setAdminTab,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

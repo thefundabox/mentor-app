@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { findTopic, topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
+import { topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   BookOpen,
@@ -16,7 +16,7 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, findTopicLive: findTopic } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);

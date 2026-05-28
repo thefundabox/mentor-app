@@ -1,5 +1,5 @@
 import { useAppState } from "@/hooks/useAppState";
-import { conceptLabel, findTopic } from "@/data";
+import { conceptLabel } from "@/data";
 import { Button } from "@/components/ui/button";
 import { Trophy, Sparkles, ArrowRight, Star, Zap, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 interface ResultsProps { dayNum: number; }
 
 export function Results({ dayNum }: ResultsProps) {
-  const { currentUser, getStudent, lastResult, setRoute, setAttemptSeed, setActiveDay, setActiveTopicId, addOverride, topicCleared } = useAppState();
+  const { currentUser, getStudent, lastResult, setRoute, setAttemptSeed, setActiveDay, setActiveTopicId, addOverride, topicCleared, findTopicLive: findTopic } = useAppState();
   if (!currentUser || !lastResult) return null;
   const user = currentUser;
   const student = getStudent(user.id);

@@ -1,12 +1,11 @@
 import { useAppState } from "@/hooks/useAppState";
-import { findTopic } from "@/data";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Clock, AlertCircle, ArrowRight, Pencil } from "lucide-react";
 import { SCOPE_LABEL } from "@/types";
 
 export function ApprovalGate() {
-  const { currentUser, getStudent, setRoute } = useAppState();
+  const { currentUser, getStudent, setRoute, findTopicLive: findTopic } = useAppState();
   if (!currentUser) return null;
   const s = getStudent(currentUser.id);
   const isPending = s.chart.status === "pending_approval";

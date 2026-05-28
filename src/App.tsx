@@ -11,6 +11,7 @@ import { QuizScreen } from "@/pages/QuizScreen";
 import { Results } from "@/pages/Results";
 import { MentorDashboard } from "@/pages/MentorDashboard";
 import { MentorStudentDetail } from "@/pages/MentorStudentDetail";
+import { AdminDashboard } from "@/pages/AdminDashboard";
 import { motion } from "framer-motion";
 
 function AppContent() {
@@ -19,6 +20,7 @@ function AppContent() {
   useEffect(() => {
     if (route !== "auto") return;
     if (!currentUser) { setRoute("landing"); return; }
+    if (currentUser.role === "admin") { setRoute("admin"); return; }
     if (currentUser.role === "mentor") { setRoute("mentor"); return; }
     const s = getStudent(currentUser.id);
     if (!s || s.chart.days.filter((d) => d.length > 0).length === 0) { setRoute("onboarding"); return; }
@@ -38,6 +40,8 @@ function AppContent() {
 
   if (!currentUser) {
     content = route === "login" ? <Login /> : <Landing />;
+  } else if (currentUser.role === "admin") {
+    content = <AdminDashboard />;
   } else if (currentUser.role === "mentor") {
     if (route === "mentor_student" && viewingStudentId) content = <MentorStudentDetail studentId={viewingStudentId} />;
     else if (route === "onboarding" && viewingStudentId) content = <Onboarding studentId={viewingStudentId} byMentor />;

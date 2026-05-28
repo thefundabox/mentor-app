@@ -8,9 +8,20 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
 
-  const accent = role === "student" ? "indigo" : "emerald";
-  const accentBg = accent === "indigo" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-emerald-600 hover:bg-emerald-700";
-  const ringClass = accent === "indigo" ? "focus:ring-indigo-100 focus:border-indigo-400" : "focus:ring-emerald-100 focus:border-emerald-400";
+  const accent: "indigo" | "emerald" | "slate" =
+    role === "student" ? "indigo" : role === "mentor" ? "emerald" : "slate";
+  const accentBg = {
+    indigo:  "bg-indigo-600 hover:bg-indigo-700",
+    emerald: "bg-emerald-600 hover:bg-emerald-700",
+    slate:   "bg-slate-700 hover:bg-slate-800",
+  }[accent];
+  const ringClass = {
+    indigo:  "focus:ring-indigo-100 focus:border-indigo-400",
+    emerald: "focus:ring-emerald-100 focus:border-emerald-400",
+    slate:   "focus:ring-slate-200 focus:border-slate-400",
+  }[accent];
+  const dotColor = { indigo: "bg-indigo-500", emerald: "bg-emerald-500", slate: "bg-slate-500" }[accent];
+  const labelColor = { indigo: "text-indigo-700", emerald: "text-emerald-700", slate: "text-slate-700" }[accent];
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,15 +43,17 @@ export function Login() {
         <button onClick={() => setRoute("landing")} className="text-sm text-slate-500 hover:text-slate-800 mb-4">← back</button>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide ${accent === "indigo" ? "text-indigo-700" : "text-emerald-700"} mb-2`}>
-            <span className={`w-2 h-2 rounded-full ${accent === "indigo" ? "bg-indigo-500" : "bg-emerald-500"}`}></span>
-            {role === "student" ? "Student sign-in" : "Mentor sign-in"}
+          <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide ${labelColor} mb-2`}>
+            <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+            {role === "student" ? "Student sign-in" : role === "mentor" ? "Mentor sign-in" : "Admin sign-in"}
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-1">Welcome{role === "mentor" ? " back" : ""}</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">Welcome{role === "student" ? "" : " back"}</h1>
           <p className="text-sm text-slate-500 mb-6">
             {role === "student"
               ? "Sign in to continue your prep journey. New here? We'll set you up automatically."
-              : "Sign in to review your students' charts and progress."}
+              : role === "mentor"
+              ? "Sign in to review your students' charts and progress."
+              : "Sign in to manage the subject catalog, mentors, and platform metrics."}
           </p>
 
           <form onSubmit={submit} className="space-y-4">

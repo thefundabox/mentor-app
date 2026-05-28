@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
-import { findTopic, conceptLabel } from "@/data";
+import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange } from "lucide-react";
@@ -16,7 +16,7 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const [feedback, setFeedback] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
 
-  const { completedDays, topicCleared } = useAppState();
+  const { completedDays, topicCleared, findTopicLive: findTopic } = useAppState();
   if (!user) return null;
 
   const cleared = completedDays(studentId);

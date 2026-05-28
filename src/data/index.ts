@@ -1,46 +1,130 @@
-import type { Subject, Question, PYQ, MainsPrompt, User, StudentData, DaySlot } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot } from "@/types";
 
-export const SUBJECTS: Subject[] = [
+/**
+ * Default subject catalog. Seeded into v5_subjects on first load.
+ * Admins can then add / rename / soft-delete from the Admin → Catalog tab.
+ *
+ * Intentionally larger than the original demo (10 subjects, ~60 topics) so
+ * the new collapsible + searchable library has something to scale against.
+ */
+export const DEFAULT_SUBJECTS: SubjectCatalogEntry[] = [
   {
-    id: "raj-history",
-    name: "Rajasthan History",
-    icon: "🏰",
-    color: "amber",
+    id: "raj-history", name: "Rajasthan History", icon: "🏰", color: "amber",
     topics: [
       { id: "mauryan-raj", name: "Mauryan Rajasthan" },
       { id: "pratiharas", name: "Gurjara-Pratiharas" },
       { id: "chauhans", name: "Chauhans of Ajmer" },
       { id: "mewar", name: "Mewar — Sisodias" },
+      { id: "marwar", name: "Marwar — Rathores" },
+      { id: "amber-jaipur", name: "Amber-Jaipur (Kachwahas)" },
       { id: "1857-raj", name: "1857 Revolt in Rajasthan" },
+      { id: "integration-raj", name: "Integration of Princely States" },
     ],
   },
   {
-    id: "polity",
-    name: "Indian Polity",
-    icon: "⚖️",
-    color: "indigo",
+    id: "polity", name: "Indian Polity", icon: "⚖️", color: "indigo",
     topics: [
       { id: "preamble", name: "Preamble & Basic Structure" },
       { id: "fund-rights", name: "Fundamental Rights" },
       { id: "dpsp", name: "DPSP & Fundamental Duties" },
       { id: "exec", name: "President & Prime Minister" },
       { id: "parliament", name: "Parliament" },
+      { id: "judiciary", name: "Supreme Court & Judiciary" },
+      { id: "federalism", name: "Federalism & Centre–State" },
+      { id: "panchayati-raj", name: "Panchayati Raj" },
     ],
   },
   {
-    id: "raj-geo",
-    name: "Geography of Rajasthan",
-    icon: "🏜️",
-    color: "emerald",
+    id: "raj-geo", name: "Geography of Rajasthan", icon: "🏜️", color: "emerald",
     topics: [
       { id: "phys-div", name: "Physical Divisions" },
       { id: "rivers", name: "Rivers & Drainage" },
       { id: "climate", name: "Climate" },
       { id: "soils", name: "Soils" },
       { id: "minerals", name: "Minerals" },
+      { id: "wildlife", name: "Wildlife & Sanctuaries" },
+      { id: "agriculture-raj", name: "Agriculture of Rajasthan" },
+    ],
+  },
+  {
+    id: "indian-history", name: "Modern Indian History", icon: "📜", color: "rose",
+    topics: [
+      { id: "british-rise", name: "Rise of British Power" },
+      { id: "revolt-1857", name: "Revolt of 1857" },
+      { id: "moderates", name: "Moderates & Extremists" },
+      { id: "gandhi-era", name: "Gandhian Era" },
+      { id: "partition", name: "Partition & Independence" },
+      { id: "constituent", name: "Making of the Constitution" },
+    ],
+  },
+  {
+    id: "geo-india", name: "Geography of India", icon: "🌏", color: "sky",
+    topics: [
+      { id: "physiography", name: "Physiography" },
+      { id: "monsoon", name: "Indian Monsoon System" },
+      { id: "river-systems", name: "River Systems" },
+      { id: "climate-india", name: "Climate Zones" },
+      { id: "minerals-india", name: "Minerals & Industries" },
+    ],
+  },
+  {
+    id: "economy", name: "Indian Economy", icon: "💹", color: "violet",
+    topics: [
+      { id: "national-income", name: "National Income" },
+      { id: "planning", name: "Planning & NITI Aayog" },
+      { id: "banking", name: "Banking & RBI" },
+      { id: "budget", name: "Union Budget" },
+      { id: "fiscal-policy", name: "Fiscal Policy" },
+      { id: "external-sector", name: "External Sector & Trade" },
+      { id: "poverty-employment", name: "Poverty & Employment" },
+    ],
+  },
+  {
+    id: "raj-art-culture", name: "Rajasthani Art & Culture", icon: "🎨", color: "pink",
+    topics: [
+      { id: "miniature-paintings", name: "Miniature Painting Schools" },
+      { id: "folk-dances", name: "Folk Dances" },
+      { id: "folk-music", name: "Folk Music & Instruments" },
+      { id: "festivals-fairs", name: "Festivals & Fairs" },
+      { id: "handicrafts", name: "Handicrafts" },
+      { id: "architecture", name: "Architecture of Rajasthan" },
+    ],
+  },
+  {
+    id: "science-tech", name: "Science & Tech", icon: "🧪", color: "teal",
+    topics: [
+      { id: "space", name: "Space — ISRO Missions" },
+      { id: "biotech", name: "Biotechnology" },
+      { id: "it-cyber", name: "IT & Cyber Security" },
+      { id: "energy", name: "Energy — Conventional & Renewable" },
+      { id: "defense-tech", name: "Defence Technology" },
+    ],
+  },
+  {
+    id: "environment", name: "Environment & Ecology", icon: "🌳", color: "lime",
+    topics: [
+      { id: "biodiversity", name: "Biodiversity & Conservation" },
+      { id: "climate-change", name: "Climate Change & Treaties" },
+      { id: "pollution", name: "Pollution & Waste" },
+      { id: "ecosystems", name: "Ecosystems" },
+      { id: "environmental-laws", name: "Environmental Laws" },
+    ],
+  },
+  {
+    id: "current-affairs", name: "Current Affairs", icon: "🗞️", color: "orange",
+    topics: [
+      { id: "ca-international", name: "International Relations" },
+      { id: "ca-national", name: "National — Last 6 Months" },
+      { id: "ca-economy", name: "Economy & Markets" },
+      { id: "ca-sports", name: "Sports & Awards" },
+      { id: "ca-summits", name: "Summits & Conferences" },
+      { id: "ca-reports", name: "Government Reports & Indices" },
     ],
   },
 ];
+
+/** Back-compat: code that still imports SUBJECTS gets the default catalog. */
+export const SUBJECTS: Subject[] = DEFAULT_SUBJECTS;
 
 export const MEWAR_NOTES = `
 # Mewar — The Sisodia Dynasty
@@ -677,8 +761,9 @@ export const MAINS_PROMPT: MainsPrompt = {
 };
 
 // Utility functions
-export function findTopic(topicId: string) {
-  for (const s of SUBJECTS) {
+/** Find a (subject, topic) pair by topicId in a catalog. Falls back to DEFAULT_SUBJECTS when omitted. */
+export function findTopic(topicId: string, catalog: Subject[] = DEFAULT_SUBJECTS) {
+  for (const s of catalog) {
     const t = s.topics.find((t) => t.id === topicId);
     if (t) return { subject: s, topic: t };
   }
@@ -761,17 +846,33 @@ const ms = (daysAgo: number) => Date.now() - daysAgo * 86400000;
 
 // One mentor + two demo students with realistic-looking progress so the
 // mentor dashboard is meaningful on first load.
+const ADMIN_ID = "u_admin_singh";
 const MENTOR_ID = "u_mentor_priya";
+const MENTOR_RAVI = "u_mentor_ravi";
 const STUDENT_AAMIR = "u_student_aamir";
 const STUDENT_NEHA  = "u_student_neha";
 
 export const SEED_USERS: User[] = [
+  {
+    id: ADMIN_ID,
+    email: "admin@example.com",
+    name: "Admin Singh",
+    role: "admin",
+    createdAt: ms(90),
+  },
   {
     id: MENTOR_ID,
     email: "priya.mentor@example.com",
     name: "Priya Sharma",
     role: "mentor",
     createdAt: ms(60),
+  },
+  {
+    id: MENTOR_RAVI,
+    email: "ravi.mentor@example.com",
+    name: "Ravi Iyer",
+    role: "mentor",
+    createdAt: ms(45),
   },
   {
     id: STUDENT_AAMIR,

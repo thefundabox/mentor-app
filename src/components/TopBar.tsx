@@ -6,6 +6,10 @@ export function TopBar() {
   const goHome = () => {
     if (!currentUser) { setRoute("landing"); return; }
     setActiveDay(null);
+    if (currentUser.role === "admin") {
+      setRoute("admin");
+      return;
+    }
     if (currentUser.role === "mentor") {
       setViewingStudentId(null);
       setRoute("mentor");
@@ -47,7 +51,7 @@ export function TopBar() {
 
           {currentUser && (
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${currentUser.role === "mentor" ? "bg-emerald-500" : "bg-indigo-500"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${currentUser.role === "admin" ? "bg-slate-700" : currentUser.role === "mentor" ? "bg-emerald-500" : "bg-indigo-500"}`}>
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
               <div className="hidden md:block leading-tight">

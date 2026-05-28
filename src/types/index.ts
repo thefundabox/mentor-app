@@ -137,7 +137,7 @@ export interface PointsState {
   history: PointEvent[];
 }
 
-export type Role = "student" | "mentor";
+export type Role = "student" | "mentor" | "admin";
 
 export interface User {
   id: string;
@@ -147,6 +147,11 @@ export interface User {
   /** For students: id of their mentor */
   mentorId?: string;
   createdAt: number;
+}
+
+/** Subject in the runtime catalog — admins can soft-delete (archived). */
+export interface SubjectCatalogEntry extends Subject {
+  archived?: boolean;
 }
 
 export interface StudentData {
@@ -171,12 +176,15 @@ export type Route =
   | "quiz"
   | "results"
   | "mentor"
-  | "mentor_student";
+  | "mentor_student"
+  | "admin";
 
 export interface AppState {
   users: User[];
   currentUserId: string | null;
   studentData: Record<string, StudentData>;
+  /** Runtime-editable subject catalog (admin-maintained). */
+  subjects: SubjectCatalogEntry[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -185,4 +193,6 @@ export interface AppState {
   lastResult: QuizResult | null;
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
+  /** Active admin sub-tab (people | catalog | stats) */
+  adminTab: "people" | "catalog" | "stats";
 }
