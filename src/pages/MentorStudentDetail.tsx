@@ -3,8 +3,9 @@ import { useAppState } from "@/hooks/useAppState";
 import { findTopic, conceptLabel } from "@/data";
 import { strengthsAndWeaknesses } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { SCOPE_LABEL } from "@/types";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
@@ -73,13 +74,32 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
         </div>
       </div>
 
+      {/* Commitment summary (always visible if chart exists) */}
+      {totalDays > 0 && s.chart.status === "approved" && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-6 flex items-center gap-3 flex-wrap">
+          <CalendarRange className="w-4 h-4 text-emerald-700" />
+          <div className="text-sm text-emerald-900">
+            <strong>{SCOPE_LABEL[s.chart.commitmentScope]} plan</strong> — approved through Day {s.chart.approvedThrough} of {totalDays}.
+            {s.chart.approvedThrough < totalDays && (
+              <span className="text-emerald-700/80"> {totalDays - s.chart.approvedThrough} more day{totalDays - s.chart.approvedThrough === 1 ? "" : "s"} still uncommitted.</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Plan approval banner */}
       {s.chart.status === "pending_approval" && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <div className="text-xs font-bold uppercase tracking-wide text-amber-800 mb-1">Plan awaiting approval</div>
-              <div className="text-sm text-amber-900">{user.name} submitted a {totalDays}-day plan. Review the chart below and decide.</div>
+              <div className="text-xs font-bold uppercase tracking-wide text-amber-800 mb-1">
+                {SCOPE_LABEL[s.chart.commitmentScope]} plan awaiting approval
+              </div>
+              <div className="text-sm text-amber-900">
+                {user.name} committed <strong>Day {s.chart.approvedThrough + 1}–{s.chart.committedThrough}</strong>
+                {" "}({s.chart.committedThrough - s.chart.approvedThrough} day{s.chart.committedThrough - s.chart.approvedThrough === 1 ? "" : "s"}).
+                {s.chart.approvedThrough > 0 && <> Already approved through Day {s.chart.approvedThrough}.</>}
+              </div>
             </div>
             <div className="flex gap-2 items-start">
               <Button onClick={onApprovePlan}><Check className="w-4 h-4" /> Approve</Button>

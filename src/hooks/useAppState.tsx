@@ -6,8 +6,9 @@ import {
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
-  Override, Attempt, MainsScore, StudentData, PointEvent, PointKind,
+  Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
 } from "@/types";
+import { SCOPE_DAYS } from "@/types";
 
 interface AppContextValue extends AppState {
   currentUser: User | null;
@@ -24,9 +25,11 @@ interface AppContextValue extends AppState {
 
   getStudent: (studentId: string) => StudentData;
   setChart: (studentId: string, chart: ChartState) => void;
-  submitChartForApproval: (studentId: string) => void;
+  submitChartForApproval: (studentId: string, scope?: CommitmentScope) => void;
   approveChart: (studentId: string) => void;
   requestChartChanges: (studentId: string, feedback?: string) => void;
+  /** Returns true if `day` is within the mentor-approved window AND the chart is approved. */
+  isDayUnlocked: (studentId: string, day: number) => boolean;
   finishQuiz: (studentId: string, attempt: Attempt) => { pointsAwarded: number; dayClearedNow: boolean; topicsRemainingInDay: number };
   addOverride: (studentId: string, override: Override) => void;
   updateOverride: (studentId: string, override: Override) => void;
@@ -46,16 +49,16 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // v3 keys — schema changed from single-topic to multi-topic days; ignore old data.
-  const [users, setUsers] = useLocalStorage<User[]>("v3_users", SEED_USERS);
-  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v3_studentData", seedStudentData());
-  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v3_currentUserId", null);
-  const [route, setRoute] = useLocalStorage<Route>("v3_route", "auto");
-  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v3_loginRoleIntent", null);
-  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v3_activeDay", null);
-  const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v3_activeTopicId", null);
-  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v3_attemptSeed", 1);
-  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v3_lastResult", null);
-  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v3_viewingStudentId", null);
+  const [users, setUsers] = useLocalStorage<User[]>("v4_users", SEED_USERS);
+  const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v4_studentData", seedStudentData());
+  const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v4_currentUserId", null);
+  const [route, setRoute] = useLocalStorage<Route>("v4_route", "auto");
+  const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v4_loginRoleIntent", null);
+  const [activeDay, setActiveDay] = useLocalStorage<number | null>("v4_activeDay", null);
+  const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v4_activeTopicId", null);
+  const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v4_attemptSeed", 1);
+  const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v4_lastResult", null);
+  const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v4_viewingStudentId", null);
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -122,8 +125,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchStudent(id, { chart });
   }, [patchStudent]);
 
-  const submitChartForApproval = useCallback((id: string) => {
-    patchStudent(id, (s) => ({ ...s, chart: { ...s.chart, status: "pending_approval", submittedAt: Date.now() } }));
+  const submitChartForApproval = useCallback((id: string, scope?: CommitmentScope) => {
+    patchStudent(id, (s) => {
+      const newScope: CommitmentScope = scope ?? s.chart.commitmentScope ?? "week";
+      const sliceSize = SCOPE_DAYS[newScope];
+      // Commit from where the mentor last approved up to scope days further (clamped to chart length).
+      const from = s.chart.approvedThrough;
+      const requested = Math.min(s.chart.days.length, from + sliceSize);
+      return {
+        ...s,
+        chart: {
+          ...s.chart,
+          status: "pending_approval",
+          commitmentScope: newScope,
+          committedThrough: Math.max(requested, s.chart.approvedThrough),
+          submittedAt: Date.now(),
+        },
+      };
+    });
   }, [patchStudent]);
 
   const awardPoints = (s: StudentData, kind: PointKind, amount: number, meta?: PointEvent["meta"]): StudentData => {
@@ -133,7 +152,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const approveChart = useCallback((id: string) => {
     patchStudent(id, (s) => {
-      const updated: StudentData = { ...s, chart: { ...s.chart, status: "approved" as ChartStatus, decidedAt: Date.now() } };
+      const newApprovedThrough = Math.max(s.chart.approvedThrough, s.chart.committedThrough);
+      const updated: StudentData = {
+        ...s,
+        chart: { ...s.chart, status: "approved" as ChartStatus, approvedThrough: newApprovedThrough, decidedAt: Date.now() },
+      };
       const already = s.points.history.some((e) => e.kind === "chart_approved");
       return already ? updated : awardPoints(updated, "chart_approved", POINTS.CHART_APPROVED);
     });
@@ -172,6 +195,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (isDayClearedFor(s, d)) out.push(d);
     }
     return out;
+  }, [getStudent]);
+
+  const isDayUnlocked = useCallback((id: string, day: number) => {
+    const s = getStudent(id);
+    return s.chart.status === "approved" && day <= s.chart.approvedThrough;
   }, [getStudent]);
 
   const finishQuiz = useCallback((id: string, attempt: Attempt) => {
@@ -243,6 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
+    isDayUnlocked,
     finishQuiz, addOverride, updateOverride, addMainsScore, markPyqReviewed,
     topicCleared, dayCleared, completedDays,
     levelInfo,

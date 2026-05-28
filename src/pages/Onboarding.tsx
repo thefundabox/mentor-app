@@ -7,8 +7,9 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppState } from "@/hooks/useAppState";
 import { SUBJECTS, findTopic } from "@/data";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, GripVertical, Send, AlertCircle, X } from "lucide-react";
-import type { DaySlot, ChartState } from "@/types";
+import { ArrowRight, GripVertical, Send, AlertCircle, X, Calendar, CalendarDays, CalendarRange } from "lucide-react";
+import type { DaySlot, ChartState, CommitmentScope } from "@/types";
+import { SCOPE_DAYS } from "@/types";
 
 interface OnboardingProps {
   studentId: string;
@@ -24,6 +25,7 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
   const [days, setDays] = useState(
     Math.max(currentChart.days.length || 15, 15)
   );
+  const [scope, setScope] = useState<CommitmentScope>(currentChart.commitmentScope || "week");
   const [activeDrag, setActiveDrag] = useState<{
     subjectId: string; topicId: string; topicName: string; subjectName: string; icon: string; color: string;
   } | null>(null);
@@ -104,15 +106,30 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
 
   const handleSubmit = () => {
     if (byMentor) {
-      setChart(studentId, { ...currentChart, days: ensureDays(days), status: "approved", decidedAt: Date.now() });
+      const finalDays = ensureDays(days);
+      setChart(studentId, {
+        ...currentChart, days: finalDays, status: "approved",
+        commitmentScope: scope, committedThrough: finalDays.length, approvedThrough: finalDays.length,
+        decidedAt: Date.now(),
+      });
       approveChart(studentId);
       setViewingStudentId(studentId);
       setRoute("mentor_student");
     } else {
-      submitChartForApproval(studentId);
+      // Persist current scope choice on the chart, then submit.
+      setChart(studentId, { ...currentChart, days: ensureDays(days), commitmentScope: scope, status: "draft" });
+      submitChartForApproval(studentId, scope);
       setRoute("approval_gate");
     }
   };
+
+  // Preview what slice will be submitted.
+  const submitFrom = currentChart.approvedThrough + 1;
+  const submitTo = Math.min(filledOrDays(), currentChart.approvedThrough + SCOPE_DAYS[scope]);
+
+  function filledOrDays() {
+    return Math.min(ensureDays(days).length, days);
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -197,16 +214,69 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
         </DragOverlay>
       </DndContext>
 
-      <div className="mt-8 flex justify-end gap-3">
+      {!byMentor && (
+        <div className="mt-8 p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/30">
+          <div className="text-xs font-bold uppercase tracking-wide text-indigo-700 mb-1">Commitment scope</div>
+          <p className="text-sm text-slate-600 mb-3">
+            How much do you want to commit at once? The mentor will approve this slice; you can re-commit the next one when you clear it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <ScopeButton
+              active={scope === "week"} onClick={() => setScope("week")}
+              icon={<Calendar className="w-4 h-4" />} label="Week" sub="7 days"
+            />
+            <ScopeButton
+              active={scope === "month"} onClick={() => setScope("month")}
+              icon={<CalendarDays className="w-4 h-4" />} label="Month" sub="30 days"
+            />
+            <ScopeButton
+              active={scope === "overall"} onClick={() => setScope("overall")}
+              icon={<CalendarRange className="w-4 h-4" />} label="Overall" sub="whole chart"
+            />
+          </div>
+          {filled > 0 && (
+            <div className="mt-3 text-xs text-slate-600">
+              {currentChart.approvedThrough > 0 && (
+                <span className="text-emerald-700 font-semibold">Already approved through Day {currentChart.approvedThrough}. </span>
+              )}
+              Submitting <strong>Day {submitFrom}–{submitTo}</strong> ({submitTo - submitFrom + 1} day{submitTo - submitFrom === 0 ? "" : "s"}) for mentor approval.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-3">
         <Button disabled={filled === 0} onClick={handleSubmit}>
           {byMentor ? (
             <>Save &amp; approve <ArrowRight className="w-4 h-4" /></>
           ) : (
-            <>{isResubmit ? "Resubmit for approval" : "Submit for mentor approval"} <Send className="w-4 h-4" /></>
+            <>
+              {isResubmit ? "Resubmit" : "Submit"} {scope === "week" ? "week plan" : scope === "month" ? "month plan" : "overall plan"}
+              <Send className="w-4 h-4" />
+            </>
           )}
         </Button>
       </div>
     </div>
+  );
+}
+
+function ScopeButton({ active, onClick, icon, label, sub }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; sub: string;
+}) {
+  return (
+    <button onClick={onClick}
+      className={`text-left p-4 rounded-xl border-2 transition flex items-center gap-3 ${
+        active ? "border-indigo-500 bg-white shadow-sm" : "border-slate-200 bg-white hover:border-indigo-300"
+      }`}>
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${active ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>
+        {icon}
+      </div>
+      <div>
+        <div className="font-semibold text-slate-900">{label}</div>
+        <div className="text-xs text-slate-500">{sub}</div>
+      </div>
+    </button>
   );
 }
 

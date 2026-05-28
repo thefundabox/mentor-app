@@ -1,21 +1,36 @@
 import { useAppState } from "@/hooks/useAppState";
 import { findTopic } from "@/data";
 import { Button } from "@/components/ui/button";
-import { Check, Lock, Trophy, Flame, Star, Circle } from "lucide-react";
+import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
+import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
-  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays } = useAppState();
+  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval } = useAppState();
   if (!currentUser) return null;
 
-  const s = getStudent(currentUser.id);
+  const user = currentUser;
+  const s = getStudent(user.id);
   const chart = s.chart.days;
   const progress = s.progress;
   if (!chart || chart.filter((d) => d.length > 0).length === 0) return null;
 
   const totalDays = chart.length;
-  const completed = completedDays(currentUser.id);
+  const completed = completedDays(user.id);
   const currentDay = progress.currentDay || 1;
-  const info = levelInfo(currentUser.id);
+  const info = levelInfo(user.id);
+  const approvedThrough = s.chart.approvedThrough;
+  const scope = s.chart.commitmentScope;
+  // Whether the student has cleared everything in the currently-approved slice
+  // and there are still days beyond it that need a new commitment.
+  const sliceCleared = approvedThrough > 0 && completed.length >= approvedThrough;
+  const hasMoreToCommit = approvedThrough < totalDays;
+  const showRecommit = sliceCleared && hasMoreToCommit && s.chart.status !== "pending_approval";
+  const awaitingApproval = s.chart.status === "pending_approval" && s.chart.committedThrough > approvedThrough;
+
+  const commitNext = (next: CommitmentScope) => {
+    submitChartForApproval(user.id, next);
+    setRoute("approval_gate");
+  };
 
   // Streak: consecutive cleared days starting from day 1.
   const streak = (() => {
@@ -56,6 +71,41 @@ export function StudentHome() {
           sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
       </div>
 
+      {/* Commitment banner */}
+      {approvedThrough > 0 && (
+        <div className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-indigo-700">Active commitment · {SCOPE_LABEL[scope]} plan</div>
+              <div className="text-sm text-slate-800 mt-1">
+                Approved through <strong>Day {approvedThrough}</strong> of {totalDays}. {completed.length} of {approvedThrough} cleared.
+              </div>
+            </div>
+            {awaitingApproval && (
+              <div className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                <Hourglass className="w-3 h-3" /> waiting for mentor approval of Day {approvedThrough + 1}–{s.chart.committedThrough}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showRecommit && (
+        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-amber-50 border-2 border-emerald-200">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold mb-1">
+            <Trophy className="w-5 h-5" /> Slice cleared — commit the next one
+          </div>
+          <p className="text-sm text-slate-700 mb-3">
+            You've cleared Day 1–{approvedThrough}. Commit your next slice for mentor approval. (You can switch scope if you like.)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => commitNext("week")}><Send className="w-4 h-4" /> Commit next week (+{Math.min(SCOPE_DAYS.week, totalDays - approvedThrough)}d)</Button>
+            <Button variant="secondary" onClick={() => commitNext("month")}>Commit next month (+{Math.min(SCOPE_DAYS.month, totalDays - approvedThrough)}d)</Button>
+            <Button variant="ghost" onClick={() => commitNext("overall")}>Commit the rest ({totalDays - approvedThrough}d)</Button>
+          </div>
+        </div>
+      )}
+
       <div className="relative">
         <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-[3px]"
           style={{ background: "repeating-linear-gradient(to bottom, #e2e8f0 0 6px, transparent 6px 12px)" }} />
@@ -63,9 +113,10 @@ export function StudentHome() {
         <div className="space-y-6 relative">
           {chart.map((topics, i) => {
             const dayNum = i + 1;
-            const isDone = completed.includes(dayNum) || dayCleared(currentUser.id, dayNum);
-            const isCurrent = dayNum === currentDay && !isDone;
-            const isLocked = dayNum > currentDay;
+            const isDone = completed.includes(dayNum) || dayCleared(user.id, dayNum);
+            const beyondCommitment = dayNum > approvedThrough;
+            const isCurrent = dayNum === currentDay && !isDone && !beyondCommitment;
+            const isLocked = dayNum > currentDay || beyondCommitment;
             const sideRight = i % 2 === 0;
             const hasMulti = topics.length > 1;
 
@@ -84,8 +135,13 @@ export function StudentHome() {
                     {isDone ? <Check className="w-6 h-6" /> : isLocked ? <Lock className="w-5 h-5" /> : dayNum}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">
-                      Day {dayNum}{hasMulti ? ` · ${topics.length} topics` : ""}
+                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-2">
+                      <span>Day {dayNum}{hasMulti ? ` · ${topics.length} topics` : ""}</span>
+                      {beyondCommitment && (
+                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                          beyond commitment
+                        </span>
+                      )}
                     </div>
                     {topics.length === 0 ? (
                       <div className="text-sm text-slate-400 italic">Unscheduled</div>
@@ -94,7 +150,7 @@ export function StudentHome() {
                         {topics.map((t) => {
                           const info = findTopic(t.topicId);
                           if (!info) return null;
-                          const cleared = topicCleared(currentUser.id, dayNum, t.topicId);
+                          const cleared = topicCleared(user.id, dayNum, t.topicId);
                           return (
                             <button
                               key={t.topicId}

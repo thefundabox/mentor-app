@@ -86,10 +86,31 @@ export interface Progress {
 
 export type ChartStatus = "draft" | "pending_approval" | "approved" | "changes_requested";
 
+/** How big a slice the student commits at a time. */
+export type CommitmentScope = "week" | "month" | "overall";
+
+export const SCOPE_DAYS: Record<CommitmentScope, number> = {
+  week: 7,
+  month: 30,
+  overall: Number.MAX_SAFE_INTEGER,
+};
+
+export const SCOPE_LABEL: Record<CommitmentScope, string> = {
+  week: "Week",
+  month: "Month",
+  overall: "Overall",
+};
+
 export interface ChartState {
   /** Each day holds 0..N topics. An empty array means an unscheduled day. */
   days: DaySlot[][];
   status: ChartStatus;
+  /** Default scope used when the student commits the next slice. */
+  commitmentScope: CommitmentScope;
+  /** Day index (1-based) that the student is submitting / has submitted for approval. 0 = nothing committed. */
+  committedThrough: number;
+  /** Day index (1-based) that the mentor has approved. 0 = not yet approved. */
+  approvedThrough: number;
   submittedAt?: number;
   decidedAt?: number;
   feedback?: string;

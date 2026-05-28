@@ -747,7 +747,7 @@ export const xpToNextLevel = (total: number) => POINTS_PER_LEVEL - xpInLevel(tot
 
 export function emptyStudentData(): StudentData {
   return {
-    chart: { days: [], status: "draft" },
+    chart: { days: [], status: "draft", commitmentScope: "week", committedThrough: 0, approvedThrough: 0 },
     progress: { currentDay: 1 },
     overrides: [],
     attempts: [],
@@ -813,7 +813,11 @@ export function seedStudentData(): Record<string, StudentData> {
     ["phys-div"],
   ]);
   const aamir: StudentData = {
-    chart: { days: aamirChart, status: "approved", submittedAt: ms(12), decidedAt: ms(11) },
+    chart: {
+      days: aamirChart, status: "approved",
+      commitmentScope: "week", committedThrough: 8, approvedThrough: 8,
+      submittedAt: ms(12), decidedAt: ms(11),
+    },
     progress: { currentDay: 4 },
     overrides: [],
     attempts: [
@@ -854,7 +858,11 @@ export function seedStudentData(): Record<string, StudentData> {
     ["fund-rights"],
   ]);
   const neha: StudentData = {
-    chart: { days: nehaChart, status: "pending_approval", submittedAt: ms(0) },
+    chart: {
+      days: nehaChart, status: "pending_approval",
+      commitmentScope: "week", committedThrough: 6, approvedThrough: 0,
+      submittedAt: ms(0),
+    },
     progress: { currentDay: 1 },
     overrides: [],
     attempts: [],

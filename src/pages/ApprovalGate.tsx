@@ -3,6 +3,7 @@ import { findTopic } from "@/data";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Clock, AlertCircle, ArrowRight, Pencil } from "lucide-react";
+import { SCOPE_LABEL } from "@/types";
 
 export function ApprovalGate() {
   const { currentUser, getStudent, setRoute } = useAppState();
@@ -21,11 +22,11 @@ export function ApprovalGate() {
           {isPending ? <Clock className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
         </div>
         <h1 className="text-2xl font-bold text-slate-900">
-          {isPending ? "Waiting for mentor approval" : "Mentor requested changes"}
+          {isPending ? `Waiting for mentor approval — ${SCOPE_LABEL[s.chart.commitmentScope]} plan` : "Mentor requested changes"}
         </h1>
         <p className="text-slate-600 mt-2 max-w-md mx-auto">
           {isPending
-            ? "Your plan has been sent to your mentor. You'll be notified here when it's approved. (Live status — try the Mentor login in another tab.)"
+            ? `You've committed Day ${s.chart.approvedThrough + 1}–${s.chart.committedThrough} for approval. You'll be notified here when your mentor approves.`
             : "Your mentor reviewed the plan and asked for changes. Update your chart and resubmit."}
         </p>
 
@@ -50,13 +51,19 @@ export function ApprovalGate() {
       </motion.div>
 
       <div className="mt-8 bg-white rounded-2xl border border-slate-200 p-5">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Your submitted plan</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Your plan</h2>
         <div className="space-y-2 max-h-[40vh] overflow-y-auto">
-          {s.chart.days.map((topics, i) => (
-            <div key={i} className="flex items-start gap-3 py-2 px-3 rounded-lg odd:bg-slate-50">
+          {s.chart.days.map((topics, i) => {
+            const day = i + 1;
+            const inCommitted = day <= s.chart.committedThrough;
+            const inApproved = day <= s.chart.approvedThrough;
+            return (
+            <div key={i} className={`flex items-start gap-3 py-2 px-3 rounded-lg ${inApproved ? "bg-emerald-50/40" : inCommitted ? "bg-amber-50/40" : "odd:bg-slate-50"}`}>
               <div className="text-xs font-semibold text-slate-500 w-12 pt-1">
-                Day {i + 1}
+                Day {day}
                 {topics.length > 1 && <div className="text-[10px] uppercase font-bold text-indigo-600">×{topics.length}</div>}
+                {inApproved && <div className="text-[10px] font-bold text-emerald-700 mt-0.5">approved</div>}
+                {!inApproved && inCommitted && <div className="text-[10px] font-bold text-amber-700 mt-0.5">pending</div>}
               </div>
               {topics.length === 0 ? (
                 <span className="text-xs text-slate-400 italic">unscheduled</span>
@@ -78,7 +85,8 @@ export function ApprovalGate() {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
