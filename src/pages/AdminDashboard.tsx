@@ -292,7 +292,7 @@ function SubjectRow({ subject, open, onToggle, onRename, onArchive, onRestore, o
       {open && !subject.archived && (
         <div className="px-5 pb-3 pl-14 space-y-1">
           {subject.topics.map((t) => (
-            <TopicRow key={t.id} topic={t}
+            <TopicRow key={t.id} topic={t} subjectId={subject.id}
               onRename={(name) => onRenameTopic(t.id, name)}
               onRemove={() => onRemoveTopic(t.id)} />
           ))}
@@ -311,30 +311,131 @@ function SubjectRow({ subject, open, onToggle, onRename, onArchive, onRestore, o
   );
 }
 
-function TopicRow({ topic, onRename, onRemove }: {
-  topic: { id: string; name: string };
+function TopicRow({ topic, subjectId, onRename, onRemove }: {
+  topic: import("@/types").Topic;
+  subjectId: string;
   onRename: (name: string) => void;
   onRemove: () => void;
 }) {
+  const { upsertTopic } = useAppState();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(topic.name);
+  const [showMedia, setShowMedia] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(topic.videoUrl || "");
+  const [docName, setDocName] = useState("");
+  const [docUrl, setDocUrl] = useState("");
+
+  const docs = topic.documents || [];
+  const mediaCount = (topic.videoUrl ? 1 : 0) + docs.length;
+
+  const updateMedia = (patch: Partial<import("@/types").Topic>) => {
+    upsertTopic(subjectId, { ...topic, ...patch });
+  };
+
+  const addDoc = () => {
+    if (!docUrl.trim()) return;
+    updateMedia({ documents: [...docs, { name: docName.trim() || docUrl.trim(), url: docUrl.trim() }] });
+    setDocName(""); setDocUrl("");
+  };
+
+  const removeDoc = (idx: number) => {
+    updateMedia({ documents: docs.filter((_, i) => i !== idx) });
+  };
+
+  const onDocFile = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      updateMedia({ documents: [...docs, { name: file.name, url: String(e.target?.result || "") }] });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onVideoFile = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => updateMedia({ videoUrl: String(e.target?.result || "") });
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-slate-50">
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 flex-shrink-0" />
-      {editing ? (
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus
-          onBlur={() => { onRename(name); setEditing(false); }}
-          onKeyDown={(e) => { if (e.key === "Enter") { onRename(name); setEditing(false); } }}
-          className="flex-1 px-2 py-1 rounded border border-slate-200 outline-none focus:border-slate-400 text-sm" />
-      ) : (
-        <div className="flex-1 text-sm text-slate-800">{topic.name}</div>
+    <div className="rounded-md hover:bg-slate-50">
+      <div className="flex items-center gap-2 py-1 px-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 flex-shrink-0" />
+        {editing ? (
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus
+            onBlur={() => { onRename(name); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { onRename(name); setEditing(false); } }}
+            className="flex-1 px-2 py-1 rounded border border-slate-200 outline-none focus:border-slate-400 text-sm" />
+        ) : (
+          <div className="flex-1 text-sm text-slate-800">{topic.name}</div>
+        )}
+        <button onClick={() => setShowMedia((v) => !v)}
+          className={`text-xs px-2 py-0.5 rounded ${mediaCount > 0 ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-400 hover:text-slate-700"}`}
+          title="media">
+          {mediaCount > 0 ? `📎 ${mediaCount}` : "📎"}
+        </button>
+        <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-slate-700" title="rename">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={onRemove} className="text-slate-300 hover:text-rose-500" title="remove">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {showMedia && (
+        <div className="ml-6 mb-2 p-2 bg-slate-50 rounded-lg space-y-2">
+          {/* Video */}
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">Video URL</label>
+            <div className="flex gap-1 mt-0.5">
+              <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)}
+                onBlur={() => updateMedia({ videoUrl: videoUrl.trim() || undefined })}
+                placeholder="YouTube / Vimeo / direct mp4 URL"
+                className="flex-1 px-2 py-1 rounded border border-slate-200 outline-none text-xs" />
+              <label className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-white cursor-pointer">
+                upload
+                <input type="file" accept="video/*" className="hidden"
+                  onChange={(e) => onVideoFile(e.target.files?.[0])} />
+              </label>
+              {topic.videoUrl && (
+                <button onClick={() => { setVideoUrl(""); updateMedia({ videoUrl: undefined }); }}
+                  className="text-xs text-slate-400 hover:text-rose-500 px-1">×</button>
+              )}
+            </div>
+          </div>
+
+          {/* Documents */}
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">Documents ({docs.length})</label>
+            {docs.length > 0 && (
+              <div className="space-y-1 mt-0.5">
+                {docs.map((d, i) => (
+                  <div key={i} className="flex items-center gap-1 text-xs">
+                    <span className="flex-1 truncate text-slate-700">{d.name}</span>
+                    <button onClick={() => removeDoc(i)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1 mt-1">
+              <input value={docName} onChange={(e) => setDocName(e.target.value)}
+                placeholder="label (opt)"
+                className="w-24 px-2 py-1 rounded border border-slate-200 outline-none text-xs" />
+              <input value={docUrl} onChange={(e) => setDocUrl(e.target.value)}
+                placeholder="PDF URL"
+                className="flex-1 px-2 py-1 rounded border border-slate-200 outline-none text-xs" />
+              <button onClick={addDoc} disabled={!docUrl.trim()}
+                className="text-xs px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-40">add</button>
+              <label className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-white cursor-pointer">
+                upload
+                <input type="file" accept="application/pdf" className="hidden"
+                  onChange={(e) => onDocFile(e.target.files?.[0])} />
+              </label>
+            </div>
+          </div>
+        </div>
       )}
-      <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-slate-700" title="rename">
-        <Pencil className="w-3.5 h-3.5" />
-      </button>
-      <button onClick={onRemove} className="text-slate-300 hover:text-rose-500" title="remove">
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }

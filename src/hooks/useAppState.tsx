@@ -55,7 +55,7 @@ interface AppContextValue extends AppState {
   setSubjects: (next: SubjectCatalogEntry[]) => void;
   upsertSubject: (s: SubjectCatalogEntry) => void;
   archiveSubject: (subjectId: string) => void;
-  upsertTopic: (subjectId: string, topic: { id: string; name: string }) => void;
+  upsertTopic: (subjectId: string, topic: import("@/types").Topic) => void;
   removeTopic: (subjectId: string, topicId: string) => void;
 
   // user/admin ops
@@ -399,7 +399,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSubjects((prev) => prev.map((s) => s.id === subjectId ? { ...s, archived: true } : s));
   }, [setSubjects]);
 
-  const upsertTopic = useCallback((subjectId: string, topic: { id: string; name: string }) => {
+  const upsertTopic = useCallback((subjectId: string, topic: import("@/types").Topic) => {
     setSubjects((prev) => prev.map((s) => {
       if (s.id !== subjectId) return s;
       const i = s.topics.findIndex((t) => t.id === topic.id);

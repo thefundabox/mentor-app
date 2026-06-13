@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
 import { topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
 import { Button } from "@/components/ui/button";
+import { TopicMediaCard } from "@/components/TopicMediaCard";
 import {
   BookOpen,
   Sparkles,
@@ -151,13 +152,16 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           transition={{ duration: 0.2 }}
         >
           {tab === "notes" && (
-            <NotesTab
-              notes={notes}
-              uploaded={uploaded}
-              setUploaded={setUploaded}
-              onStartQuiz={handleStartQuiz}
-              dayNum={dayNum}
-            />
+            <>
+              <TopicMediaCard topic={info.topic} />
+              <NotesTab
+                notes={notes}
+                uploaded={uploaded}
+                setUploaded={setUploaded}
+                onStartQuiz={handleStartQuiz}
+                dayNum={dayNum}
+              />
+            </>
           )}
           {tab === "quiz" && (
             <QuizTab

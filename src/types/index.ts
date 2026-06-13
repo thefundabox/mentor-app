@@ -1,6 +1,16 @@
+/** A reference document attached to a topic — typically a PDF, but any external URL works. */
+export interface TopicDocument {
+  name: string;
+  url: string;
+}
+
 export interface Topic {
   id: string;
   name: string;
+  /** Optional embedded video for the topic. URL or data: URI. */
+  videoUrl?: string;
+  /** Optional PDFs / external doc links shown on the topic page. */
+  documents?: TopicDocument[];
 }
 
 export interface Subject {
