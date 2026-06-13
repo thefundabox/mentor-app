@@ -31,12 +31,18 @@ const CATEGORY_TONE: Record<string, string> = {
   international:    "bg-slate-100 text-slate-800",
 };
 
-export function CurrentAffairsDigest() {
+interface CurrentAffairsDigestProps {
+  /** How many CA items to show. Defaults to 3 for the Dashboard glance;
+   * the Journey page passes 6 to make it the focal sidebar content. */
+  limit?: number;
+}
+
+export function CurrentAffairsDigest({ limit = 3 }: CurrentAffairsDigestProps = {}) {
   const { currentAffairs } = useAppState();
   const [collapsed, setCollapsed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  const items = useMemo(() => dailyDigest(currentAffairs, 3), [currentAffairs]);
+  const items = useMemo(() => dailyDigest(currentAffairs, limit), [currentAffairs, limit]);
   if (dismissed || items.length === 0) return null;
 
   return (

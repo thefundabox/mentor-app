@@ -21,39 +21,64 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Sparkles, MapPin,
   AlertTriangle, ChevronDown, ChevronRight, Check, Circle, Hourglass, Trophy,
+  Star, Flame, Library, FileText, Map as MapIcon, Pencil,
 } from "lucide-react";
 import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
   type NegativeMarkingRisk, type TopicStatus, type TrendDirection,
 } from "@/lib/dashboardMetrics";
+import { HabitsCard } from "@/components/HabitsCard";
+import { StatTile } from "@/components/StatTile";
+import { SCOPE_LABEL } from "@/types";
 
 export function Dashboard({ studentId }: { studentId: string }) {
   const {
     currentUser, getStudent, subjects, testAttempts, users, setRoute, setViewingStudentId,
+    levelInfo, completedDays,
   } = useAppState();
   const student = getStudent(studentId);
   const studentUser = users.find((u) => u.id === studentId);
   const isMentorView = currentUser?.role !== "student" || currentUser.id !== studentId;
+  // Dashboard is now the student's landing route. Suppress the back link in
+  // that case — there's no prior page to return to. Mentors viewing a
+  // student's dashboard always see the back link (they navigated in).
+  const showBackLink = isMentorView;
 
   const metrics: DashboardMetrics = useMemo(
     () => computeDashboard(student, subjects, testAttempts, studentId, Date.now()),
     [student, subjects, testAttempts, studentId],
   );
 
-  const backLabel = isMentorView ? "Back to student" : "Back to home";
-  const back = () => {
-    if (isMentorView) {
-      setRoute("mentor_student");
-    } else {
-      setRoute("home");
+  // --- Today-strip inputs (self-view only; mentors don't see this block) ---
+  const info = levelInfo(studentId);
+  const completed = completedDays(studentId);
+  const chartLen = student.chart.days.length;
+  const approvedThrough = student.chart.approvedThrough;
+  const awaitingApproval = student.chart.status === "pending_approval"
+    && student.chart.committedThrough > approvedThrough;
+  const scope = student.chart.commitmentScope;
+  // Streak: consecutive cleared days starting from day 1 (same calc as the
+  // legacy StudentHome — kept local here so Dashboard doesn't depend on it).
+  const streak = (() => {
+    let n = 0;
+    for (let i = 1; i <= chartLen; i++) {
+      if (completed.includes(i)) n++; else break;
     }
+    return n;
+  })();
+
+  const back = () => {
+    if (isMentorView) setRoute("mentor_student");
+    else setRoute("home");
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      <button onClick={back} className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
-        <ArrowLeft className="w-4 h-4" /> {backLabel}
-      </button>
+    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      {showBackLink && (
+        <button onClick={back} className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+          <ArrowLeft className="w-4 h-4" /> Back to student
+        </button>
+      )}
 
       {isMentorView && studentUser && (
         <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-sm text-indigo-900">
@@ -61,12 +86,74 @@ export function Dashboard({ studentId }: { studentId: string }) {
         </div>
       )}
 
-      <header>
-        <div className="text-sm font-semibold text-indigo-600">Dashboard</div>
-        <h1 className="text-3xl font-bold text-slate-900">
-          {isMentorView ? `${studentUser?.name ?? "Student"}'s readiness` : "Your readiness"}
-        </h1>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold text-indigo-600">Dashboard</div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {isMentorView
+              ? `${studentUser?.name ?? "Student"}'s readiness`
+              : `Welcome back, ${currentUser?.name?.split(" ")[0] ?? "there"}`}
+          </h1>
+        </div>
+        {!isMentorView && (
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setRoute("smart_practice")}>
+              <Sparkles className="w-4 h-4" /> Smart practice
+            </Button>
+            <Button variant="secondary" onClick={() => setRoute("home")}>
+              <MapIcon className="w-4 h-4" /> Journey
+            </Button>
+            <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
+              <Library className="w-4 h-4" /> PYQ bank
+            </Button>
+            <Button variant="secondary" onClick={() => setRoute("tests")}>
+              <FileText className="w-4 h-4" /> Mock tests
+            </Button>
+            <Button variant="secondary" onClick={() => setRoute("onboarding")}>
+              <Pencil className="w-4 h-4" /> Edit chart
+            </Button>
+          </div>
+        )}
       </header>
+
+      {/* Today strip — habits + stats + active commitment. Self-view only;
+        * mentors see the readiness numbers but don't need the daily-tracking
+        * widgets (those belong to the student's own session). */}
+      {!isMentorView && (
+        <section>
+          <HabitsCard
+            student={student}
+            completedDays={completed}
+            flush
+            rightSlot={approvedThrough > 0 ? (
+              <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 lg:min-w-[260px]">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                  Active commitment · {SCOPE_LABEL[scope]} plan
+                </div>
+                <div className="text-sm text-slate-800 mt-1 leading-snug">
+                  Approved through <strong>Day {approvedThrough}</strong> of {chartLen}.{" "}
+                  <span className="text-slate-600">{completed.length} of {approvedThrough} cleared.</span>
+                </div>
+                {awaitingApproval && (
+                  <div className="text-xs text-amber-700 font-semibold flex items-center gap-1 mt-1.5">
+                    <Hourglass className="w-3 h-3" /> waiting for mentor approval of Day {approvedThrough + 1}–{student.chart.committedThrough}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          />
+
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
+              sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
+              progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
+            <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
+              sub={`${completed.length} days cleared`} />
+            <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
+              sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
+          </div>
+        </section>
+      )}
 
       {/* Readiness scores */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">

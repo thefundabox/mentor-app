@@ -41,7 +41,9 @@ function AppContent() {
     if (s.chart.status === "pending_approval" || s.chart.status === "changes_requested") {
       setRoute("approval_gate"); return;
     }
-    setRoute("home");
+    // Fully onboarded student lands on Dashboard (the daily readiness view),
+    // not the day path. The journey is one click away via the nav.
+    setRoute("dashboard");
   }, [route, currentUser, getStudent, setRoute]);
 
   useEffect(() => {

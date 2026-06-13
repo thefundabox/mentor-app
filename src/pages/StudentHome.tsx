@@ -1,17 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
-import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText, Library, Sparkles, LineChart } from "lucide-react";
-import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles } from "lucide-react";
+import { SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
-  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive, batchForStudent } = useAppState();
+  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive, batchForStudent } = useAppState();
   const { startTour } = useTour();
   const findTopic = findTopicLive;
 
@@ -39,9 +38,7 @@ export function StudentHome() {
   const totalDays = chart.length;
   const completed = completedDays(user.id);
   const currentDay = progress.currentDay || 1;
-  const info = levelInfo(user.id);
   const approvedThrough = s.chart.approvedThrough;
-  const scope = s.chart.commitmentScope;
   const batch = batchForStudent(user.id);
   const pacing = batch ? pacingStatus(batch, currentDay) : null;
   const daysToStart = batch ? daysUntilBatchStart(batch) : 0;
@@ -50,21 +47,11 @@ export function StudentHome() {
   const sliceCleared = approvedThrough > 0 && completed.length >= approvedThrough;
   const hasMoreToCommit = approvedThrough < totalDays;
   const showRecommit = sliceCleared && hasMoreToCommit && s.chart.status !== "pending_approval";
-  const awaitingApproval = s.chart.status === "pending_approval" && s.chart.committedThrough > approvedThrough;
 
   const commitNext = (next: CommitmentScope) => {
     submitChartForApproval(user.id, next);
     setRoute("approval_gate");
   };
-
-  // Streak: consecutive cleared days starting from day 1.
-  const streak = (() => {
-    let n = 0;
-    for (let i = 1; i <= totalDays; i++) {
-      if (completed.includes(i)) n++; else break;
-    }
-    return n;
-  })();
 
   const pickTopic = (day: number, topicId: string) => {
     setActiveDay(day);
@@ -74,11 +61,16 @@ export function StudentHome() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <button
+        onClick={() => setRoute("dashboard")}
+        className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 mb-3"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+      </button>
+
+      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
         <div>
-          <div className="text-sm font-semibold text-indigo-600">
-            Welcome back, {currentUser.name.split(" ")[0]}
-          </div>
+          <div className="text-sm font-semibold text-indigo-600">Your journey</div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Day {currentDay} of {totalDays}
           </h1>
@@ -87,95 +79,50 @@ export function StudentHome() {
           <Button onClick={() => setRoute("smart_practice")}>
             <Sparkles className="w-4 h-4" /> Smart practice
           </Button>
-          <Button variant="secondary" onClick={() => setRoute("dashboard")}>
-            <LineChart className="w-4 h-4" /> Dashboard
+          <Button variant="secondary" onClick={() => setRoute("tests")}>
+            <FileText className="w-4 h-4" /> Mock tests
           </Button>
           <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
             <Library className="w-4 h-4" /> PYQ bank
-          </Button>
-          <Button variant="secondary" onClick={() => setRoute("tests")}>
-            <FileText className="w-4 h-4" /> Mock tests
           </Button>
           <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
         </div>
       </div>
 
       {/*
-        Top "Today" strip — full width, sits between the header and the
-        two-column grid. Pulls the auto-tracked habits + level/points/streak
-        + active-commitment badge into one horizontal row so the dead space
-        in the right sidebar (when the path is short) goes away.
+        Two-column layout:
+        - lg+ grid is [320px | 1fr]: a narrow journey column on the left
+          (compact week-grouped path) and a wider content column on the
+          right (override / announcements / current affairs). Inverts the
+          previous proportions so the high-signal content gets the room
+          and the path stops dominating the screen.
+        - Mobile: stacks via source order (sidebar/content first, then
+          path) — same scroll order students are used to.
       */}
-      <div className="mb-6">
-        <HabitsCard
-          student={s}
-          completedDays={completed}
-          flush
-          rightSlot={approvedThrough > 0 ? (
-            <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 lg:min-w-[260px]">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
-                Active commitment · {SCOPE_LABEL[scope]} plan
-              </div>
-              <div className="text-sm text-slate-800 mt-1 leading-snug">
-                Approved through <strong>Day {approvedThrough}</strong> of {totalDays}.{" "}
-                <span className="text-slate-600">{completed.length} of {approvedThrough} cleared.</span>
-              </div>
-              {awaitingApproval && (
-                <div className="text-xs text-amber-700 font-semibold flex items-center gap-1 mt-1.5">
-                  <Hourglass className="w-3 h-3" /> waiting for mentor approval of Day {approvedThrough + 1}–{s.chart.committedThrough}
-                </div>
-              )}
-            </div>
-          ) : null}
-        />
-
-        {/* Compact stats row, sits visually attached to the habits card. */}
-        <div data-tour="streak" className="grid grid-cols-3 gap-3 mt-3">
-          <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
-            sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
-            progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
-          <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
-            sub={`${completed.length} days cleared`} />
-          <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
-            sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
-        </div>
-      </div>
-
-      {/*
-        Layout:
-        - Mobile: everything stacks (sidebar first via natural source order,
-          then path) — preserves the existing scroll order.
-        - lg+: two-column grid. CSS `order` puts the path on the LEFT (1fr)
-          and the sidebar on the RIGHT (320px) without re-ordering JSX, so
-          mobile users keep seeing banners/announcements before the path.
-      */}
-      <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-6 lg:items-start">
-        {/* Sidebar — notification-style content only. Habits + stats +
-          * commitment all live in the top Today-strip above. */}
+      <div className="lg:grid lg:grid-cols-[320px_1fr] lg:gap-6 lg:items-start">
+        {/* Content column — notification + discovery. */}
         <aside className="lg:order-2 space-y-5">
           <OverrideDecisionBanner studentId={user.id} />
           <AnnouncementsBanner studentId={user.id} />
-          <CurrentAffairsDigest />
+          <CurrentAffairsDigest limit={6} />
         </aside>
 
-        {/* Journey column (batch context, recommit, day path) */}
+        {/* Journey column — batch context, recommit, compact week-grouped path. */}
         <section className="lg:order-1 min-w-0 mt-6 lg:mt-0">
 
       {batch && (
-        <div className="mb-5 p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="text-[10px] uppercase font-bold text-slate-500">{batch.vertical}</div>
-            <div className="text-sm font-semibold text-slate-900">{batch.name}</div>
-          </div>
+        <div className="mb-4 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+          <div className="text-[10px] uppercase font-bold text-slate-500">{batch.vertical}</div>
+          <div className="text-sm font-semibold text-slate-900">{batch.name}</div>
           {pacing && pacing.status !== "not-started" && (
-            <div className="text-xs">
+            <div className="text-xs mt-1">
               {pacing.status === "on-schedule" && <span className="text-emerald-700 font-semibold">✓ on schedule (Day {pacing.calendarDay} today)</span>}
-              {pacing.status === "ahead" && <span className="text-indigo-700 font-semibold">⏩ {pacing.delta} day{pacing.delta === 1 ? "" : "s"} ahead (calendar Day {pacing.calendarDay})</span>}
-              {pacing.status === "behind" && <span className="text-amber-700 font-semibold">⏰ {-pacing.delta} day{-pacing.delta === 1 ? "" : "s"} behind (calendar Day {pacing.calendarDay})</span>}
+              {pacing.status === "ahead" && <span className="text-indigo-700 font-semibold">⏩ {pacing.delta} day{pacing.delta === 1 ? "" : "s"} ahead</span>}
+              {pacing.status === "behind" && <span className="text-amber-700 font-semibold">⏰ {-pacing.delta} day{-pacing.delta === 1 ? "" : "s"} behind</span>}
             </div>
           )}
           {pacing && pacing.status === "not-started" && (
-            <div className="text-xs text-slate-600 font-semibold">
+            <div className="text-xs text-slate-600 font-semibold mt-1">
               Starts in {daysToStart} day{daysToStart === 1 ? "" : "s"} · {formatDate(batch.startDate)}
             </div>
           )}
@@ -183,130 +130,191 @@ export function StudentHome() {
       )}
 
       {showRecommit && (
-        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-amber-50 border-2 border-emerald-200">
-          <div className="flex items-center gap-2 text-emerald-700 font-bold mb-1">
-            <Trophy className="w-5 h-5" /> Slice cleared — commit the next one
+        <div className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-amber-50 border-2 border-emerald-200">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold mb-1 text-sm">
+            <Trophy className="w-4 h-4" /> Slice cleared — commit next
           </div>
-          <p className="text-sm text-slate-700 mb-3">
-            You've cleared Day 1–{approvedThrough}. Commit your next slice for mentor approval. (You can switch scope if you like.)
+          <p className="text-xs text-slate-700 mb-2">
+            You've cleared Day 1–{approvedThrough}. Pick a slice to submit.
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => commitNext("week")}><Send className="w-4 h-4" /> Commit next week (+{Math.min(SCOPE_DAYS.week, totalDays - approvedThrough)}d)</Button>
-            <Button variant="secondary" onClick={() => commitNext("month")}>Commit next month (+{Math.min(SCOPE_DAYS.month, totalDays - approvedThrough)}d)</Button>
-            <Button variant="ghost" onClick={() => commitNext("overall")}>Commit the rest ({totalDays - approvedThrough}d)</Button>
+          <div className="flex flex-col gap-1.5">
+            <Button onClick={() => commitNext("week")}><Send className="w-4 h-4" /> Next week (+{Math.min(SCOPE_DAYS.week, totalDays - approvedThrough)}d)</Button>
+            <Button variant="secondary" onClick={() => commitNext("month")}>Next month (+{Math.min(SCOPE_DAYS.month, totalDays - approvedThrough)}d)</Button>
+            <Button variant="ghost" onClick={() => commitNext("overall")}>The rest ({totalDays - approvedThrough}d)</Button>
           </div>
         </div>
       )}
 
-      <div data-tour="day-path" className="relative">
-        <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-[3px]"
-          style={{ background: "repeating-linear-gradient(to bottom, #e2e8f0 0 6px, transparent 6px 12px)" }} />
-
-        <div className="space-y-6 relative">
-          {chart.map((topics, i) => {
-            const dayNum = i + 1;
-            const isDone = completed.includes(dayNum) || dayCleared(user.id, dayNum);
-            const beyondCommitment = dayNum > approvedThrough;
-            const isCurrent = dayNum === currentDay && !isDone && !beyondCommitment;
-            const isLocked = dayNum > currentDay || beyondCommitment;
-            const sideRight = i % 2 === 0;
-            const hasMulti = topics.length > 1;
-
-            return (
-              <div key={i} className={`flex items-center ${sideRight ? "justify-start" : "justify-end"}`}>
-                <div data-tour={isCurrent ? "current-day" : undefined}
-                  className={`flex items-start gap-4 max-w-[80%] p-4 rounded-2xl border-2 transition ${
-                  isDone ? "bg-emerald-50 border-emerald-200"
-                  : isCurrent ? "bg-white border-indigo-300 pulse-ring"
-                  : "bg-white border-slate-200 opacity-60"
-                }`}>
-                  <div className={`relative w-14 h-14 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${
-                    isDone ? "bg-emerald-500 text-white"
-                    : isCurrent ? "bg-indigo-600 text-white"
-                    : "bg-slate-200 text-slate-400"
-                  }`}>
-                    {isDone ? <Check className="w-6 h-6" /> : isLocked ? <Lock className="w-5 h-5" /> : dayNum}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
-                      <span>Day {dayNum}{hasMulti ? ` · ${topics.length} topics` : ""}</span>
-                      {batch && (
-                        <span className="text-[10px] normal-case font-medium text-slate-500">
-                          {formatDate(dateForBatchDay(batch, dayNum))}
-                        </span>
-                      )}
-                      {beyondCommitment && (
-                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                          beyond commitment
-                        </span>
-                      )}
-                    </div>
-                    {topics.length === 0 ? (
-                      <div className="text-sm text-slate-400 italic">Unscheduled</div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {topics.map((t) => {
-                          const info = findTopic(t.topicId);
-                          if (!info) return null;
-                          const cleared = topicCleared(user.id, dayNum, t.topicId);
-                          return (
-                            <button
-                              key={t.topicId}
-                              disabled={isLocked}
-                              onClick={() => pickTopic(dayNum, t.topicId)}
-                              className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                                isLocked ? "cursor-not-allowed"
-                                : "hover:bg-slate-50 cursor-pointer"
-                              } ${cleared ? "bg-emerald-50/60" : "bg-white border border-slate-100"}`}
-                            >
-                              {cleared
-                                ? <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                : <Circle className="w-4 h-4 text-slate-300 flex-shrink-0" />
-                              }
-                              <span className="text-base flex-shrink-0">{info.subject.icon}</span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[11px] text-slate-500 truncate">{info.subject.name}</div>
-                                <div className="font-semibold text-slate-900 text-sm truncate">{info.topic.name}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <DayPathByWeek
+        chart={chart}
+        currentDay={currentDay}
+        approvedThrough={approvedThrough}
+        completed={completed}
+        batch={batch}
+        topicCleared={(day, topicId) => topicCleared(user.id, day, topicId)}
+        dayCleared={(day) => dayCleared(user.id, day)}
+        findTopic={findTopic}
+        onPickTopic={pickTopic}
+      />
         </section>
       </div>
     </div>
   );
 }
 
-function StatTile({ label, value, accent, icon, sub, progress }: {
-  label: string; value: string | number; accent: "indigo" | "amber" | "rose";
-  icon: React.ReactNode; sub: string; progress?: number;
+/* ---------- Compact week-grouped day path ----------------------------------
+ *
+ * Replaces the old alternating-sides timeline. Chunks the chart into 7-day
+ * weeks; each week is a collapsible section. Current week starts expanded;
+ * past weeks collapse to a "X / 7 cleared" summary; future weeks show their
+ * locked/beyond-commitment state. Day cards inside an expanded week are
+ * single-column and smaller (`w-10 h-10` circle, `p-3` card) so the path
+ * stops eating vertical space.
+ *
+ * Expansion state lives in component-local useState — session-only on
+ * purpose; persists nothing across reloads so the change is low-stakes.
+ */
+function DayPathByWeek({
+  chart, currentDay, approvedThrough, completed, batch,
+  topicCleared, dayCleared, findTopic, onPickTopic,
+}: {
+  chart: { topicId: string; subjectId: string }[][];
+  currentDay: number;
+  approvedThrough: number;
+  completed: number[];
+  batch: import("@/types").Batch | null;
+  topicCleared: (day: number, topicId: string) => boolean;
+  dayCleared: (day: number) => boolean;
+  findTopic: (id: string) => { subject: { name: string; icon: string }; topic: { id: string; name: string } } | null;
+  onPickTopic: (day: number, topicId: string) => void;
 }) {
-  const map = {
-    indigo: { bg: "from-indigo-50 to-indigo-100/40", text: "text-indigo-700", bar: "bg-indigo-500" },
-    amber:  { bg: "from-amber-50 to-amber-100/40",   text: "text-amber-700",  bar: "bg-amber-500"  },
-    rose:   { bg: "from-rose-50 to-rose-100/40",     text: "text-rose-700",   bar: "bg-rose-500"   },
-  }[accent];
+  // Group days into weeks of 7. weeks[w] = array of (dayNum, topics) for week w.
+  const weeks: { dayNum: number; topics: { topicId: string; subjectId: string }[] }[][] = [];
+  for (let i = 0; i < chart.length; i++) {
+    const w = Math.floor(i / 7);
+    if (!weeks[w]) weeks[w] = [];
+    weeks[w].push({ dayNum: i + 1, topics: chart[i] });
+  }
+  const currentWeekIdx = Math.floor((currentDay - 1) / 7);
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set([currentWeekIdx]));
+  const toggle = (idx: number) => setExpanded((s) => {
+    const n = new Set(s);
+    n.has(idx) ? n.delete(idx) : n.add(idx);
+    return n;
+  });
+
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-gradient-to-br ${map.bg} p-4`}>
-      <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide ${map.text}`}>
-        {icon}{label}
-      </div>
-      <div className="text-2xl font-bold text-slate-900 mt-1">{value}</div>
-      <div className="text-xs text-slate-500 mt-1">{sub}</div>
-      {progress !== undefined && (
-        <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
-          <div className={`h-full ${map.bar}`} style={{ width: `${Math.max(2, progress * 100)}%` }} />
-        </div>
-      )}
+    <div data-tour="day-path" className="space-y-2">
+      {weeks.map((days, wi) => {
+        const startDay = days[0].dayNum;
+        const endDay = days[days.length - 1].dayNum;
+        const totalInWeek = days.length;
+        const clearedInWeek = days.filter((d) => completed.includes(d.dayNum) || dayCleared(d.dayNum)).length;
+        const allBeyondCommitment = days.every((d) => d.dayNum > approvedThrough);
+        const isOpen = expanded.has(wi);
+        const isCurrentWeek = wi === currentWeekIdx;
+
+        return (
+          <div key={wi} className={`rounded-2xl border ${isCurrentWeek ? "border-indigo-200 bg-white" : "border-slate-200 bg-white"} overflow-hidden`}>
+            <button
+              onClick={() => toggle(wi)}
+              className={`w-full px-3 py-2.5 flex items-center gap-3 text-left transition ${isOpen ? "border-b border-slate-100" : ""} hover:bg-slate-50`}
+            >
+              {isOpen ? <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-500 flex-shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-slate-900">
+                  Week {wi + 1}
+                  <span className="text-xs font-normal text-slate-500 ml-1.5">· Days {startDay}{startDay !== endDay ? `–${endDay}` : ""}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span className={clearedInWeek === totalInWeek ? "text-emerald-700 font-semibold" : ""}>
+                    {clearedInWeek} / {totalInWeek} cleared
+                  </span>
+                  {isCurrentWeek && <span className="text-indigo-700 font-semibold">· current week</span>}
+                  {allBeyondCommitment && <span className="text-slate-400 font-semibold">· beyond commitment</span>}
+                </div>
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="px-3 py-3 space-y-2">
+                {days.map(({ dayNum, topics }) => {
+                  const isDone = completed.includes(dayNum) || dayCleared(dayNum);
+                  const beyondCommitment = dayNum > approvedThrough;
+                  const isCurrent = dayNum === currentDay && !isDone && !beyondCommitment;
+                  const isLocked = dayNum > currentDay || beyondCommitment;
+                  return (
+                    <div
+                      key={dayNum}
+                      data-tour={isCurrent ? "current-day" : undefined}
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition ${
+                        isDone ? "bg-emerald-50 border-emerald-200"
+                        : isCurrent ? "bg-white border-indigo-300 pulse-ring"
+                        : "bg-white border-slate-200 opacity-70"
+                      }`}
+                    >
+                      <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                        isDone ? "bg-emerald-500 text-white"
+                        : isCurrent ? "bg-indigo-600 text-white"
+                        : "bg-slate-200 text-slate-400"
+                      }`}>
+                        {isDone ? <Check className="w-4 h-4" /> : isLocked ? <Lock className="w-4 h-4" /> : dayNum}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
+                          <span>Day {dayNum}{topics.length > 1 ? ` · ${topics.length} topics` : ""}</span>
+                          {batch && (
+                            <span className="text-[10px] normal-case font-medium text-slate-500">
+                              {formatDate(dateForBatchDay(batch, dayNum))}
+                            </span>
+                          )}
+                          {beyondCommitment && (
+                            <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                              beyond
+                            </span>
+                          )}
+                        </div>
+                        {topics.length === 0 ? (
+                          <div className="text-xs text-slate-400 italic">Unscheduled</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {topics.map((t) => {
+                              const info = findTopic(t.topicId);
+                              if (!info) return null;
+                              const cleared = topicCleared(dayNum, t.topicId);
+                              return (
+                                <button
+                                  key={t.topicId}
+                                  disabled={isLocked}
+                                  onClick={() => onPickTopic(dayNum, t.topicId)}
+                                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg transition ${
+                                    isLocked ? "cursor-not-allowed"
+                                    : "hover:bg-slate-50 cursor-pointer"
+                                  } ${cleared ? "bg-emerald-50/60" : "bg-white border border-slate-100"}`}
+                                >
+                                  {cleared
+                                    ? <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                    : <Circle className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                                  }
+                                  <span className="text-sm flex-shrink-0">{info.subject.icon}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-[10px] text-slate-500 truncate">{info.subject.name}</div>
+                                    <div className="font-semibold text-slate-900 text-xs truncate">{info.topic.name}</div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
