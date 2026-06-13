@@ -9,6 +9,7 @@ import {
 import type { SubjectCatalogEntry, PlanTemplate, CommitmentScope, TourStep, Question, Batch, Test, TestSection, TestSchedule } from "@/types";
 import { SCOPE_LABEL } from "@/types";
 import { conceptLabel } from "@/data";
+import { parsePYQCSV } from "@/lib/csv";
 
 export function AdminDashboard() {
   const { adminTab, setAdminTab } = useAppState();
@@ -839,19 +840,21 @@ function TourStepEditor({
 /* ==================== Questions tab ==================== */
 
 function QuestionsTab() {
-  const [sub, setSub] = useState<"quiz" | "foundation" | "placement">("quiz");
+  const [sub, setSub] = useState<"quiz" | "foundation" | "placement" | "pyq">("quiz");
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 border-b border-slate-100 pb-3">
+      <div className="flex gap-2 border-b border-slate-100 pb-3 flex-wrap">
         <SubTabButton active={sub === "quiz"}       label="Quiz pool"   onClick={() => setSub("quiz")} />
         <SubTabButton active={sub === "foundation"} label="Foundation" onClick={() => setSub("foundation")} />
         <SubTabButton active={sub === "placement"}  label="Placement"  onClick={() => setSub("placement")} />
+        <SubTabButton active={sub === "pyq"}        label="PYQ bank"   onClick={() => setSub("pyq")} />
       </div>
 
       {sub === "quiz"       && <QuizPoolEditor />}
       {sub === "foundation" && <FoundationPoolEditor />}
       {sub === "placement"  && <PlacementPoolEditor />}
+      {sub === "pyq"        && <PYQBankEditor />}
     </div>
   );
 }
@@ -1721,6 +1724,375 @@ function TestEditor({ test, onDone, onUpsert }: {
       </div>
 
       <Button onClick={save}>Save test</Button>
+    </div>
+  );
+}
+
+/* ==================== PYQ Bank editor ==================== */
+
+function PYQBankEditor() {
+  const { pyqBank, upsertPYQ, removePYQ, subjects } = useAppState();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [yearFilter, setYearFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const [query, setQuery] = useState("");
+
+  const years = useMemo(() => {
+    const all = pyqBank.map((p) => p.year).filter(Boolean);
+    return [...new Set(all)].sort((a, b) => b.localeCompare(a));
+  }, [pyqBank]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return pyqBank.filter((p) => {
+      if (yearFilter && p.year !== yearFilter) return false;
+      if (subjectFilter && !(p.subjectIds || []).includes(subjectFilter)) return false;
+      if (q) {
+        const hay = `${p.q} ${p.a} ${p.explain}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [pyqBank, query, yearFilter, subjectFilter]);
+
+  const addNew = () => {
+    const id = `pyq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
+    upsertPYQ({
+      id,
+      year: years[0] || "RAS 2024",
+      q: "New question",
+      a: "",
+      explain: "",
+      subjectIds: [],
+      topicIds: [],
+      marks: 2,
+    });
+    setOpenId(id);
+  };
+
+  const subjectLookup = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center gap-2 flex-wrap">
+        <p className="text-sm text-slate-500">
+          {pyqBank.length} question{pyqBank.length === 1 ? "" : "s"} in the bank. Students search and filter this from the PYQ archive.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowImport(true)}><Plus className="w-4 h-4" /> Bulk import</Button>
+          <Button onClick={addNew}><Plus className="w-4 h-4" /> Add PYQ</Button>
+        </div>
+      </div>
+
+      {showImport && <PYQBulkImportPanel onClose={() => setShowImport(false)} />}
+
+      {/* Filters */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+        <input value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search question, answer, or explanation"
+          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
+        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm">
+          <option value="">All years</option>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm">
+          <option value="">All subjects</option>
+          {subjects.filter((s) => !s.archived).map((s) => (
+            <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+          {pyqBank.length === 0 ? "Bank is empty. Add a PYQ or bulk import." : "No questions match your filters."}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map((p) => {
+          const isOpen = openId === p.id;
+          const subjectChips = (p.subjectIds || []).map((id) => subjectLookup.get(id)).filter(Boolean);
+          return (
+            <div key={p.id} className="bg-white border border-slate-200 rounded-2xl">
+              <button onClick={() => setOpenId(isOpen ? null : (p.id || null))}
+                className="w-full text-left p-3 hover:bg-slate-50 rounded-2xl">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-700 rounded px-2 py-0.5">{p.year}</span>
+                  {p.marks && <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 rounded px-2 py-0.5">{p.marks} marks</span>}
+                  {subjectChips.map((s) => (
+                    <span key={s!.id} className="text-[10px] uppercase font-bold bg-indigo-50 text-indigo-700 rounded px-2 py-0.5">
+                      {s!.icon} {s!.name}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-sm text-slate-800 truncate">{p.q}</div>
+              </button>
+
+              {isOpen && (
+                <PYQEditorBody pyq={p} onSave={(patch) => upsertPYQ({ ...p, ...patch })}
+                  onRemove={() => { removePYQ(p.id!); setOpenId(null); }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PYQEditorBody({ pyq, onSave, onRemove }: {
+  pyq: import("@/types").PYQ;
+  onSave: (patch: Partial<import("@/types").PYQ>) => void;
+  onRemove: () => void;
+}) {
+  const { subjects } = useAppState();
+  const [draft, setDraft] = useState(pyq);
+
+  const update = (patch: Partial<import("@/types").PYQ>) => setDraft({ ...draft, ...patch });
+  const commit = () => onSave(draft);
+
+  const toggleSubject = (id: string) => {
+    const cur = draft.subjectIds || [];
+    update({ subjectIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  };
+
+  const allTopics = subjects.flatMap((s) => s.topics.map((t) => ({ subject: s, topic: t })));
+  const toggleTopic = (id: string) => {
+    const cur = draft.topicIds || [];
+    update({ topicIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  };
+
+  return (
+    <div className="border-t border-slate-100 p-4 space-y-3 bg-slate-50/50 rounded-b-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div>
+          <label className="text-[10px] font-bold uppercase text-slate-500">Year</label>
+          <input value={draft.year} onChange={(e) => update({ year: e.target.value })}
+            placeholder="RAS 2024"
+            className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-slate-500">Marks</label>
+          <input type="number" min={0} step={0.5} value={draft.marks ?? ""}
+            onChange={(e) => update({ marks: e.target.value ? Number(e.target.value) : undefined })}
+            className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold uppercase text-slate-500">Question</label>
+        <textarea value={draft.q} onChange={(e) => update({ q: e.target.value })} rows={3}
+          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm resize-y" />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold uppercase text-slate-500">Answer</label>
+        <input value={draft.a} onChange={(e) => update({ a: e.target.value })}
+          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold uppercase text-slate-500">Explanation</label>
+        <textarea value={draft.explain} onChange={(e) => update({ explain: e.target.value })} rows={2}
+          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm resize-y" />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold uppercase text-slate-500">Subject tags</label>
+        <div className="mt-0.5 flex flex-wrap gap-1">
+          {subjects.filter((s) => !s.archived).map((s) => {
+            const active = (draft.subjectIds || []).includes(s.id);
+            return (
+              <button key={s.id} onClick={() => toggleSubject(s.id)}
+                className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                  active ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}>
+                {s.icon} {s.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold uppercase text-slate-500">Topic tags (optional)</label>
+        <div className="mt-0.5 max-h-24 overflow-y-auto flex flex-wrap gap-1 border border-slate-200 rounded-lg p-2 bg-white">
+          {allTopics
+            .filter((p) => !draft.subjectIds || draft.subjectIds.length === 0 || draft.subjectIds.includes(p.subject.id))
+            .map(({ topic }) => {
+              const active = (draft.topicIds || []).includes(topic.id);
+              return (
+                <button key={topic.id} onClick={() => toggleTopic(topic.id)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                    active ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}>
+                  {topic.name}
+                </button>
+              );
+            })}
+        </div>
+      </div>
+
+      <div className="flex justify-between gap-2">
+        <Button variant="ghost" onClick={onRemove}><Trash2 className="w-4 h-4 text-rose-600" /> Delete</Button>
+        <Button onClick={commit}>Save</Button>
+      </div>
+    </div>
+  );
+}
+
+function PYQBulkImportPanel({ onClose }: { onClose: () => void }) {
+  const { subjects, upsertPYQ } = useAppState();
+  const [text, setText] = useState("");
+  const [stage, setStage] = useState<"input" | "preview" | "done">("input");
+  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+
+  const parsed = useMemo(() => (text.trim() ? parsePYQCSV(text) : null), [text]);
+
+  // Resolve subject/topic text -> ids
+  const resolveSubjects = (raw?: string): string[] => {
+    if (!raw) return [];
+    const tokens = raw.split(/[;|]/).map((s) => s.trim()).filter(Boolean);
+    const out: string[] = [];
+    for (const tok of tokens) {
+      const lo = tok.toLowerCase();
+      const s = subjects.find((s) => s.name.toLowerCase() === lo || s.id.toLowerCase() === lo);
+      if (s) out.push(s.id);
+    }
+    return out;
+  };
+  const resolveTopics = (raw?: string): string[] => {
+    if (!raw) return [];
+    const tokens = raw.split(/[;|]/).map((s) => s.trim()).filter(Boolean);
+    const out: string[] = [];
+    for (const tok of tokens) {
+      const lo = tok.toLowerCase();
+      for (const s of subjects) {
+        const t = s.topics.find((t) => t.name.toLowerCase() === lo || t.id.toLowerCase() === lo);
+        if (t) { out.push(t.id); break; }
+      }
+    }
+    return out;
+  };
+
+  const SAMPLE = `year,subject,topic,q,a,explain,marks
+RAS 2019,Geography of Rajasthan,Rivers & Drainage,Which river is called the lifeline of Mewar?,Banas,Tributary of the Chambal flowing through Mewar.,2
+RAS 2020,Indian Polity,Preamble & Basic Structure,Words 'Socialist' and 'Secular' were added by which amendment?,42nd Amendment 1976,Mini-Constitution amendment under Indira Gandhi.,2`;
+
+  const previewRows = useMemo(() => {
+    if (!parsed) return [];
+    return parsed.rows.map((r) => ({
+      ...r,
+      resolvedSubjects: resolveSubjects(r.subjects),
+      resolvedTopics: resolveTopics(r.topics),
+    }));
+  }, [parsed, subjects]);
+
+  const confirm = () => {
+    let created = 0, skipped = 0;
+    for (const r of previewRows) {
+      if (!r.q || !r.a) { skipped++; continue; }
+      const id = `pyq_imp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      upsertPYQ({
+        id, year: r.year, q: r.q, a: r.a, explain: r.explain || "",
+        marks: r.marks,
+        subjectIds: r.resolvedSubjects,
+        topicIds: r.resolvedTopics,
+      });
+      created++;
+    }
+    setResult({ created, skipped });
+    setStage("done");
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-900">Bulk import PYQs</h3>
+        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-900">close</button>
+      </div>
+
+      {stage === "input" && (
+        <>
+          <div className="text-xs text-slate-600">
+            Format: <code className="bg-slate-100 px-1.5 py-0.5 rounded">year, subject, topic, q, a, explain, marks</code>.
+            Subjects/topics can be semicolon-separated (e.g. <code className="bg-slate-100 px-1 rounded">Polity;Indian Polity</code>) and match by name or id. Header row auto-detected.
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <label className="text-sm px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              Upload CSV
+              <input type="file" accept=".csv,text/csv" className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => setText(String(ev.target?.result || ""));
+                  reader.readAsText(f);
+                }} />
+            </label>
+            <Button variant="ghost" onClick={() => setText(SAMPLE)}>Paste sample</Button>
+          </div>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6}
+            placeholder={SAMPLE}
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-mono resize-y" />
+          {parsed && parsed.errors.length > 0 && (
+            <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 space-y-1">
+              {parsed.errors.slice(0, 5).map((e, i) => (
+                <div key={i}>Line {e.line}: {e.reason}</div>
+              ))}
+              {parsed.errors.length > 5 && <div>… and {parsed.errors.length - 5} more</div>}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={() => setStage("preview")} disabled={!parsed || parsed.rows.length === 0}>
+              Preview {parsed?.rows.length || 0} →
+            </Button>
+          </div>
+        </>
+      )}
+
+      {stage === "preview" && (
+        <>
+          <div className="text-xs text-slate-500">Rows with no resolvable subject will still import with empty tags.</div>
+          <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+            {previewRows.map((r, i) => (
+              <div key={i} className="px-3 py-2 text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-amber-700">{r.year}</span>
+                  {r.marks && <span className="text-slate-500">{r.marks} marks</span>}
+                  {r.resolvedSubjects.map((id) => {
+                    const s = subjects.find((x) => x.id === id);
+                    return s ? <span key={id} className="text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">{s.name}</span> : null;
+                  })}
+                  {!r.resolvedSubjects.length && r.subjects && (
+                    <span className="text-rose-600 bg-rose-50 rounded px-1.5 py-0.5">unmatched: {r.subjects}</span>
+                  )}
+                </div>
+                <div className="text-slate-800 mt-0.5 truncate">{r.q}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between gap-2">
+            <Button variant="ghost" onClick={() => setStage("input")}>← back</Button>
+            <Button onClick={confirm}>Create {previewRows.length} PYQ{previewRows.length === 1 ? "" : "s"}</Button>
+          </div>
+        </>
+      )}
+
+      {stage === "done" && result && (
+        <>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-900">
+            Created {result.created} PYQ{result.created === 1 ? "" : "s"}{result.skipped > 0 && <> · {result.skipped} skipped</>}.
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Done</Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
