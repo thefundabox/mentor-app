@@ -73,8 +73,8 @@ export function StudentHome() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-6xl mx-auto px-6 py-10">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <div className="text-sm font-semibold text-indigo-600">
             Welcome back, {currentUser.name.split(" ")[0]}
@@ -100,6 +100,37 @@ export function StudentHome() {
         </div>
       </div>
 
+      {/*
+        Layout:
+        - Mobile: everything stacks (sidebar first via natural source order,
+          then path) — preserves the existing scroll order.
+        - lg+: two-column grid. CSS `order` puts the path on the LEFT (1fr)
+          and the sidebar on the RIGHT (320px) without re-ordering JSX, so
+          mobile users keep seeing banners/announcements before the path.
+      */}
+      <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-6 lg:items-start">
+        {/* Sidebar (banners, CA, habits, stats) — visually right on lg+ */}
+        <aside className="lg:order-2 space-y-5">
+          <OverrideDecisionBanner studentId={user.id} />
+          <AnnouncementsBanner studentId={user.id} />
+          <CurrentAffairsDigest />
+
+          <HabitsCard student={s} completedDays={completed} />
+
+          <div data-tour="streak" className="grid grid-cols-3 gap-3">
+            <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
+              sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
+              progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
+            <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
+              sub={`${completed.length} days cleared`} />
+            <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
+              sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
+          </div>
+        </aside>
+
+        {/* Journey column (batch context, commitment banners, day path) */}
+        <section className="lg:order-1 min-w-0 mt-6 lg:mt-0">
+
       {batch && (
         <div className="mb-5 p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -120,22 +151,6 @@ export function StudentHome() {
           )}
         </div>
       )}
-
-      <OverrideDecisionBanner studentId={user.id} />
-      <AnnouncementsBanner studentId={user.id} />
-      <CurrentAffairsDigest />
-
-      <HabitsCard student={s} completedDays={completed} />
-
-      <div data-tour="streak" className="grid grid-cols-3 gap-3 mb-8">
-        <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
-          sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
-          progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
-        <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
-          sub={`${completed.length} days cleared`} />
-        <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
-          sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
-      </div>
 
       {/* Commitment banner */}
       {approvedThrough > 0 && (
@@ -253,6 +268,8 @@ export function StudentHome() {
             );
           })}
         </div>
+      </div>
+        </section>
       </div>
     </div>
   );
