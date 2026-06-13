@@ -140,6 +140,37 @@ export interface ConfusionPair {
 }
 
 /**
+ * One Smart Practice session, persisted after the runner finishes.
+ *
+ * Kept lightweight on purpose — we don't store every question, only the
+ * counts and scores needed for the dashboard's trend chart and the
+ * neg-marking risk score. The full per-question history of the day-quiz
+ * flow still lives on Attempt.perQuestion when that lands in a later PR.
+ *
+ * Field shapes map 1:1 to a planned `smart_sessions` Supabase table.
+ */
+export interface SmartSessionRecord {
+  id: string;
+  /** Mode the student picked in SmartPractice. */
+  mode: "prelims_practice" | "rajasthan_focus" | "weak_area_drill";
+  /** ms timestamp the session started. */
+  startedAt: number;
+  /** ms timestamp the session finished. */
+  finishedAt: number;
+  /** Counts (from NegativeMarkingReport). */
+  attempted: number;
+  correct: number;
+  wrong: number;
+  skipped: number;
+  /** Marks the student actually scored (with 1/3 negative applied). */
+  actualScore: number;
+  /** Marks they would have scored under the optimal-skip heuristic. */
+  skipRecommendedScore: number;
+  /** Count of wrong-and-slow answers (the "you should have skipped" tally). */
+  shouldHaveSkipped: number;
+}
+
+/**
  * Current Affairs item, admin-managed.
  *
  * Drives the 15% CA quota in prelims practice sessions and the daily digest
@@ -501,6 +532,8 @@ export interface StudentData {
   topicRecords?: StudentTopicRecord[];
   /** Adaptive: confusion pairs the student has accumulated. */
   confusionPairs?: ConfusionPair[];
+  /** Adaptive: log of finished Smart Practice sessions; powers the dashboard's trend + risk score. */
+  smartSessions?: SmartSessionRecord[];
 }
 
 export type Route =
@@ -521,6 +554,7 @@ export type Route =
   | "pyq_archive"
   | "smart_practice"
   | "smart_session"
+  | "dashboard"
   | "mentor"
   | "mentor_student"
   | "admin";

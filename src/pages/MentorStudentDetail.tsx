@@ -3,7 +3,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText, LineChart } from "lucide-react";
 import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
@@ -77,6 +77,9 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
               <Pencil className="w-4 h-4" /> Edit plan
             </Button>
           )}
+          <Button variant="secondary" onClick={() => { setViewingStudentId(studentId); setRoute("dashboard"); }}>
+            <LineChart className="w-4 h-4" /> Dashboard
+          </Button>
         </div>
       </div>
 

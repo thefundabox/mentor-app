@@ -13,6 +13,7 @@ import { TestResult } from "@/pages/TestResult";
 import { PYQArchive } from "@/pages/PYQArchive";
 import { SmartPractice } from "@/pages/SmartPractice";
 import { SmartSessionScreen } from "@/pages/SmartSessionScreen";
+import { Dashboard } from "@/pages/Dashboard";
 import { StudentHome } from "@/pages/StudentHome";
 import { TopicScreen } from "@/pages/TopicScreen";
 import { QuizScreen } from "@/pages/QuizScreen";
@@ -56,6 +57,7 @@ function AppContent() {
     content = <AdminDashboard />;
   } else if (currentUser.role === "mentor") {
     if (route === "mentor_student" && viewingStudentId) content = <MentorStudentDetail studentId={viewingStudentId} />;
+    else if (route === "dashboard" && viewingStudentId) content = <Dashboard studentId={viewingStudentId} />;
     else if (route === "onboarding" && viewingStudentId) content = <Onboarding studentId={viewingStudentId} byMentor />;
     else content = <MentorDashboard />;
   } else {
@@ -72,6 +74,7 @@ function AppContent() {
     else if (route === "pyq_archive") content = <PYQArchive />;
     else if (route === "smart_practice") content = <SmartPractice />;
     else if (route === "smart_session") content = <SmartSessionScreen />;
+    else if (route === "dashboard") content = <Dashboard studentId={currentUser.id} />;
     else content = <StudentHome />;
   }
 

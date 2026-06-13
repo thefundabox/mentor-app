@@ -49,8 +49,8 @@ const REASON_LABEL: Record<SessionReason, { label: string; tone: string }> = {
 
 export function SmartSessionScreen() {
   const {
-    currentUser, activeSession, setActiveSession, setRoute, applyTopicScheduling,
-    subjects, getStudent, recordStudentConfusion,
+    currentUser, activeSession, setActiveSession, activeSessionMeta, setActiveSessionMeta,
+    setRoute, applyTopicScheduling, subjects, getStudent, recordStudentConfusion, recordSmartSession,
   } = useAppState();
 
   const items = activeSession ?? [];
@@ -59,12 +59,39 @@ export function SmartSessionScreen() {
   const [questionStart, setQuestionStart] = useState<number>(() => Date.now());
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [done, setDone] = useState(false);
+  const [recorded, setRecorded] = useState(false);
 
   // Reset the question timer every time the index advances.
   useEffect(() => {
     setQuestionStart(Date.now());
     setChosen(null);
   }, [i]);
+
+  // PR 5: persist a SmartSessionRecord the moment the session ends. Guarded
+  // by `recorded` so re-renders don't append duplicates.
+  useEffect(() => {
+    if (!done || recorded || !currentUser || !activeSessionMeta || answers.length === 0) return;
+    const outcomes = answers.map((a) => ({
+      skipped: a.wasSkipped,
+      wasCorrect: a.wasCorrect,
+      responseTimeMs: a.responseTimeMs,
+    }));
+    const report = computeNegativeMarkingReport(outcomes);
+    recordSmartSession(currentUser.id, {
+      id: `ss_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      mode: activeSessionMeta.mode,
+      startedAt: activeSessionMeta.startedAt,
+      finishedAt: Date.now(),
+      attempted: report.attempted,
+      correct: report.correct,
+      wrong: report.wrong,
+      skipped: report.skipped,
+      actualScore: report.actualScore,
+      skipRecommendedScore: report.skipRecommendedScore,
+      shouldHaveSkipped: report.shouldHaveSkipped,
+    });
+    setRecorded(true);
+  }, [done, recorded, currentUser, activeSessionMeta, answers, recordSmartSession]);
 
   // Bounce to the picker if someone landed here without a planned session
   // (refresh-after-finish, deep link, etc.).
@@ -87,11 +114,11 @@ export function SmartSessionScreen() {
         answers={answers}
         confusionPairs={studentNow.confusionPairs ?? []}
         onAgain={() => {
-          setActiveSession(null);
+          setActiveSession(null); setActiveSessionMeta(null);
           setRoute("smart_practice");
         }}
         onHome={() => {
-          setActiveSession(null);
+          setActiveSession(null); setActiveSessionMeta(null);
           setRoute("home");
         }}
         subjectName={subjectName}

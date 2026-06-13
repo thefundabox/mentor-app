@@ -12,10 +12,11 @@ import type {
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
   Test, TestAttempt, TestSchedule, PYQ, CurrentAffairsTopic, StudentTopicRecord,
+  SmartSessionRecord,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 import { scheduleNextReview, isTopicRajasthanSpecific, type ReviewSignal } from "@/lib/scheduler";
-import type { SessionItem } from "@/lib/selector";
+import type { SessionItem, SessionMode } from "@/lib/selector";
 import { recordConfusion } from "@/lib/confusion";
 
 interface AppContextValue extends AppState {
@@ -173,6 +174,9 @@ interface AppContextValue extends AppState {
   // from SmartPractice (picker) to SmartSessionScreen (runner).
   activeSession: SessionItem[] | null;
   setActiveSession: (next: SessionItem[] | null) => void;
+  /** PR 5: mode + start time of the active session, persisted alongside items. */
+  activeSessionMeta: { mode: SessionMode; startedAt: number } | null;
+  setActiveSessionMeta: (next: { mode: SessionMode; startedAt: number } | null) => void;
 
   /**
    * Adaptive PR 4: record a wrong-distractor pick into the student's
@@ -186,6 +190,9 @@ interface AppContextValue extends AppState {
     confusedWith: string,
     topicId: string,
   ) => void;
+
+  /** Adaptive PR 5: append a finished Smart Practice session for the dashboard. */
+  recordSmartSession: (studentId: string, record: SmartSessionRecord) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -218,6 +225,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pyqBank, setPyqBank] = useLocalStorage<PYQ[]>("v5_pyqBank", DEFAULT_PYQ_BANK);
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
+  const [activeSessionMeta, setActiveSessionMeta] = useLocalStorage<{ mode: SessionMode; startedAt: number } | null>("v5_activeSessionMeta", null);
   const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
@@ -379,6 +387,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         confusedWith,
         topicId,
       ),
+    }));
+  }, [patchStudent]);
+
+  const recordSmartSession = useCallback((studentId: string, record: SmartSessionRecord) => {
+    patchStudent(studentId, (s) => ({
+      ...s,
+      smartSessions: [...(s.smartSessions ?? []), record],
     }));
   }, [patchStudent]);
 
@@ -885,7 +900,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentAffairs, setCurrentAffairs,
     applyTopicScheduling,
     activeSession, setActiveSession,
+    activeSessionMeta, setActiveSessionMeta,
     recordStudentConfusion,
+    recordSmartSession,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

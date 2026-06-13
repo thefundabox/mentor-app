@@ -64,7 +64,8 @@ const DURATIONS = [10, 20, 30, 45];
 
 export function SmartPractice() {
   const {
-    currentUser, getStudent, subjects, quizPool, setRoute, setActiveSession,
+    currentUser, getStudent, subjects, quizPool, setRoute,
+    setActiveSession, setActiveSessionMeta,
   } = useAppState();
   const [mode, setMode] = useState<SessionMode>("prelims_practice");
   const [minutes, setMinutes] = useState<number>(20);
@@ -88,6 +89,7 @@ export function SmartPractice() {
       return;
     }
     setActiveSession(items);
+    setActiveSessionMeta({ mode, startedAt: Date.now() });
     setRoute("smart_session");
   };
 

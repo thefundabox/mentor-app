@@ -841,6 +841,7 @@ export function emptyStudentData(): StudentData {
     pyqsReviewed: [],
     topicRecords: [],
     confusionPairs: [],
+    smartSessions: [],
   };
 }
 
