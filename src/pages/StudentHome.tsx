@@ -6,7 +6,7 @@ import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText, Library } from "lucide-react";
+import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText, Library, Sparkles } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
@@ -83,6 +83,9 @@ export function StudentHome() {
           </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button onClick={() => setRoute("smart_practice")}>
+            <Sparkles className="w-4 h-4" /> Smart practice
+          </Button>
           <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
             <Library className="w-4 h-4" /> PYQ bank
           </Button>

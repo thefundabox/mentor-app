@@ -15,6 +15,7 @@ import type {
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 import { scheduleNextReview, isTopicRajasthanSpecific, type ReviewSignal } from "@/lib/scheduler";
+import type { SessionItem } from "@/lib/selector";
 
 interface AppContextValue extends AppState {
   currentUser: User | null;
@@ -166,6 +167,11 @@ interface AppContextValue extends AppState {
   upsertPlacementQuestion: (idx: number, q: Question) => void;
   addPlacementQuestion: (q: Question) => void;
   removePlacementQuestion: (idx: number) => void;
+
+  // Adaptive PR 3: planned session items + setter. Lives across the route hop
+  // from SmartPractice (picker) to SmartSessionScreen (runner).
+  activeSession: SessionItem[] | null;
+  setActiveSession: (next: SessionItem[] | null) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -197,6 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [testSchedules, setTestSchedules] = useLocalStorage<TestSchedule[]>("v5_testSchedules", []);
   const [pyqBank, setPyqBank] = useLocalStorage<PYQ[]>("v5_pyqBank", DEFAULT_PYQ_BANK);
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
+  const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
   const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
@@ -844,6 +851,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertPYQ, removePYQ,
     currentAffairs, setCurrentAffairs,
     applyTopicScheduling,
+    activeSession, setActiveSession,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
