@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
@@ -18,6 +18,7 @@ import { SCOPE_DAYS } from "@/types";
 import { scheduleNextReview, isTopicRajasthanSpecific, type ReviewSignal } from "@/lib/scheduler";
 import type { SessionItem, SessionMode } from "@/lib/selector";
 import { recordConfusion } from "@/lib/confusion";
+import { deactivateExpiredTopics } from "@/lib/currentAffairs";
 
 interface AppContextValue extends AppState {
   currentUser: User | null;
@@ -67,7 +68,7 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs") => void;
 
   // Tests (admin-managed)
   upsertTest: (t: Test) => void;
@@ -94,8 +95,10 @@ interface AppContextValue extends AppState {
   upsertPYQ: (p: PYQ) => void;
   removePYQ: (id: string) => void;
 
-  // Current Affairs (admin-managed; adaptive PR 1 surface — actions land in later PRs).
+  // Current Affairs (admin-managed)
   setCurrentAffairs: (next: CurrentAffairsTopic[]) => void;
+  upsertCurrentAffairs: (item: CurrentAffairsTopic) => void;
+  removeCurrentAffairs: (id: string) => void;
 
   /**
    * Adaptive PR 2: apply one review signal to a student's StudentTopicRecord.
@@ -226,7 +229,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
   const [activeSessionMeta, setActiveSessionMeta] = useLocalStorage<{ mode: SessionMode; startedAt: number } | null>("v5_activeSessionMeta", null);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs">("v5_adminTab", "people");
+
+  // PR 6: on every mount and whenever the CA list changes, prune items that
+  // have passed their 18-month expiry. Cheap (O(n)) and runs in the browser
+  // since there's no cron environment yet. Persists only when something
+  // actually flipped — deactivateExpiredTopics returns the same array ref
+  // when nothing changed.
+  useEffect(() => {
+    setCurrentAffairs((prev) => deactivateExpiredTopics(prev));
+    // We intentionally don't depend on `currentAffairs` here — the setter
+    // is a stable reference and we only need this to run on mount + when a
+    // future writer (admin save) touches the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -853,6 +869,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPyqBank((prev) => prev.filter((p) => p.id !== id));
   }, [setPyqBank]);
 
+  /* ---------- Adaptive PR 6: Current Affairs CRUD ----------------------- */
+
+  const upsertCurrentAffairs = useCallback((item: CurrentAffairsTopic) => {
+    setCurrentAffairs((prev) => {
+      const i = prev.findIndex((x) => x.id === item.id);
+      if (i < 0) return [...prev, item];
+      const next = [...prev]; next[i] = item; return next;
+    });
+  }, [setCurrentAffairs]);
+
+  const removeCurrentAffairs = useCallback((id: string) => {
+    setCurrentAffairs((prev) => prev.filter((x) => x.id !== id));
+  }, [setCurrentAffairs]);
+
   const activeSchedulesForStudent = useCallback((studentId: string): TestSchedule[] => {
     const u = users.find((x) => x.id === studentId);
     if (!u) return [];
@@ -898,6 +928,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pyqBank,
     upsertPYQ, removePYQ,
     currentAffairs, setCurrentAffairs,
+    upsertCurrentAffairs, removeCurrentAffairs,
     applyTopicScheduling,
     activeSession, setActiveSession,
     activeSessionMeta, setActiveSessionMeta,

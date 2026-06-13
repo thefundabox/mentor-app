@@ -31,8 +31,15 @@
 
 import type {
   StudentData, SubjectCatalogEntry, Question, StudentTopicRecord,
+  CurrentAffairsTopic,
 } from "@/types";
 import { dueTopics, isTopicRajasthanSpecific } from "./scheduler";
+import { flattenActiveCAQuestions } from "./currentAffairs";
+
+/** Synthetic subjectId carried on SessionItem when the slot is a CA question. */
+export const CA_SUBJECT_ID = "__current_affairs__";
+/** Target fraction of prelims_practice slots that should be CA items. */
+export const CA_QUOTA = 0.15;
 
 export type SessionMode =
   | "prelims_practice"
@@ -46,7 +53,8 @@ export type SessionReason =
   | "skip_prone"
   | "weak_area"
   | "new_topic"
-  | "filler";
+  | "filler"
+  | "current_affairs";
 
 /** One slot in a session. The runner walks these in order. */
 export interface SessionItem {
@@ -62,6 +70,8 @@ export interface SessionItem {
   reason: SessionReason;
   /** Time budget for this question, in seconds. MCQs default to 72s (3h / 150Q). */
   estimatedTimeSeconds: number;
+  /** PR 6: when subjectId === CA_SUBJECT_ID, the CA item's headline for display. */
+  caHeadline?: string;
 }
 
 /** Inputs are passed in explicitly so the function stays pure & testable. */
@@ -69,6 +79,8 @@ export interface BuildSessionInput {
   studentData: StudentData;
   subjects: SubjectCatalogEntry[];
   questionPool: Question[];
+  /** PR 6: active CA items contribute the 15% CA quota in prelims_practice. */
+  currentAffairs?: CurrentAffairsTopic[];
   mode: SessionMode;
   durationMinutes: number;
   now: number;
@@ -83,7 +95,7 @@ const MCQ_ESTIMATE_SECONDS = 72;
  * the last is filler. The runner can stop early if the student exits.
  */
 export function buildSession(input: BuildSessionInput): SessionItem[] {
-  const { studentData, subjects, questionPool, mode, durationMinutes, now } = input;
+  const { studentData, subjects, questionPool, currentAffairs, mode, durationMinutes, now } = input;
   const capacity = Math.max(1, Math.floor((durationMinutes * 60) / MCQ_ESTIMATE_SECONDS));
   const records = studentData.topicRecords ?? [];
 
@@ -122,13 +134,13 @@ export function buildSession(input: BuildSessionInput): SessionItem[] {
   // session. If we run out of unique questions, we let the same one repeat —
   // better to fill the session than to truncate it.
   const used = new Set<string>();
-  const items: SessionItem[] = [];
+  const regular: SessionItem[] = [];
   for (const slot of plan) {
     const meta = topicIndex.get(slot.topicId)!;
     const pick = pickQuestion(questionPool, used);
     if (!pick) break; // pool exhausted (shouldn't happen with the seed pool)
     used.add(pick.id);
-    items.push({
+    regular.push({
       questionId: pick.id,
       question: pick.question,
       topicId: slot.topicId,
@@ -137,7 +149,53 @@ export function buildSession(input: BuildSessionInput): SessionItem[] {
       estimatedTimeSeconds: MCQ_ESTIMATE_SECONDS,
     });
   }
-  return items;
+
+  // PR 6: enforce CA_QUOTA in prelims_practice when CA questions are
+  // available. Trim the regular plan by the CA reservation and interleave
+  // CA items evenly so they're sprinkled across the session, not bunched
+  // at the start.
+  if (mode === "prelims_practice" && currentAffairs && currentAffairs.length > 0) {
+    const caPool = flattenActiveCAQuestions(currentAffairs);
+    if (caPool.length > 0) {
+      const caCount = Math.min(caPool.length, Math.ceil(capacity * CA_QUOTA));
+      if (caCount > 0) {
+        const caItems = caPool.slice(0, caCount).map((entry, idx) => ({
+          questionId: `ca_${entry.caTopicId}_${idx}`,
+          question: entry.question,
+          topicId: entry.caTopicId,
+          subjectId: CA_SUBJECT_ID,
+          reason: "current_affairs" as SessionReason,
+          estimatedTimeSeconds: MCQ_ESTIMATE_SECONDS,
+          caHeadline: currentAffairs.find((c) => c.id === entry.caTopicId)?.headline,
+        }));
+        const trimmedRegular = regular.slice(0, Math.max(0, capacity - caCount));
+        return interleave(trimmedRegular, caItems);
+      }
+    }
+  }
+
+  return regular;
+}
+
+/**
+ * Interleave two ordered lists so the second list's items are evenly spread
+ * across the merged result. Used to sprinkle CA questions through a session
+ * rather than dumping them at the front.
+ */
+function interleave<T>(primary: T[], secondary: T[]): T[] {
+  if (secondary.length === 0) return primary;
+  if (primary.length === 0) return secondary;
+  const total = primary.length + secondary.length;
+  const step = total / secondary.length;
+  const out: T[] = [];
+  let p = 0, s = 0;
+  for (let i = 0; i < total; i++) {
+    const wantSecondary = s < secondary.length && (i + 1) >= Math.round((s + 1) * step) - step / 2;
+    if (wantSecondary) { out.push(secondary[s++]); }
+    else if (p < primary.length) { out.push(primary[p++]); }
+    else if (s < secondary.length) { out.push(secondary[s++]); }
+  }
+  return out;
 }
 
 /* ---------- mode planners ------------------------------------------------- */

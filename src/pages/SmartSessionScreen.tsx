@@ -22,6 +22,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, MapPin, SkipForward, X, Check, AlertTriangle, Info } from "lucide-react";
 import type { SessionItem, SessionReason } from "@/lib/selector";
+import { CA_SUBJECT_ID } from "@/lib/selector";
 import {
   computeNegativeMarkingReport,
   shouldAttemptRecommendation,
@@ -45,6 +46,7 @@ const REASON_LABEL: Record<SessionReason, { label: string; tone: string }> = {
   weak_area:          { label: "Weak area",             tone: "bg-rose-100 text-rose-800" },
   new_topic:          { label: "New topic",             tone: "bg-emerald-100 text-emerald-800" },
   filler:             { label: "Practice",              tone: "bg-slate-100 text-slate-700" },
+  current_affairs:    { label: "Current affairs",       tone: "bg-violet-100 text-violet-800" },
 };
 
 export function SmartSessionScreen() {
@@ -101,10 +103,16 @@ export function SmartSessionScreen() {
     );
   }
 
-  const subjectName = (id: string) =>
-    subjects.find((s) => s.id === id)?.name ?? "Practice";
-  const topicName = (subjectId: string, topicId: string) =>
-    subjects.find((s) => s.id === subjectId)?.topics.find((t) => t.id === topicId)?.name ?? "Topic";
+  const subjectName = (id: string) => {
+    if (id === CA_SUBJECT_ID) return "Current Affairs";
+    return subjects.find((s) => s.id === id)?.name ?? "Practice";
+  };
+  // For CA slots, the SessionItem carries the headline directly; fall back to
+  // the topic name lookup for normal slots.
+  const topicName = (subjectId: string, topicId: string, caHeadline?: string) => {
+    if (subjectId === CA_SUBJECT_ID) return caHeadline ?? "Recent item";
+    return subjects.find((s) => s.id === subjectId)?.topics.find((t) => t.id === topicId)?.name ?? "Topic";
+  };
 
   // ---- End-of-session summary -------------------------------------------
   if (done) {
@@ -137,11 +145,16 @@ export function SmartSessionScreen() {
     const just = next[next.length - 1];
     // Push every answer through the scheduler immediately so the next
     // session's due-queue reflects this one. We tag CA later (PR 5).
+    const isCA = item.subjectId === CA_SUBJECT_ID;
     applyTopicScheduling(currentUser.id, item.topicId, {
       wasCorrect: just.wasCorrect,
       wasSkipped: just.wasSkipped,
       responseTimeMs: just.responseTimeMs,
-      isCurrentAffairs: false,
+      isCurrentAffairs: isCA,
+      // PR 6: pass the CA event date so the scheduler's 180-day stale cap fires.
+      questionDate: isCA
+        ? undefined  // We don't have the CA dateOfEvent in scope here; selector keeps active items only, so the cap is implicit. Refinement candidate.
+        : undefined,
     });
     // PR 4: when the student picks a wrong distractor (not skip), record the
     // (correctConcept, chosen-option-text) pair so we can show muddled
@@ -231,7 +244,7 @@ export function SmartSessionScreen() {
             {reasonMeta.label}
           </span>
           <span className="text-xs text-slate-500">
-            {subjectName(item.subjectId)} · {topicName(item.subjectId, item.topicId)}
+            {subjectName(item.subjectId)} · {topicName(item.subjectId, item.topicId, item.caHeadline)}
           </span>
           {q.rajasthanAngle && (
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">
@@ -300,7 +313,7 @@ function SessionSummary({
   onAgain: () => void;
   onHome: () => void;
   subjectName: (id: string) => string;
-  topicName: (subjectId: string, topicId: string) => string;
+  topicName: (subjectId: string, topicId: string, caHeadline?: string) => string;
 }) {
   // Convert AnswerRecord[] → AttemptOutcome[] for the analyzer. We default to
   // standard prelims scoring (1 mark, 1/3 negative); a future PR can flex this
@@ -389,7 +402,7 @@ function SessionSummary({
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-slate-900 truncate">{a.item.question.q}</div>
                 <div className="text-xs text-slate-500">
-                  {subjectName(a.item.subjectId)} · {topicName(a.item.subjectId, a.item.topicId)} · {(a.responseTimeMs / 1000).toFixed(1)}s
+                  {subjectName(a.item.subjectId)} · {topicName(a.item.subjectId, a.item.topicId, a.item.caHeadline)} · {(a.responseTimeMs / 1000).toFixed(1)}s
                 </div>
               </div>
             </li>

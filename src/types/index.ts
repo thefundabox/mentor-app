@@ -198,6 +198,12 @@ export interface CurrentAffairsTopic {
   sourceUrl?: string;
   /** Free-form admin note explaining why this item matters for RAS. */
   note?: string;
+  /**
+   * Optional questions admins attach to this CA item. The selector reads
+   * these to fulfil the 15% CA quota in prelims_practice sessions.
+   * Question.questionType should be "mcq_current" for items here.
+   */
+  questions?: Question[];
 }
 
 export interface PYQ {
@@ -602,5 +608,5 @@ export interface AppState {
   /** Attempt record id for the test in progress / just submitted. */
   activeAttemptId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs";
 }
