@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
-import { strengthsAndWeaknesses } from "@/lib/analytics";
+import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck } from "lucide-react";
 import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
-          approveChart, requestChartChanges, updateOverride } = useAppState();
+          approveChart, requestChartChanges, updateOverride, addOverride } = useAppState();
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);
   const info = levelInfo(studentId);
@@ -91,6 +91,17 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           </div>
         </div>
       )}
+
+      {/* Red flag / mercy pass card */}
+      <StuckDaysCard studentId={studentId} student={s} onMercy={(day, attempts, bestScore) => {
+        addOverride(studentId, {
+          id: Date.now(),
+          day,
+          status: "approved",
+          attempts,
+          bestScore,
+        });
+      }} />
 
       {/* Commitment summary (always visible if chart exists) */}
       {totalDays > 0 && s.chart.status === "approved" && (
@@ -312,6 +323,57 @@ function AssessmentField({ label, value }: { label: string; value: string | numb
     <div>
       <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
       <div className="text-sm font-semibold text-slate-900 mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function StuckDaysCard({ student, onMercy }: {
+  studentId: string;
+  student: import("@/types").StudentData;
+  onMercy: (day: number, attempts: number, bestScore: number) => void;
+}) {
+  const { findTopicLive } = useAppState();
+  const stuck = stuckDays(student);
+  if (stuck.length === 0) return null;
+
+  return (
+    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">🚩</span>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wide text-rose-700">Needs help</div>
+          <div className="text-sm text-rose-900">
+            {stuck.length === 1
+              ? "Student is stuck on 1 day."
+              : `Student is stuck on ${stuck.length} days.`}
+            {" "}Grant a mercy pass to unlock the next day without re-attempting.
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {stuck.map((row) => {
+          const topics = student.chart.days[row.day - 1] || [];
+          const topicNames = topics.map((t) => findTopicLive(t.topicId)?.topic.name).filter(Boolean).join(", ");
+          return (
+            <div key={row.day} className="bg-white border border-rose-200 rounded-xl p-3 flex items-center gap-3 flex-wrap">
+              <div className="w-10 text-center text-xs font-bold text-rose-700">D{row.day}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-900 truncate">{topicNames || `Day ${row.day}`}</div>
+                <div className="text-xs text-slate-600">{row.attempts} attempts · best score {row.bestScore}%</div>
+              </div>
+              <Button onClick={() => {
+                if (!confirm(`Grant mercy pass for Day ${row.day}?\nThis lets the student advance without scoring 80%.`)) return;
+                onMercy(row.day, row.attempts, row.bestScore);
+              }}>
+                <ShieldCheck className="w-4 h-4" /> Grant mercy pass
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[11px] text-rose-700/80 mt-3">
+        We surface this when a student has ≥3 attempts on a day without clearing 80%. Use sparingly — the gate exists for a reason.
+      </div>
     </div>
   );
 }

@@ -1,4 +1,29 @@
-import type { Attempt, ConceptStat } from "@/types";
+import type { Attempt, ConceptStat, StudentData } from "@/types";
+
+/** Threshold for considering a student "stuck" on a day (red-flagged). */
+export const STUCK_ATTEMPTS_THRESHOLD = 3;
+
+/** Days where the student has attempted ≥ threshold times without 80%+ and no approved override. */
+export function stuckDays(s: StudentData): { day: number; attempts: number; bestScore: number }[] {
+  const byDay: Record<number, Attempt[]> = {};
+  for (const a of s.attempts) {
+    (byDay[a.day] = byDay[a.day] || []).push(a);
+  }
+  const out: { day: number; attempts: number; bestScore: number }[] = [];
+  for (const [dayStr, list] of Object.entries(byDay)) {
+    const day = Number(dayStr);
+    const hasApprovedOverride = s.overrides.some((o) => o.day === day && o.status === "approved");
+    if (hasApprovedOverride) continue;
+    const bestScore = Math.max(...list.map((a) => a.score));
+    if (bestScore >= 80) continue;
+    if (list.length >= STUCK_ATTEMPTS_THRESHOLD) out.push({ day, attempts: list.length, bestScore });
+  }
+  return out.sort((a, b) => a.day - b.day);
+}
+
+export function hasRedFlag(s: StudentData): boolean {
+  return stuckDays(s).length > 0;
+}
 
 export interface ConceptScore {
   concept: string;

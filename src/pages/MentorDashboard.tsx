@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle } from "lucide-react";
+import { hasRedFlag } from "@/lib/analytics";
 
 export function MentorDashboard() {
   const { currentUser, students, getStudent, setViewingStudentId, setRoute } = useAppState();
@@ -111,7 +112,8 @@ function StudentRow({ userId, name, email, onOpen }: { userId: string; name: str
 
   const attemptsByDay: Record<number, number> = {};
   s.attempts.forEach((a) => { attemptsByDay[a.day] = (attemptsByDay[a.day] || 0) + 1; });
-  const stuck = Object.entries(attemptsByDay).some(([d, c]) => c >= 2 && !cleared.includes(Number(d)));
+  const stuckBorderline = Object.entries(attemptsByDay).some(([d, c]) => c === 2 && !cleared.includes(Number(d)));
+  const redFlag = hasRedFlag(s);
 
   const statusBadge = (() => {
     switch (s.chart.status) {
@@ -131,9 +133,14 @@ function StudentRow({ userId, name, email, onOpen }: { userId: string; name: str
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-semibold text-slate-900 truncate">{name}</div>
           {statusBadge}
-          {stuck && (
+          {redFlag && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-rose-700 px-2 py-0.5 rounded bg-rose-100">
+              🚩 needs help
+            </span>
+          )}
+          {!redFlag && stuckBorderline && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-amber-700 px-2 py-0.5 rounded bg-amber-100">
-              <AlertTriangle className="w-3 h-3" /> stuck
+              <AlertTriangle className="w-3 h-3" /> 2 attempts
             </span>
           )}
         </div>
