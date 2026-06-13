@@ -135,21 +135,25 @@ export function QuizPathTracker({
             * line up under their main cells. */}
           {(activeDrill || main.some((m) => m.foundationDots > 0)) && (
             <div className="relative mt-1" style={{ height: activeDrill ? `${activeDrill.results.length * 18 + 4}px` : "10px" }}>
-              {/* Past-drill pips */}
+              {/* Past-drill marker — single small numbered pill that scales
+                * regardless of how many foundation Qs the drill spanned.
+                * Old design was one dot per F Q; that's fine at 2 but gets
+                * noisy beyond. The pill carries the same information ("N
+                * foundation Qs done here") in a fixed-size element. */}
               {main.map((cell, idx) => {
                 if (cell.foundationDots === 0) return null;
                 if (activeDrill && activeDrill.mainIdx === idx) return null; // skip if currently drilling here
-                const left = idx * 24 + (22 - 6) / 2; // center 6px pip under 22px cell
+                // Pill is ~14px wide for 1 digit, grows for larger counts.
+                const pillW = cell.foundationDots < 10 ? 14 : 18;
+                const left = idx * 24 + (22 - pillW) / 2;
                 return (
                   <div
                     key={`pip-${idx}`}
-                    className="absolute top-0 flex gap-[2px]"
-                    style={{ left: `${left}px` }}
+                    className="absolute top-0 inline-flex items-center justify-center rounded-full bg-slate-200 text-slate-700 text-[9px] font-bold leading-none"
+                    style={{ left: `${left}px`, width: `${pillW}px`, height: "10px" }}
                     title={`${cell.foundationDots} foundation Q${cell.foundationDots === 1 ? "" : "s"} done`}
                   >
-                    {Array.from({ length: cell.foundationDots }).map((_, k) => (
-                      <span key={k} className="w-[6px] h-[6px] rounded-full bg-slate-400" />
-                    ))}
+                    {cell.foundationDots}
                   </div>
                 );
               })}
