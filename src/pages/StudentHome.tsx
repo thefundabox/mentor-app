@@ -101,6 +101,47 @@ export function StudentHome() {
       </div>
 
       {/*
+        Top "Today" strip — full width, sits between the header and the
+        two-column grid. Pulls the auto-tracked habits + level/points/streak
+        + active-commitment badge into one horizontal row so the dead space
+        in the right sidebar (when the path is short) goes away.
+      */}
+      <div className="mb-6">
+        <HabitsCard
+          student={s}
+          completedDays={completed}
+          flush
+          rightSlot={approvedThrough > 0 ? (
+            <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 lg:min-w-[260px]">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                Active commitment · {SCOPE_LABEL[scope]} plan
+              </div>
+              <div className="text-sm text-slate-800 mt-1 leading-snug">
+                Approved through <strong>Day {approvedThrough}</strong> of {totalDays}.{" "}
+                <span className="text-slate-600">{completed.length} of {approvedThrough} cleared.</span>
+              </div>
+              {awaitingApproval && (
+                <div className="text-xs text-amber-700 font-semibold flex items-center gap-1 mt-1.5">
+                  <Hourglass className="w-3 h-3" /> waiting for mentor approval of Day {approvedThrough + 1}–{s.chart.committedThrough}
+                </div>
+              )}
+            </div>
+          ) : null}
+        />
+
+        {/* Compact stats row, sits visually attached to the habits card. */}
+        <div data-tour="streak" className="grid grid-cols-3 gap-3 mt-3">
+          <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
+            sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
+            progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
+          <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
+            sub={`${completed.length} days cleared`} />
+          <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
+            sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
+        </div>
+      </div>
+
+      {/*
         Layout:
         - Mobile: everything stacks (sidebar first via natural source order,
           then path) — preserves the existing scroll order.
@@ -109,26 +150,15 @@ export function StudentHome() {
           mobile users keep seeing banners/announcements before the path.
       */}
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-6 lg:items-start">
-        {/* Sidebar (banners, CA, habits, stats) — visually right on lg+ */}
+        {/* Sidebar — notification-style content only. Habits + stats +
+          * commitment all live in the top Today-strip above. */}
         <aside className="lg:order-2 space-y-5">
           <OverrideDecisionBanner studentId={user.id} />
           <AnnouncementsBanner studentId={user.id} />
           <CurrentAffairsDigest />
-
-          <HabitsCard student={s} completedDays={completed} />
-
-          <div data-tour="streak" className="grid grid-cols-3 gap-3">
-            <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
-              sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
-              progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
-            <StatTile label="Points" value={info.total.toLocaleString()} accent="amber" icon={<Star className="w-4 h-4" />}
-              sub={`${completed.length} days cleared`} />
-            <StatTile label="Streak" value={streak} accent="rose" icon={<Flame className="w-4 h-4" />}
-              sub={streak >= 3 ? "🔥 keep it up" : "complete day 1 to start"} />
-          </div>
         </aside>
 
-        {/* Journey column (batch context, commitment banners, day path) */}
+        {/* Journey column (batch context, recommit, day path) */}
         <section className="lg:order-1 min-w-0 mt-6 lg:mt-0">
 
       {batch && (
@@ -149,25 +179,6 @@ export function StudentHome() {
               Starts in {daysToStart} day{daysToStart === 1 ? "" : "s"} · {formatDate(batch.startDate)}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Commitment banner */}
-      {approvedThrough > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wide text-indigo-700">Active commitment · {SCOPE_LABEL[scope]} plan</div>
-              <div className="text-sm text-slate-800 mt-1">
-                Approved through <strong>Day {approvedThrough}</strong> of {totalDays}. {completed.length} of {approvedThrough} cleared.
-              </div>
-            </div>
-            {awaitingApproval && (
-              <div className="text-xs text-amber-700 font-semibold flex items-center gap-1">
-                <Hourglass className="w-3 h-3" /> waiting for mentor approval of Day {approvedThrough + 1}–{s.chart.committedThrough}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
