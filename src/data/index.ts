@@ -1,4 +1,4 @@
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -839,6 +839,8 @@ export function emptyStudentData(): StudentData {
     mainsScores: [],
     points: { total: 0, history: [] },
     pyqsReviewed: [],
+    topicRecords: [],
+    confusionPairs: [],
   };
 }
 
@@ -1245,4 +1247,34 @@ export const DEFAULT_PYQ_BANK: PYQ[] = [
     q: "Ghoomar is the traditional folk dance of which community?",
     a: "Bhils",
     explain: "Originally a Bhil tribal dance; adopted by Rajput women as a courtly performance and now a state symbol." },
+];
+
+/**
+ * Default Current Affairs seed. Empty by design — admins add items from the
+ * (forthcoming) Admin → Current Affairs tab. The two sample entries below
+ * exist purely so the seed isn't blank on first load and a future digest UI
+ * has something to render in dev. Replace via admin UI.
+ *
+ * `expiresAt` is set to dateOfEvent + 18 months per the auto-decay spec.
+ */
+const CA_18_MONTHS_MS = 18 * 30 * 86400000;
+export const DEFAULT_CURRENT_AFFAIRS: CurrentAffairsTopic[] = [
+  {
+    id: "ca_sample_raj_scheme_2026_01",
+    headline: "Rajasthan launches Mukhyamantri Anuprati Coaching Yojana expansion (sample seed)",
+    category: "rajasthan_scheme",
+    dateOfEvent: Date.parse("2026-02-15"),
+    expiresAt: Date.parse("2026-02-15") + CA_18_MONTHS_MS,
+    isActive: true,
+    note: "Sample seed entry. Replace from Admin → Current Affairs once that tab ships (PR 5).",
+  },
+  {
+    id: "ca_sample_national_2026_01",
+    headline: "Union Budget 2026 highlights for capital expenditure (sample seed)",
+    category: "national_policy",
+    dateOfEvent: Date.parse("2026-02-01"),
+    expiresAt: Date.parse("2026-02-01") + CA_18_MONTHS_MS,
+    isActive: true,
+    note: "Sample seed entry.",
+  },
 ];

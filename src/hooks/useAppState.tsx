@@ -5,13 +5,13 @@ import {
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
   QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES, DEFAULT_TESTS,
-  DEFAULT_PYQ_BANK,
+  DEFAULT_PYQ_BANK, DEFAULT_CURRENT_AFFAIRS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
-  Test, TestAttempt, TestSchedule, PYQ,
+  Test, TestAttempt, TestSchedule, PYQ, CurrentAffairsTopic,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -89,6 +89,9 @@ interface AppContextValue extends AppState {
   // PYQ bank (admin-managed)
   upsertPYQ: (p: PYQ) => void;
   removePYQ: (id: string) => void;
+
+  // Current Affairs (admin-managed; adaptive PR 1 surface — actions land in later PRs).
+  setCurrentAffairs: (next: CurrentAffairsTopic[]) => void;
 
   // Test scheduling (admin-managed)
   upsertTestSchedule: (s: TestSchedule) => void;
@@ -177,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>("v5_testAttempts", []);
   const [testSchedules, setTestSchedules] = useLocalStorage<TestSchedule[]>("v5_testSchedules", []);
   const [pyqBank, setPyqBank] = useLocalStorage<PYQ[]>("v5_pyqBank", DEFAULT_PYQ_BANK);
+  const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
@@ -782,6 +786,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertTestSchedule, removeTestSchedule, schedulesForTest, activeSchedulesForStudent,
     pyqBank,
     upsertPYQ, removePYQ,
+    currentAffairs, setCurrentAffairs,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
