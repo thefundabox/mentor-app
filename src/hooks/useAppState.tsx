@@ -4,12 +4,13 @@ import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
-  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES,
+  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES, DEFAULT_TESTS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
+  Test, TestAttempt,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -60,7 +61,13 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats") => void;
+
+  // Tests (admin-managed)
+  upsertTest: (t: Test) => void;
+  archiveTest: (id: string) => void;
+  unarchiveTest: (id: string) => void;
+  removeTest: (id: string) => void;
 
   // Batches / cohorts (admin-managed)
   upsertBatch: (b: Batch) => void;
@@ -135,7 +142,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v5_placementPool", PLACEMENT_MCQS);
   const [batches, setBatches] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
   const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>("v5_announcements", []);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats">("v5_adminTab", "people");
+  const [tests, setTests] = useLocalStorage<Test[]>("v5_tests", DEFAULT_TESTS);
+  const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>("v5_testAttempts", []);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -596,6 +605,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => a.postedAt - b.postedAt);
   }, [users, announcements]);
 
+  /* ---------- Tests (admin-managed) ---------- */
+
+  const upsertTest = useCallback((t: Test) => {
+    setTests((prev) => {
+      const i = prev.findIndex((x) => x.id === t.id);
+      if (i < 0) return [...prev, t];
+      const next = [...prev]; next[i] = t; return next;
+    });
+  }, [setTests]);
+
+  const archiveTest = useCallback((id: string) => {
+    setTests((prev) => prev.map((t) => t.id === id ? { ...t, archived: true } : t));
+  }, [setTests]);
+
+  const unarchiveTest = useCallback((id: string) => {
+    setTests((prev) => prev.map((t) => t.id === id ? { ...t, archived: false } : t));
+  }, [setTests]);
+
+  const removeTest = useCallback((id: string) => {
+    setTests((prev) => prev.filter((t) => t.id !== id));
+    setTestAttempts((prev) => prev.filter((a) => a.testId !== id));
+  }, [setTests, setTestAttempts]);
+
   const value: AppContextValue = {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
@@ -621,6 +653,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
+    tests, testAttempts,
+    upsertTest, archiveTest, unarchiveTest, removeTest,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

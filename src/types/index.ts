@@ -172,6 +172,54 @@ export interface Assessment {
   submittedAt: number;
 }
 
+/** A single section inside a Test — typically scoped to one or two subjects. */
+export interface TestSection {
+  id: string;
+  /** Display name, e.g. "Polity" or "History — Modern". */
+  name: string;
+  /** Pull questions only from these subject ids. Empty = any subject. */
+  subjectIds: string[];
+  /** How many questions in this section. */
+  questionCount: number;
+  /** Marks awarded per correct answer. */
+  marksPerQuestion: number;
+  /** Marks deducted per wrong answer (positive number — applied as negative). */
+  negativeMarks: number;
+}
+
+/** A test definition — admin-built, taken by students, scored on submit. */
+export interface Test {
+  id: string;
+  /** Display title, e.g. "RAS 2026 Mock #1". */
+  title: string;
+  /** Short blurb shown on the test card. */
+  description?: string;
+  /** Test category — drives default section structure. */
+  type: "sectional" | "full-length" | "custom";
+  sections: TestSection[];
+  /** Total time the student has, in minutes. */
+  durationMins: number;
+  archived?: boolean;
+  createdAt: number;
+}
+
+/** A student's attempt at a test — stores answers and computed scores. */
+export interface TestAttempt {
+  id: string;
+  testId: string;
+  studentId: string;
+  startedAt: number;
+  finishedAt?: number;
+  /** questionId → chosen option index. Missing = unattempted. */
+  answers: Record<string, number>;
+  /** Total marks scored. Undefined until finishedAt is set. */
+  score?: number;
+  /** Maximum achievable marks. */
+  maxScore?: number;
+  /** Section-level breakdown (sectionId → stats). */
+  sectionScores?: Record<string, { right: number; wrong: number; unattempted: number; marks: number }>;
+}
+
 /** A timed message posted by a mentor or admin to a batch (or institute-wide). */
 export interface Announcement {
   id: string;
@@ -293,6 +341,10 @@ export interface AppState {
   batches: Batch[];
   /** Mentor/admin-posted announcements (batch-targeted or institute-wide). */
   announcements: Announcement[];
+  /** Admin-built tests (mock / sectional / custom). */
+  tests: Test[];
+  /** Student test attempt records. */
+  testAttempts: TestAttempt[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -302,5 +354,5 @@ export interface AppState {
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats";
 }

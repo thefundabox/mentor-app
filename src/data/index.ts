@@ -1,4 +1,4 @@
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -1168,5 +1168,34 @@ export const DEFAULT_BATCHES: Batch[] = [
     mentorIds: [MENTOR_RAVI],
     defaultPlanTemplateId: "tpl_overall_full",
     createdAt: ms(45),
+  },
+];
+
+/* ==================== DEFAULT TESTS ==================== */
+
+export const DEFAULT_TESTS: Test[] = [
+  {
+    id: "test_full_mock_01",
+    title: "RAS 2026 Mock #1",
+    description: "Full-length mock — 150 questions, 3h. Three sections, RAS exam-format negative marking.",
+    type: "full-length",
+    durationMins: 180,
+    sections: [
+      { id: "sec_history",  name: "History & Culture", subjectIds: ["raj-history", "raj-art-culture", "indian-history"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+      { id: "sec_polity",   name: "Polity & Constitution", subjectIds: ["polity"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+      { id: "sec_geo_econ", name: "Geography & Economy",   subjectIds: ["raj-geo", "geo-india", "economy"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+    ],
+    createdAt: Date.now() - 30 * 86400000,
+  },
+  {
+    id: "test_sectional_polity_01",
+    title: "Polity sectional — Constitutional foundations",
+    description: "30-min sectional on Preamble, Basic Structure, Fundamental Rights, DPSP.",
+    type: "sectional",
+    durationMins: 30,
+    sections: [
+      { id: "sec_polity_only", name: "Polity", subjectIds: ["polity"], questionCount: 20, marksPerQuestion: 1, negativeMarks: 0.33 },
+    ],
+    createdAt: Date.now() - 10 * 86400000,
   },
 ];
