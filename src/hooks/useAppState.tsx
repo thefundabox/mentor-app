@@ -38,6 +38,7 @@ interface AppContextValue extends AppState {
   finishQuiz: (studentId: string, attempt: Attempt) => { pointsAwarded: number; dayClearedNow: boolean; topicsRemainingInDay: number };
   addOverride: (studentId: string, override: Override) => void;
   updateOverride: (studentId: string, override: Override) => void;
+  markOverrideSeen: (studentId: string, overrideId: number) => void;
   addMainsScore: (studentId: string, score: MainsScore) => void;
   markPyqReviewed: (studentId: string, label: string) => void;
 
@@ -363,7 +364,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patchStudent]);
 
   const updateOverride = useCallback((id: string, override: Override) => {
-    patchStudent(id, (s) => ({ ...s, overrides: s.overrides.map((o) => o.id === override.id ? override : o) }));
+    // Stamp decidedAt the first time the override gets a non-pending status, so the
+    // student banner can show "1h ago" attribution.
+    const stamped: Override = override.status !== "pending" && !override.decidedAt
+      ? { ...override, decidedAt: Date.now() }
+      : override;
+    patchStudent(id, (s) => ({ ...s, overrides: s.overrides.map((o) => o.id === stamped.id ? stamped : o) }));
+  }, [patchStudent]);
+
+  const markOverrideSeen = useCallback((id: string, overrideId: number) => {
+    patchStudent(id, (s) => ({
+      ...s,
+      overrides: s.overrides.map((o) => o.id === overrideId ? { ...o, seenByStudent: true } : o),
+    }));
   }, [patchStudent]);
 
   const addMainsScore = useCallback((id: string, score: MainsScore) => {
@@ -746,7 +759,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
-    finishQuiz, addOverride, updateOverride, addMainsScore, markPyqReviewed,
+    finishQuiz, addOverride, updateOverride, markOverrideSeen, addMainsScore, markPyqReviewed,
     topicCleared, dayCleared, completedDays,
     levelInfo,
     findTopicLive,

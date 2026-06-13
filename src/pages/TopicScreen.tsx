@@ -41,9 +41,10 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   const notes = topicNotes(slot.topicId);
   if (!info) return null;
 
-  const hasOverride = student.overrides.some(
-    (o) => o.day === dayNum && o.status === "approved"
-  );
+  // Most recent override on this day — drives the QuizTab status messages.
+  const dayOverride = [...student.overrides]
+    .filter((o) => o.day === dayNum)
+    .sort((a, b) => b.id - a.id)[0] || null;
 
   const pickTopic = (tid: string) => {
     if (tid === resolvedTopicId) return;
@@ -166,7 +167,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           {tab === "quiz" && (
             <QuizTab
               onStartQuiz={handleStartQuiz}
-              hasOverride={hasOverride}
+              dayOverride={dayOverride}
               onRequestOverride={handleRequestOverride}
             />
           )}
@@ -288,13 +289,15 @@ function NotesTab({
 // --- Quiz Tab ---
 function QuizTab({
   onStartQuiz,
-  hasOverride,
+  dayOverride,
   onRequestOverride,
 }: {
   onStartQuiz: () => void;
-  hasOverride: boolean;
+  dayOverride: import("@/types").Override | null;
   onRequestOverride: () => void;
 }) {
+  const status = dayOverride?.status;
+
   return (
     <div className="text-center py-10">
       <div className="text-5xl mb-3">✨</div>
@@ -309,13 +312,33 @@ function QuizTab({
         Start quiz
       </Button>
 
-      {hasOverride && (
-        <div className="mt-4 text-sm text-emerald-600 font-medium">
-          Mentor override granted — you can proceed without 80%.
+      {status === "approved" && (
+        <div className="mt-4 inline-block text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-medium">
+          ✓ Mentor override granted — you can proceed without 80%.
         </div>
       )}
 
-      {!hasOverride && (
+      {status === "pending" && (
+        <div className="mt-4 inline-block text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-medium">
+          ⏳ Override request sent — waiting for your mentor.
+        </div>
+      )}
+
+      {status === "declined" && (
+        <div className="mt-4 inline-block text-left text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          <div className="font-semibold">✗ Override declined</div>
+          <div className="text-xs mt-0.5">Your mentor wants you to keep trying. Try the quiz again with a fresh question set.</div>
+          {dayOverride?.mentorNote && (
+            <div className="text-xs mt-1 italic">"{dayOverride.mentorNote}"</div>
+          )}
+          <button onClick={onRequestOverride}
+            className="text-xs underline mt-2 text-rose-600 hover:text-rose-800">
+            Send a new request
+          </button>
+        </div>
+      )}
+
+      {!status && (
         <div className="mt-6">
           <button
             onClick={onRequestOverride}

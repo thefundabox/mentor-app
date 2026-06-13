@@ -63,6 +63,12 @@ export interface Override {
   status: "pending" | "approved" | "declined";
   attempts: number;
   bestScore: number;
+  /** Optional one-line note the mentor left when deciding. */
+  mentorNote?: string;
+  /** Set once the student has seen the decision and dismissed the banner. */
+  seenByStudent?: boolean;
+  /** ms when the mentor decided (approved or declined). */
+  decidedAt?: number;
 }
 
 export interface ConceptStat {

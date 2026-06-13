@@ -4,6 +4,7 @@ import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
+import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText, Library } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
@@ -113,6 +114,7 @@ export function StudentHome() {
         </div>
       )}
 
+      <OverrideDecisionBanner studentId={user.id} />
       <AnnouncementsBanner studentId={user.id} />
 
       <HabitsCard student={s} completedDays={completed} />

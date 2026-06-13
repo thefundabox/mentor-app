@@ -10,7 +10,7 @@ import { SCOPE_LABEL } from "@/types";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
-          approveChart, requestChartChanges, updateOverride, addOverride, tests, testAttempts } = useAppState();
+          approveChart, requestChartChanges, addOverride, tests, testAttempts } = useAppState();
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);
   const info = levelInfo(studentId);
@@ -164,16 +164,7 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           <div className="text-xs font-bold uppercase tracking-wide text-rose-800 mb-2">Override request{pendingOverrides.length > 1 ? "s" : ""}</div>
           <div className="space-y-2">
             {pendingOverrides.map((o) => (
-              <div key={o.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                <div className="text-sm">
-                  <span className="font-semibold text-slate-900">Day {o.day}</span>
-                  <span className="text-slate-500"> · {o.attempts} attempts · best {o.bestScore}%</span>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => updateOverride(studentId, { ...o, status: "approved" })}>Approve</Button>
-                  <Button size="sm" variant="secondary" onClick={() => updateOverride(studentId, { ...o, status: "declined" })}>Decline</Button>
-                </div>
-              </div>
+              <PendingOverrideRow key={o.id} override={o} studentId={studentId} />
             ))}
           </div>
         </div>
@@ -331,6 +322,40 @@ function AssessmentField({ label, value }: { label: string; value: string | numb
     <div>
       <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
       <div className="text-sm font-semibold text-slate-900 mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function PendingOverrideRow({ override: o, studentId }: { override: import("@/types").Override; studentId: string }) {
+  const { updateOverride } = useAppState();
+  const [showNote, setShowNote] = useState(false);
+  const [note, setNote] = useState("");
+
+  const decide = (status: "approved" | "declined") => {
+    updateOverride(studentId, { ...o, status, mentorNote: note.trim() || undefined });
+    setShowNote(false); setNote("");
+  };
+
+  return (
+    <div className="bg-white rounded-lg px-3 py-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm">
+          <span className="font-semibold text-slate-900">Day {o.day}</span>
+          <span className="text-slate-500"> · {o.attempts} attempts · best {o.bestScore}%</span>
+        </div>
+        <div className="flex gap-2 items-center">
+          <button onClick={() => setShowNote((v) => !v)} className="text-xs text-slate-500 hover:text-slate-900 underline">
+            {showNote ? "hide note" : "+ note"}
+          </button>
+          <Button size="sm" onClick={() => decide("approved")}>Approve</Button>
+          <Button size="sm" variant="secondary" onClick={() => decide("declined")}>Decline</Button>
+        </div>
+      </div>
+      {showNote && (
+        <input value={note} onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional note shown to the student"
+          className="mt-2 w-full px-2 py-1.5 rounded-lg border border-rose-200 outline-none text-xs"/>
+      )}
     </div>
   );
 }
