@@ -10,6 +10,7 @@ import { ApprovalGate } from "@/pages/ApprovalGate";
 import { TestsList } from "@/pages/TestsList";
 import { TakeTest } from "@/pages/TakeTest";
 import { TestResult } from "@/pages/TestResult";
+import { PYQArchive } from "@/pages/PYQArchive";
 import { StudentHome } from "@/pages/StudentHome";
 import { TopicScreen } from "@/pages/TopicScreen";
 import { QuizScreen } from "@/pages/QuizScreen";
@@ -66,6 +67,7 @@ function AppContent() {
     else if (route === "tests") content = <TestsList />;
     else if (route === "take_test") content = <TakeTest />;
     else if (route === "test_result") content = <TestResult />;
+    else if (route === "pyq_archive") content = <PYQArchive />;
     else content = <StudentHome />;
   }
 

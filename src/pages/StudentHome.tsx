@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText } from "lucide-react";
+import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText, Library } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
@@ -81,7 +81,10 @@ export function StudentHome() {
             Day {currentDay} of {totalDays}
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
+            <Library className="w-4 h-4" /> PYQ bank
+          </Button>
           <Button variant="secondary" onClick={() => setRoute("tests")}>
             <FileText className="w-4 h-4" /> Mock tests
           </Button>

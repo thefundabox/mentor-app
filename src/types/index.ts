@@ -38,10 +38,18 @@ export interface Question {
 }
 
 export interface PYQ {
+  /** Optional stable id for admin CRUD; auto-generated if missing. */
+  id?: string;
   q: string;
   a: string;
   year: string;
   explain: string;
+  /** Subject ids this PYQ belongs to (for filtering). */
+  subjectIds?: string[];
+  /** Optional topic ids for finer filtering. */
+  topicIds?: string[];
+  /** Optional marks for this question. */
+  marks?: number;
 }
 
 export interface MainsPrompt {
@@ -342,6 +350,7 @@ export type Route =
   | "tests"
   | "take_test"
   | "test_result"
+  | "pyq_archive"
   | "mentor"
   | "mentor_student"
   | "admin";
@@ -372,6 +381,8 @@ export interface AppState {
   testAttempts: TestAttempt[];
   /** Scheduling rules pinning tests to batches with release/close dates. */
   testSchedules: TestSchedule[];
+  /** Admin-managed PYQ archive (year-tagged, searchable). */
+  pyqBank: PYQ[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
