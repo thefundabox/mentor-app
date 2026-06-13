@@ -3,6 +3,7 @@ import { conceptLabel } from "@/data";
 import { Button } from "@/components/ui/button";
 import { Trophy, Sparkles, ArrowRight, Star, Zap, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { getTopConfusions } from "@/lib/confusion";
 
 interface ResultsProps { dayNum: number; }
 
@@ -97,13 +98,54 @@ export function Results({ dayNum }: ResultsProps) {
         {lastResult.missedConcepts && lastResult.missedConcepts.length > 0 && (
           <div className="mt-6 text-left p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div className="text-xs font-semibold uppercase text-slate-500 mb-2">Concepts to revisit</div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 mb-3">
               {lastResult.missedConcepts.map((c) => (
                 <span key={c} className="text-xs px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-700">
                   {conceptLabel(c)}
                 </span>
               ))}
             </div>
+            {/* PR 7: surface the freshest confusion pairs picked up from this
+               * quiz (and prior ones). Helps the student see specifically
+               * which distractors they're falling for, not just which
+               * concepts are weak. */}
+            {(() => {
+              const topConfusions = getTopConfusions(student.confusionPairs ?? [], 3);
+              if (topConfusions.length === 0) return null;
+              return (
+                <div className="border-t border-slate-200 pt-3 mt-3">
+                  <div className="text-xs font-semibold uppercase text-slate-500 mb-2">Concepts you're muddling</div>
+                  <ul className="space-y-1">
+                    {topConfusions.map((cp) => (
+                      <li key={cp.id} className="text-xs text-slate-700">
+                        <strong>{conceptLabel(cp.correctConcept)}</strong>
+                        <span className="text-slate-400"> ↔ </span>
+                        <span className="text-slate-600">"{cp.confusedWith.length > 50 ? cp.confusedWith.slice(0, 49) + "…" : cp.confusedWith}"</span>
+                        <span className="text-slate-400 ml-1">·{cp.count}×</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* PR 7: nudge into Smart Practice's weak-area drill when the
+          * student has accumulated topic history. Doesn't show on the very
+          * first attempt — they'd land on an empty drill. */}
+        {(student.topicRecords?.length ?? 0) >= 2 && (
+          <div className="mt-4 text-left p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+            <div className="text-sm font-semibold text-indigo-900">
+              <Sparkles className="w-4 h-4 inline mr-1 -mt-0.5" />
+              Drill your weak topics
+            </div>
+            <p className="text-xs text-indigo-800 mt-1 mb-2">
+              Smart Practice can hand you targeted questions on the topics where your confidence is lowest — no waiting until the next day quiz.
+            </p>
+            <Button variant="secondary" onClick={() => setRoute("smart_practice")}>
+              Open Smart Practice <ArrowRight className="w-4 h-4" />
+            </Button>
           </div>
         )}
 

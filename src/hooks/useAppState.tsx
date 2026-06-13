@@ -476,14 +476,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next;
     });
 
-    // Adaptive PR 2: feed the legacy aggregate attempt into the scheduler.
-    // The quiz UI doesn't capture per-question timing yet (lands in PR 3),
-    // so responseTimeMs is the moderate-confidence bucket (12s). wasCorrect
-    // = score >= 80 mirrors the existing quiz-pass gate.
+    // Adaptive PR 2 + PR 7: feed the attempt into the scheduler. When
+    // perQuestion is present (day-quiz from PR 7 onwards) we use the actual
+    // average response time so confidence math runs on real signal; we also
+    // upgrade wasCorrect from the topic-level gate to the per-question
+    // truth (correct / total > 0.8 still maps to a "pass" attempt). Legacy
+    // attempts without perQuestion fall back to the moderate-confidence
+    // 12s default and the score-based gate.
+    const perQ = attempt.perQuestion ?? [];
+    const avgRespMs = perQ.length > 0
+      ? Math.round(perQ.reduce((acc, q) => acc + q.responseTimeMs, 0) / perQ.length)
+      : 12000;
     applyTopicScheduling(id, attempt.topicId, {
       wasCorrect: attempt.score >= 80,
       wasSkipped: false,
-      responseTimeMs: 12000,
+      responseTimeMs: avgRespMs,
       isCurrentAffairs: false,
     });
 

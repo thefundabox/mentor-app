@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
 import { shuffle } from "@/data";
 import { Button } from "@/components/ui/button";
 import { X, ArrowRight } from "lucide-react";
-import type { Question, QuizResult, ConceptStat } from "@/types";
+import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
 
 interface QuizScreenProps {
   dayNum: number;
@@ -29,7 +29,7 @@ function buildAttempt(pool: Question[], seed: number): Question[] {
 }
 
 export function QuizScreen({ dayNum }: QuizScreenProps) {
-  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, quizPool, foundationPool } = useAppState();
+  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, quizPool, foundationPool, recordStudentConfusion } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
@@ -52,19 +52,54 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [remediation, setRemediation] = useState<RemediationState | null>(null);
 
+  // PR 7: per-question timing + perQuestion log. Real timings let the
+  // scheduler escape its legacy 12s default and start producing accurate
+  // confidence scores on day-quiz attempts too.
+  const [questionStart, setQuestionStart] = useState<number>(() => Date.now());
+  const [perQuestion, setPerQuestion] = useState<QuestionAttempt[]>([]);
+
+  // Reset the question timer on every fresh question (main or remediation).
+  useEffect(() => {
+    setQuestionStart(Date.now());
+  }, [i, remediation?.i, remediation == null]);
+
   const q = remediation ? remediation.qs[remediation.i] : questions[i];
   const total = questions.length;
 
   function handleSubmit() {
     if (chosen === null) return;
     const isCorrect = chosen === q.correct;
+    const responseTimeMs = Date.now() - questionStart;
 
+    // Remediation answers don't go into the perQuestion log: they're a
+    // teaching moment, not a graded item. Same reason confusion isn't
+    // recorded for foundation Qs.
     if (remediation) {
       const nextI = remediation.i + 1;
       if (nextI < remediation.qs.length) setRemediation({ ...remediation, i: nextI });
       else setRemediation(null);
       setChosen(null);
       return;
+    }
+
+    // PR 7: record per-question detail for the scheduler and analytics. Stable
+    // question id uses (concept, index) — matches the selector's convention.
+    const qa: QuestionAttempt = {
+      questionId: `${q.concept}_${i}`,
+      selectedOption: chosen,
+      wasCorrect: isCorrect,
+      skipped: false,
+      responseTimeMs,
+      concept: q.concept,
+    };
+    const nextPerQuestion = [...perQuestion, qa];
+    setPerQuestion(nextPerQuestion);
+
+    // PR 7: record (concept, chosen-distractor) when the student picked a
+    // wrong main-pool answer. Foundation remediation is excluded above.
+    if (!isCorrect) {
+      const distractor = q.options[chosen] ?? `option_${chosen}`;
+      recordStudentConfusion(user.id, q.concept || "unknown", distractor, topicId);
     }
 
     const newAnswers = [...answers, { correct: isCorrect, concept: q.concept, type: q.type }];
@@ -97,7 +132,10 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
       const attemptsForTopic = student.attempts.filter((a) => a.day === dayNum && a.topicId === topicId).length;
       const isFirstTry = attemptsForTopic === 0;
       const score = Math.round((correctCount / total) * 100);
-      const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, { day: dayNum, topicId: topicId, score, when: Date.now(), byConcept });
+      const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, {
+        day: dayNum, topicId, score, when: Date.now(), byConcept,
+        perQuestion: nextPerQuestion,
+      });
       const result: QuizResult = {
         score, correct: correctCount, total,
         missedConcepts: [...new Set(newAnswers.filter((a) => !a.correct).map((a) => a.concept))],
