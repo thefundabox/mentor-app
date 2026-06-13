@@ -3,11 +3,12 @@ import { useLocalStorage } from "./useLocalStorage";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
+  DEFAULT_PLAN_TEMPLATES,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
-  SubjectCatalogEntry,
+  SubjectCatalogEntry, Assessment, PlanTemplate,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -58,7 +59,19 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "stats") => void;
+
+  // assessment (per-student, captured once on signup)
+  setAssessment: (studentId: string, assessment: Assessment) => void;
+
+  // plan templates (admin-managed)
+  setPlanTemplates: (next: PlanTemplate[]) => void;
+  upsertPlanTemplate: (tpl: PlanTemplate) => void;
+  removePlanTemplate: (id: string) => void;
+  /** Copy a template's days into the student's chart and record the choice. */
+  adoptPlanTemplate: (studentId: string, templateId: string) => void;
+  /** Wipe student's chart so they start from a blank slate, recording the "built own" choice. */
+  startBlankPlan: (studentId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -76,7 +89,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v5_lastResult", null);
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
   const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "stats">("v5_adminTab", "people");
+  const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -334,8 +348,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsers((prev) => prev.map((u) => u.id === studentId && u.role === "student" ? { ...u, mentorId } : u));
   }, [setUsers]);
 
+  /* ---------- assessment (per-student) ---------- */
+
+  const setAssessment = useCallback((id: string, assessment: Assessment) => {
+    patchStudent(id, { assessment });
+  }, [patchStudent]);
+
+  /* ---------- plan templates (admin-managed) ---------- */
+
+  const upsertPlanTemplate = useCallback((tpl: PlanTemplate) => {
+    setPlanTemplates((prev) => {
+      const i = prev.findIndex((t) => t.id === tpl.id);
+      if (i < 0) return [...prev, tpl];
+      const next = [...prev]; next[i] = tpl; return next;
+    });
+  }, [setPlanTemplates]);
+
+  const removePlanTemplate = useCallback((tplId: string) => {
+    setPlanTemplates((prev) => prev.filter((t) => t.id !== tplId));
+  }, [setPlanTemplates]);
+
+  const adoptPlanTemplate = useCallback((id: string, templateId: string) => {
+    const tpl = planTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    patchStudent(id, (s) => ({
+      ...s,
+      adoptedTemplateId: templateId,
+      chart: {
+        ...s.chart,
+        days: tpl.days.map((slots) => slots.map((slot) => ({ ...slot }))),
+        commitmentScope: tpl.scope,
+        status: "draft",
+      },
+    }));
+  }, [patchStudent, planTemplates]);
+
+  const startBlankPlan = useCallback((id: string) => {
+    patchStudent(id, (s) => ({
+      ...s,
+      adoptedTemplateId: null,
+      chart: { ...s.chart, days: [], status: "draft" },
+    }));
+  }, [patchStudent]);
+
   const value: AppContextValue = {
-    users, currentUserId, studentData, subjects, adminTab,
+    users, currentUserId, studentData, subjects, planTemplates, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
@@ -348,6 +405,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     findTopicLive,
     setSubjects, upsertSubject, archiveSubject, upsertTopic, removeTopic,
     addUser, assignStudentToMentor, setAdminTab,
+    setAssessment,
+    setPlanTemplates, upsertPlanTemplate, removePlanTemplate, adoptPlanTemplate, startBlankPlan,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

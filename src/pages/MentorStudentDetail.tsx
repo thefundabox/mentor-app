@@ -3,7 +3,8 @@ import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard } from "lucide-react";
+import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
 
@@ -73,6 +74,23 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           <Stat label="Attempts" value={s.attempts.length} />
         </div>
       </div>
+
+      {/* Assessment summary (intake captured at signup) */}
+      {s.assessment && (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Clipboard className="w-4 h-4 text-slate-600" />
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Signup assessment</div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+            <AssessmentField label="Time/day" value={`${Math.floor(s.assessment.timeCommitMins / 60)}h ${s.assessment.timeCommitMins % 60}m`} />
+            <AssessmentField label="Self-rated" value={SELF_RATED_LEVELS.find((l) => l.id === s.assessment!.selfRatedLevel)?.label || s.assessment.selfRatedLevel} />
+            <AssessmentField label="Roadblock" value={ROADBLOCK_OPTIONS.find((r) => r.id === s.assessment!.roadblockId)?.label || s.assessment.roadblockId} />
+            <AssessmentField label="Placement" value={s.assessment.placementScore === null ? "—" : `${s.assessment.placementScore}%`} />
+            <AssessmentField label="Source" value={s.adoptedTemplateId ? "Adopted template" : "Built own"} />
+          </div>
+        </div>
+      )}
 
       {/* Commitment summary (always visible if chart exists) */}
       {totalDays > 0 && s.chart.status === "approved" && (
@@ -285,6 +303,15 @@ function Stat({ label, value, icon }: { label: string; value: string | number; i
     <div className="text-right">
       <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
       <div className="text-lg font-bold text-slate-900 flex items-center justify-end gap-1">{icon}{value}</div>
+    </div>
+  );
+}
+
+function AssessmentField({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
+      <div className="text-sm font-semibold text-slate-900 mt-0.5">{value}</div>
     </div>
   );
 }

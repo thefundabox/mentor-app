@@ -154,6 +154,32 @@ export interface SubjectCatalogEntry extends Subject {
   archived?: boolean;
 }
 
+export type SelfRatedLevel = "beginner" | "intermediate" | "advanced";
+
+/** Captured once on signup, before the student picks a plan. */
+export interface Assessment {
+  /** Daily commitment in minutes. Hard-capped at 480 (8h). */
+  timeCommitMins: number;
+  selfRatedLevel: SelfRatedLevel;
+  /** Free-form id matching one of the admin-managed roadblock options. */
+  roadblockId: string;
+  /** mcqId -> selected option index. */
+  mcqAnswers: Record<string, number>;
+  /** % of placement MCQs answered correctly. null if there were no MCQs. */
+  placementScore: number | null;
+  submittedAt: number;
+}
+
+/** Admin-curated starter plan a student can adopt during onboarding. */
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  blurb: string;
+  scope: CommitmentScope;
+  /** Same shape as ChartState.days — pre-filled day slots. */
+  days: DaySlot[][];
+}
+
 export interface StudentData {
   chart: ChartState;
   progress: Progress;
@@ -163,12 +189,18 @@ export interface StudentData {
   points: PointsState;
   pyqsReviewed: string[];
   lastActivityAt?: number;
+  /** Set once the student finishes the signup assessment. Missing on legacy/seed users. */
+  assessment?: Assessment;
+  /** If the student adopted a plan template, its id. null/undefined = built own. */
+  adoptedTemplateId?: string | null;
 }
 
 export type Route =
   | "auto"
   | "landing"
   | "login"
+  | "assessment"
+  | "choose_plan"
   | "onboarding"
   | "approval_gate"
   | "home"
@@ -185,6 +217,8 @@ export interface AppState {
   studentData: Record<string, StudentData>;
   /** Runtime-editable subject catalog (admin-maintained). */
   subjects: SubjectCatalogEntry[];
+  /** Admin-curated default plan templates students can adopt. */
+  planTemplates: PlanTemplate[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -193,6 +227,6 @@ export interface AppState {
   lastResult: QuizResult | null;
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
-  /** Active admin sub-tab (people | catalog | stats) */
-  adminTab: "people" | "catalog" | "stats";
+  /** Active admin sub-tab */
+  adminTab: "people" | "catalog" | "plans" | "stats";
 }

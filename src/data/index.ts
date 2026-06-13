@@ -1,4 +1,4 @@
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -980,4 +980,97 @@ export function seedStudentData(): Record<string, StudentData> {
 }
 
 export const DEFAULT_MENTOR_ID = MENTOR_ID;
+
+/* ==================== ASSESSMENT DEFAULTS ==================== */
+
+export const ASSESSMENT_TIME = {
+  minMins: 30,
+  maxMins: 480, // hard cap at 8h
+  defaultMins: 90,
+  stepMins: 15,
+};
+
+export const ROADBLOCK_OPTIONS: { id: string; label: string; helper: string }[] = [
+  { id: "personal",  label: "Personal",  helper: "Time, distractions, motivation, exhaustion" },
+  { id: "knowledge", label: "Knowledge", helper: "Concepts, depth, retention, application" },
+];
+
+export const SELF_RATED_LEVELS: { id: "beginner" | "intermediate" | "advanced"; label: string; helper: string }[] = [
+  { id: "beginner",     label: "Beginner",     helper: "Just starting — need the basics from scratch" },
+  { id: "intermediate", label: "Intermediate", helper: "Covered most basics — now consolidating" },
+  { id: "advanced",     label: "Advanced",     helper: "Revising for finals — sharpening accuracy" },
+];
+
+/**
+ * Placement MCQs shown during signup assessment. Kept small so signup stays under 3 minutes.
+ * In a follow-up PR these will be admin-editable; for now they reuse 3 conceptual questions
+ * from QPOOL_MEWAR so the placement check stays grounded in real prep material.
+ */
+export const PLACEMENT_MCQS: Question[] = QPOOL_MEWAR.filter((q) => q.type === "conceptual").slice(0, 3);
+
+/* ==================== DEFAULT PLAN TEMPLATES ==================== */
+
+/** Helper: build a single-topic-per-day chart from a list of topic ids. */
+const singleTopicDays = (topicIds: string[]): DaySlot[][] =>
+  topicIds.map((id) => {
+    const t = findTopic(id);
+    if (!t) return [];
+    return [{ subjectId: t.subject.id, topicId: id }];
+  });
+
+export const DEFAULT_PLAN_TEMPLATES: PlanTemplate[] = [
+  {
+    id: "tpl_week_starter",
+    name: "Starter week",
+    blurb: "7 days, one topic per day. Light load — best for first-timers easing in.",
+    scope: "week",
+    days: singleTopicDays([
+      "mauryan-raj", "pratiharas", "chauhans", "mewar",
+      "preamble", "fund-rights", "phys-div",
+    ]),
+  },
+  {
+    id: "tpl_month_balanced",
+    name: "Balanced month",
+    blurb: "30 days interleaved across History, Polity, Geography — steady tempo.",
+    scope: "month",
+    days: (() => {
+      const buckets = [
+        ["mauryan-raj", "pratiharas", "chauhans", "mewar", "marwar", "amber-jaipur", "1857-raj", "integration-raj"],
+        ["preamble", "fund-rights", "dpsp", "exec", "parliament", "judiciary", "federalism", "panchayati-raj"],
+        ["phys-div", "rivers", "climate", "soils", "minerals", "wildlife", "agriculture-raj"],
+      ];
+      const out: string[] = [];
+      let i = 0;
+      while (out.length < 30) {
+        const b = buckets[i % buckets.length];
+        const slot = Math.floor(i / buckets.length);
+        if (slot < b.length) out.push(b[slot]);
+        i++;
+        if (i > 200) break;
+      }
+      return singleTopicDays(out.slice(0, 30));
+    })(),
+  },
+  {
+    id: "tpl_overall_full",
+    name: "Full-syllabus 45-day",
+    blurb: "45-day overall plan spanning Rajasthan + national subjects. Best for serious prep.",
+    scope: "overall",
+    days: (() => {
+      const subjectsInOrder = [
+        ["mauryan-raj", "pratiharas", "chauhans", "mewar", "marwar", "amber-jaipur", "1857-raj", "integration-raj"],
+        ["phys-div", "rivers", "climate", "soils", "minerals", "wildlife", "agriculture-raj"],
+        ["preamble", "fund-rights", "dpsp", "exec", "parliament", "judiciary", "federalism", "panchayati-raj"],
+        ["british-rise", "revolt-1857", "moderates", "gandhi-era", "partition", "constituent"],
+        ["physiography", "monsoon", "river-systems", "climate-india", "minerals-india"],
+        ["national-income", "planning", "banking", "budget", "fiscal-policy", "external-sector", "poverty-employment"],
+        ["miniature-paintings", "folk-dances", "folk-music", "festivals-fairs", "handicrafts", "architecture"],
+      ];
+      const flat: string[] = [];
+      for (const block of subjectsInOrder) flat.push(...block);
+      return singleTopicDays(flat.slice(0, 45));
+    })(),
+  },
+];
 

@@ -3,6 +3,8 @@ import { AppProvider, useAppState } from "@/hooks/useAppState";
 import { TopBar } from "@/components/TopBar";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
+import { Assessment } from "@/pages/Assessment";
+import { ChoosePlan } from "@/pages/ChoosePlan";
 import { Onboarding } from "@/pages/Onboarding";
 import { ApprovalGate } from "@/pages/ApprovalGate";
 import { StudentHome } from "@/pages/StudentHome";
@@ -23,7 +25,11 @@ function AppContent() {
     if (currentUser.role === "admin") { setRoute("admin"); return; }
     if (currentUser.role === "mentor") { setRoute("mentor"); return; }
     const s = getStudent(currentUser.id);
-    if (!s || s.chart.days.filter((d) => d.length > 0).length === 0) { setRoute("onboarding"); return; }
+    const noPlanYet = !s || s.chart.days.filter((d) => d.length > 0).length === 0;
+    // Brand-new student: no assessment AND no plan -> intake first.
+    if (noPlanYet && !s?.assessment) { setRoute("assessment"); return; }
+    // Has assessment but hasn't picked / built a plan yet.
+    if (noPlanYet) { setRoute("choose_plan"); return; }
     if (s.chart.status === "draft") { setRoute("onboarding"); return; }
     if (s.chart.status === "pending_approval" || s.chart.status === "changes_requested") {
       setRoute("approval_gate"); return;
@@ -47,7 +53,9 @@ function AppContent() {
     else if (route === "onboarding" && viewingStudentId) content = <Onboarding studentId={viewingStudentId} byMentor />;
     else content = <MentorDashboard />;
   } else {
-    if (route === "onboarding") content = <Onboarding studentId={currentUser.id} />;
+    if (route === "assessment") content = <Assessment studentId={currentUser.id} />;
+    else if (route === "choose_plan") content = <ChoosePlan studentId={currentUser.id} />;
+    else if (route === "onboarding") content = <Onboarding studentId={currentUser.id} />;
     else if (route === "approval_gate") content = <ApprovalGate />;
     else if (route === "topic" && activeDay) content = <TopicScreen dayNum={activeDay} />;
     else if (route === "quiz" && activeDay) content = <QuizScreen dayNum={activeDay} />;
