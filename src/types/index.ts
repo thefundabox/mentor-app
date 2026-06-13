@@ -112,6 +112,8 @@ export interface StudentTopicRecord {
   skipRate: number;
   /** Set when the student skipped this topic 3+ times in a row. Forces inclusion in next session. */
   skipProne?: boolean;
+  /** Running count of back-to-back skips; resets to 0 on any non-skip attempt. Drives skipProne. */
+  consecutiveSkips?: number;
   /** Set when a Rajasthan-specific wrong answer flags this topic for prioritized review. */
   priorityFlag?: boolean;
 }

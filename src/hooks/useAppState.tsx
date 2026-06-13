@@ -11,9 +11,10 @@ import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
-  Test, TestAttempt, TestSchedule, PYQ, CurrentAffairsTopic,
+  Test, TestAttempt, TestSchedule, PYQ, CurrentAffairsTopic, StudentTopicRecord,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
+import { scheduleNextReview, isTopicRajasthanSpecific, type ReviewSignal } from "@/lib/scheduler";
 
 interface AppContextValue extends AppState {
   currentUser: User | null;
@@ -92,6 +93,21 @@ interface AppContextValue extends AppState {
 
   // Current Affairs (admin-managed; adaptive PR 1 surface — actions land in later PRs).
   setCurrentAffairs: (next: CurrentAffairsTopic[]) => void;
+
+  /**
+   * Adaptive PR 2: apply one review signal to a student's StudentTopicRecord.
+   * Creates the record on first touch, otherwise upserts.
+   *
+   * Pass `signal` with `now` defaulted by the caller (Date.now()) and
+   * `isRajasthanTopic` resolved against the live subjects catalog — both
+   * are handled inside this method, so callers only supply the per-attempt
+   * dimensions (wasCorrect/wasSkipped/responseTimeMs/isCurrentAffairs/questionDate).
+   */
+  applyTopicScheduling: (
+    studentId: string,
+    topicId: string,
+    signal: Omit<ReviewSignal, "now" | "isRajasthanTopic">
+  ) => StudentTopicRecord;
 
   // Test scheduling (admin-managed)
   upsertTestSchedule: (s: TestSchedule) => void;
@@ -326,6 +342,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return s.chart.status === "approved" && day <= s.chart.approvedThrough;
   }, [getStudent]);
 
+  /* ---------- Adaptive PR 2: scheduler integration --------------------- */
+
+  const applyTopicScheduling = useCallback((
+    studentId: string,
+    topicId: string,
+    partialSignal: Omit<ReviewSignal, "now" | "isRajasthanTopic">
+  ): StudentTopicRecord => {
+    const now = Date.now();
+    const signal: ReviewSignal = {
+      ...partialSignal,
+      now,
+      isRajasthanTopic: isTopicRajasthanSpecific(subjects, topicId),
+    };
+    let updated: StudentTopicRecord | null = null;
+    patchStudent(studentId, (s) => {
+      const records = s.topicRecords ?? [];
+      const prior = records.find((r) => r.topicId === topicId);
+      const computed = scheduleNextReview(prior, signal);
+      // scheduleNextReview seeds an empty record from inside; ensure the
+      // returned record carries the real topicId, not the placeholder.
+      const next: StudentTopicRecord = { ...computed, topicId };
+      updated = next;
+      const others = records.filter((r) => r.topicId !== topicId);
+      return { ...s, topicRecords: [...others, next] };
+    });
+    return updated!;
+  }, [patchStudent, subjects]);
+
   const finishQuiz = useCallback((id: string, attempt: Attempt) => {
     let pointsAwarded = 0;
     let dayClearedNow = false;
@@ -360,8 +404,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
+
+    // Adaptive PR 2: feed the legacy aggregate attempt into the scheduler.
+    // The quiz UI doesn't capture per-question timing yet (lands in PR 3),
+    // so responseTimeMs is the moderate-confidence bucket (12s). wasCorrect
+    // = score >= 80 mirrors the existing quiz-pass gate.
+    applyTopicScheduling(id, attempt.topicId, {
+      wasCorrect: attempt.score >= 80,
+      wasSkipped: false,
+      responseTimeMs: 12000,
+      isCurrentAffairs: false,
+    });
+
     return { pointsAwarded, dayClearedNow, topicsRemainingInDay };
-  }, [patchStudent]);
+  }, [patchStudent, applyTopicScheduling]);
 
   const addOverride = useCallback((id: string, override: Override) => {
     patchStudent(id, (s) => ({ ...s, overrides: [...s.overrides, override] }));
@@ -787,6 +843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pyqBank,
     upsertPYQ, removePYQ,
     currentAffairs, setCurrentAffairs,
+    applyTopicScheduling,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
