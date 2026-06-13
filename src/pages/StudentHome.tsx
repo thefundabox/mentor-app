@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
+import { HabitsCard } from "@/components/HabitsCard";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
@@ -77,6 +78,8 @@ export function StudentHome() {
         </div>
         <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
       </div>
+
+      <HabitsCard student={s} completedDays={completed} />
 
       <div data-tour="streak" className="grid grid-cols-3 gap-3 mb-8">
         <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
