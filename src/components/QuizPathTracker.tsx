@@ -32,6 +32,14 @@ export interface FoundationDrill {
   mainIdx: number;
   /** One state per foundation question in this drill (typically up to 2). */
   results: CellResult[];
+  /**
+   * - `drilling`: student is currently working through the F cells; the one
+   *   marked `current` in `results` is ringed.
+   * - `reattempt`: F cells are all done; the student is back on the main Q
+   *   to retry it. F cells render filled (no ring); the main cell renders
+   *   wrong-with-current-ring so it's clear they're re-attempting.
+   */
+  phase: "drilling" | "reattempt";
 }
 
 export interface QuizPathTrackerProps {
@@ -93,21 +101,32 @@ export function QuizPathTracker({
       {/* Tracker grid — horizontal scroll-x if it overflows on a narrow viewport. */}
       <div className="flex-1 min-w-0 overflow-x-auto">
         <div className="inline-block">
-          {/* Main row */}
+          {/* Main row. During a reattempt the wrong cell at activeDrill.mainIdx
+            * keeps its red wrong colour but picks up an indigo ring overlay so
+            * the student can tell they're back on that Q after the drill. */}
           <div className="flex items-center gap-[2px]">
-            {main.map((cell, idx) => (
-              <div
-                key={idx}
-                title={`Q${idx + 1} · ${cell.result}`}
-                className={`${MAIN_CELL} rounded-md flex items-center justify-center text-[10px] font-bold transition ${mainClass(cell.result)}`}
-              >
-                {cell.result === "correct"
-                  ? <Check className="w-3 h-3" />
-                  : cell.result === "wrong"
-                    ? <X className="w-3 h-3" />
-                    : idx + 1}
-              </div>
-            ))}
+            {main.map((cell, idx) => {
+              const isReattemptHere =
+                activeDrill?.phase === "reattempt" && activeDrill.mainIdx === idx;
+              const reattemptRing = isReattemptHere ? " ring-2 ring-indigo-300" : "";
+              return (
+                <div
+                  key={idx}
+                  title={
+                    isReattemptHere
+                      ? `Q${idx + 1} · re-attempting`
+                      : `Q${idx + 1} · ${cell.result}`
+                  }
+                  className={`${MAIN_CELL} rounded-md flex items-center justify-center text-[10px] font-bold transition ${mainClass(cell.result)}${reattemptRing}`}
+                >
+                  {cell.result === "correct"
+                    ? <Check className="w-3 h-3" />
+                    : cell.result === "wrong"
+                      ? <X className="w-3 h-3" />
+                      : idx + 1}
+                </div>
+              );
+            })}
           </div>
 
           {/* Foundation row below main — collapsed pips for past drills, or

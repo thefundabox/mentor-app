@@ -136,39 +136,67 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
         setActiveDrill({ ...activeDrill, results: drillResults });
         setRemediation({ ...remediation, i: nextI });
       } else {
-        // Drill done. Two things happen together:
-        //   - Tracker: collapse foundation cells into a foundationDots count
-        //     under the originating main cell, mark the next main cell current.
-        //   - Quiz state: advance the main cursor `i` past the failed Q so the
-        //     student moves forward to the next main question (was a quirk in
-        //     the original code that they re-attempted the same Q; the
-        //     tracker design assumes — and the user's mental model expects —
-        //     forward progress here, and the scoring already recorded the
-        //     wrong answer for the failed Q so re-attempting isn't needed).
-        setPathMain((prev) => {
-          const next = [...prev];
-          next[activeDrill.mainIdx] = {
-            ...next[activeDrill.mainIdx],
-            foundationDots: drillResults.length,
-          };
-          const nextMain = activeDrill.mainIdx + 1;
-          if (nextMain < next.length) {
-            next[nextMain] = { ...next[nextMain], result: "current" };
-          }
-          return next;
-        });
-        setActiveDrill(null);
+        // Drill done. Transition into "re-attempt" phase: the student goes
+        // back to the original main Q for a second try. We do NOT advance i
+        // here; we close out the remediation flow and flip the drill phase.
+        // The next handleSubmit will fall through to the main branch and
+        // detect activeDrill.phase === "reattempt" to handle the second
+        // attempt (replace previous wrong answer, collapse drill to pips,
+        // advance forward).
+        setActiveDrill({ ...activeDrill, results: drillResults, phase: "reattempt" });
         setRemediation(null);
-        if (i + 1 < total) {
-          setI(i + 1);
-        } else {
-          // Drill was on the last main Q — finalize using the answers/perQ
-          // that were already recorded when the failed main answer fired.
-          finalizeQuiz(answers, perQuestion);
-          return;
-        }
       }
       setChosen(null);
+      return;
+    }
+
+    // Re-attempt branch: drill is done, student is back on the original main
+    // Q for a second try. Replace the previous wrong entry in answers and
+    // perQuestion with the new result so the score reflects what the student
+    // ultimately demonstrated. Don't trigger another drill (avoids an
+    // infinite-loop) and don't re-record confusion (the first wrong pick was
+    // already recorded when the drill opened).
+    if (activeDrill && activeDrill.phase === "reattempt") {
+      const drillLength = activeDrill.results.length;
+
+      const replacedQa: QuestionAttempt = {
+        questionId: `${q.concept}_${i}`,
+        selectedOption: chosen,
+        wasCorrect: isCorrect,
+        skipped: false,
+        responseTimeMs,
+        concept: q.concept,
+      };
+      const nextPerQuestion = [...perQuestion.slice(0, -1), replacedQa];
+      setPerQuestion(nextPerQuestion);
+
+      const nextAnswers: Answer[] = [
+        ...answers.slice(0, -1),
+        { correct: isCorrect, concept: q.concept, type: q.type },
+      ];
+      setAnswers(nextAnswers);
+
+      // Tracker: flip the cell to its final result, collapse the drill into
+      // foundationDots pips, mark the next main cell current.
+      setPathMain((prev) => {
+        const next = [...prev];
+        next[i] = {
+          ...next[i],
+          result: isCorrect ? "correct" : "wrong",
+          foundationDots: drillLength,
+        };
+        if (i + 1 < next.length) {
+          next[i + 1] = { ...next[i + 1], result: "current" };
+        }
+        return next;
+      });
+      setActiveDrill(null);
+      setChosen(null);
+      if (i + 1 < total) {
+        setI(i + 1);
+      } else {
+        finalizeQuiz(nextAnswers, nextPerQuestion);
+      }
       return;
     }
 
@@ -208,6 +236,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
         setActiveDrill({
           mainIdx: i,
           results: found.map((_, k) => (k === 0 ? "current" : "pending")),
+          phase: "drilling",
         });
         setRemediation({
           qs: found.map((f) => ({ ...f, _foundation: true })),
@@ -264,8 +293,24 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
           </motion.div>
         )}
 
+        {/* Re-attempt banner: shown when the drill just ended and the
+          * student is about to take a second swing at the original main Q. */}
+        {!remediation && activeDrill && activeDrill.phase === "reattempt" && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
+            <div className="text-xs font-bold uppercase tracking-wide text-indigo-700 mb-1">Try this one again</div>
+            <div className="text-sm text-indigo-900">
+              You just worked through {activeDrill.results.length} foundation question{activeDrill.results.length === 1 ? "" : "s"}. Now retake the original question — this is what counts toward your score.
+            </div>
+          </motion.div>
+        )}
+
         <div className="text-xs uppercase font-semibold text-indigo-600 mb-2">
-          {remediation ? "Foundation refresher" : q.type === "conceptual" ? "Conceptual" : "Analytical · Fact-based"}
+          {remediation
+            ? "Foundation refresher"
+            : activeDrill && activeDrill.phase === "reattempt"
+              ? "Second attempt"
+              : q.type === "conceptual" ? "Conceptual" : "Analytical · Fact-based"}
         </div>
 
         <h2 className="text-2xl font-bold text-slate-900 mb-6 leading-snug">{q.q}</h2>
