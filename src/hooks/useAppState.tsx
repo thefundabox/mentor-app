@@ -69,6 +69,21 @@ interface AppContextValue extends AppState {
   unarchiveTest: (id: string) => void;
   removeTest: (id: string) => void;
 
+  // Test attempts (student-side)
+  setActiveTestId: (id: string | null) => void;
+  setActiveAttemptId: (id: string | null) => void;
+  /** Start a new attempt for the given test and student. Returns the attempt id. */
+  startTestAttempt: (testId: string, studentId: string) => string;
+  /** Persist an in-progress attempt's answer map. */
+  saveTestAnswers: (attemptId: string, answers: Record<string, number>) => void;
+  /** Finish the attempt — accepts the final answer map and section scores. */
+  finishTestAttempt: (attemptId: string, payload: {
+    answers: Record<string, number>;
+    score: number;
+    maxScore: number;
+    sectionScores: Record<string, { right: number; wrong: number; unattempted: number; marks: number }>;
+  }) => void;
+
   // Batches / cohorts (admin-managed)
   upsertBatch: (b: Batch) => void;
   archiveBatch: (id: string) => void;
@@ -134,6 +149,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v5_attemptSeed", 1);
   const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v5_lastResult", null);
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
+  const [activeTestId, setActiveTestId] = useLocalStorage<string | null>("v5_activeTestId", null);
+  const [activeAttemptId, setActiveAttemptId] = useLocalStorage<string | null>("v5_activeAttemptId", null);
   const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
   const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
   const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
@@ -628,6 +645,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTestAttempts((prev) => prev.filter((a) => a.testId !== id));
   }, [setTests, setTestAttempts]);
 
+  /* ---------- Test attempts ---------- */
+
+  const startTestAttempt = useCallback((testId: string, studentId: string): string => {
+    const id = `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const attempt: TestAttempt = {
+      id, testId, studentId,
+      startedAt: Date.now(),
+      answers: {},
+    };
+    setTestAttempts((prev) => [...prev, attempt]);
+    return id;
+  }, [setTestAttempts]);
+
+  const saveTestAnswers = useCallback((attemptId: string, answers: Record<string, number>) => {
+    setTestAttempts((prev) => prev.map((a) => a.id === attemptId ? { ...a, answers } : a));
+  }, [setTestAttempts]);
+
+  const finishTestAttempt = useCallback((attemptId: string, payload: {
+    answers: Record<string, number>;
+    score: number;
+    maxScore: number;
+    sectionScores: Record<string, { right: number; wrong: number; unattempted: number; marks: number }>;
+  }) => {
+    setTestAttempts((prev) => prev.map((a) => a.id === attemptId ? {
+      ...a,
+      finishedAt: Date.now(),
+      answers: payload.answers,
+      score: payload.score,
+      maxScore: payload.maxScore,
+      sectionScores: payload.sectionScores,
+    } : a));
+  }, [setTestAttempts]);
+
   const value: AppContextValue = {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
@@ -653,8 +703,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
-    tests, testAttempts,
+    tests, testAttempts, activeTestId, activeAttemptId,
     upsertTest, archiveTest, unarchiveTest, removeTest,
+    setActiveTestId, setActiveAttemptId,
+    startTestAttempt, saveTestAnswers, finishTestAttempt,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -317,6 +317,9 @@ export type Route =
   | "topic"
   | "quiz"
   | "results"
+  | "tests"
+  | "take_test"
+  | "test_result"
   | "mentor"
   | "mentor_student"
   | "admin";
@@ -353,6 +356,10 @@ export interface AppState {
   lastResult: QuizResult | null;
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
+  /** Test the student is currently taking (or just submitted). */
+  activeTestId: string | null;
+  /** Attempt record id for the test in progress / just submitted. */
+  activeAttemptId: string | null;
   /** Active admin sub-tab */
   adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats";
 }

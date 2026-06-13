@@ -7,6 +7,9 @@ import { Assessment } from "@/pages/Assessment";
 import { ChoosePlan } from "@/pages/ChoosePlan";
 import { Onboarding } from "@/pages/Onboarding";
 import { ApprovalGate } from "@/pages/ApprovalGate";
+import { TestsList } from "@/pages/TestsList";
+import { TakeTest } from "@/pages/TakeTest";
+import { TestResult } from "@/pages/TestResult";
 import { StudentHome } from "@/pages/StudentHome";
 import { TopicScreen } from "@/pages/TopicScreen";
 import { QuizScreen } from "@/pages/QuizScreen";
@@ -60,10 +63,13 @@ function AppContent() {
     else if (route === "topic" && activeDay) content = <TopicScreen dayNum={activeDay} />;
     else if (route === "quiz" && activeDay) content = <QuizScreen dayNum={activeDay} />;
     else if (route === "results" && lastResult && activeDay) content = <Results dayNum={activeDay} />;
+    else if (route === "tests") content = <TestsList />;
+    else if (route === "take_test") content = <TakeTest />;
+    else if (route === "test_result") content = <TestResult />;
     else content = <StudentHome />;
   }
 
-  const showTopBar = !!currentUser && route !== "quiz";
+  const showTopBar = !!currentUser && route !== "quiz" && route !== "take_test";
 
   return (
     <div className="min-h-screen bg-slate-50">

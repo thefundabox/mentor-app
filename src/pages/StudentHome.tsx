@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
+import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass, FileText } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
@@ -81,7 +81,12 @@ export function StudentHome() {
             Day {currentDay} of {totalDays}
           </h1>
         </div>
-        <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setRoute("tests")}>
+            <FileText className="w-4 h-4" /> Mock tests
+          </Button>
+          <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
+        </div>
       </div>
 
       {batch && (
