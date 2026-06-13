@@ -1,11 +1,28 @@
+import { useEffect } from "react";
 import { useAppState } from "@/hooks/useAppState";
+import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
   const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive } = useAppState();
+  const { startTour } = useTour();
   const findTopic = findTopicLive;
+
+  // Auto-fire the Introduction Tour the first time a student lands on home.
+  // Wait one frame so the DOM (and data-tour anchors) are present.
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== "student") return;
+    const s = getStudent(currentUser.id);
+    if (s.hasSeenTour) return;
+    if (s.chart.days.filter((d) => d.length > 0).length === 0) return;
+    const t = window.setTimeout(() => startTour(), 200);
+    return () => window.clearTimeout(t);
+    // Run only when user changes; we don't want to re-fire on every patch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
   if (!currentUser) return null;
 
   const user = currentUser;
@@ -58,10 +75,10 @@ export function StudentHome() {
             Day {currentDay} of {totalDays}
           </h1>
         </div>
-        <Button variant="secondary" onClick={() => setRoute("onboarding")}>Edit chart</Button>
+        <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div data-tour="streak" className="grid grid-cols-3 gap-3 mb-8">
         <StatTile label="Level" value={info.level} accent="indigo" icon={<Trophy className="w-4 h-4" />}
           sub={`${info.xpInLevel} / ${info.xpInLevel + info.xpToNextLevel} XP`}
           progress={info.xpInLevel / (info.xpInLevel + info.xpToNextLevel)} />
@@ -106,7 +123,7 @@ export function StudentHome() {
         </div>
       )}
 
-      <div className="relative">
+      <div data-tour="day-path" className="relative">
         <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-[3px]"
           style={{ background: "repeating-linear-gradient(to bottom, #e2e8f0 0 6px, transparent 6px 12px)" }} />
 
@@ -122,7 +139,8 @@ export function StudentHome() {
 
             return (
               <div key={i} className={`flex items-center ${sideRight ? "justify-start" : "justify-end"}`}>
-                <div className={`flex items-start gap-4 max-w-[80%] p-4 rounded-2xl border-2 transition ${
+                <div data-tour={isCurrent ? "current-day" : undefined}
+                  className={`flex items-start gap-4 max-w-[80%] p-4 rounded-2xl border-2 transition ${
                   isDone ? "bg-emerald-50 border-emerald-200"
                   : isCurrent ? "bg-white border-indigo-300 pulse-ring"
                   : "bg-white border-slate-200 opacity-60"

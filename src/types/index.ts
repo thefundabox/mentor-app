@@ -170,6 +170,28 @@ export interface Assessment {
   submittedAt: number;
 }
 
+/** A single step in the Introduction Tour. Steps are admin-editable. */
+export interface TourStep {
+  id: string;
+  /** Where this step appears in the sequence (lower = earlier). */
+  order: number;
+  /** Headline shown in the tour popover. */
+  title: string;
+  /** Body copy in the popover. Plain text. */
+  body: string;
+  /**
+   * Either a CSS selector pointing at a `data-tour="..."` attribute on the page,
+   * or `"__center__"` for an unanchored centered popover (used for intro/outro).
+   */
+  target: string;
+  /** Popover side relative to the target. driver.js side values. */
+  side?: "top" | "right" | "bottom" | "left" | "over";
+  /** Optional align value passed to driver.js. */
+  align?: "start" | "center" | "end";
+  /** Which screen this step belongs on (used to auto-route during the tour). */
+  screen?: "home" | "topic" | "onboarding" | "approval_gate";
+}
+
 /** Admin-curated starter plan a student can adopt during onboarding. */
 export interface PlanTemplate {
   id: string;
@@ -193,6 +215,8 @@ export interface StudentData {
   assessment?: Assessment;
   /** If the student adopted a plan template, its id. null/undefined = built own. */
   adoptedTemplateId?: string | null;
+  /** True once the student has finished the Introduction Tour at least once. */
+  hasSeenTour?: boolean;
 }
 
 export type Route =
@@ -219,6 +243,8 @@ export interface AppState {
   subjects: SubjectCatalogEntry[];
   /** Admin-curated default plan templates students can adopt. */
   planTemplates: PlanTemplate[];
+  /** Admin-editable Introduction Tour steps. */
+  tourSteps: TourStep[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -228,5 +254,5 @@ export interface AppState {
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "stats";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "stats";
 }

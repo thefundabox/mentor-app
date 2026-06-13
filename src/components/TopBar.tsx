@@ -1,7 +1,10 @@
 import { useAppState } from "@/hooks/useAppState";
+import { useTour } from "@/hooks/useTour";
+import { HelpCircle } from "lucide-react";
 
 export function TopBar() {
   const { currentUser, resetAll, logout, setRoute, setActiveDay, setViewingStudentId, getStudent, levelInfo } = useAppState();
+  const { startTour } = useTour();
 
   const goHome = () => {
     if (!currentUser) { setRoute("landing"); return; }
@@ -47,6 +50,18 @@ export function TopBar() {
                 <span>⭐</span>{info.total.toLocaleString()}
               </div>
             </div>
+          )}
+
+          {isStudent && (
+            <button
+              data-tour="restart-tour"
+              onClick={startTour}
+              title="Take the tour"
+              className="hidden sm:flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-50 transition"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Tour
+            </button>
           )}
 
           {currentUser && (

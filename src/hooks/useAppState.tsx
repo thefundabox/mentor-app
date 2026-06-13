@@ -3,12 +3,12 @@ import { useLocalStorage } from "./useLocalStorage";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
-  DEFAULT_PLAN_TEMPLATES,
+  DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
-  SubjectCatalogEntry, Assessment, PlanTemplate,
+  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -59,7 +59,7 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "stats") => void;
 
   // assessment (per-student, captured once on signup)
   setAssessment: (studentId: string, assessment: Assessment) => void;
@@ -72,6 +72,13 @@ interface AppContextValue extends AppState {
   adoptPlanTemplate: (studentId: string, templateId: string) => void;
   /** Wipe student's chart so they start from a blank slate, recording the "built own" choice. */
   startBlankPlan: (studentId: string) => void;
+
+  // Introduction Tour (admin-managed steps + per-student progress)
+  setTourSteps: (next: TourStep[]) => void;
+  upsertTourStep: (step: TourStep) => void;
+  removeTourStep: (id: string) => void;
+  reorderTourSteps: (orderedIds: string[]) => void;
+  markTourSeen: (studentId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -90,7 +97,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
   const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
   const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "stats">("v5_adminTab", "people");
+  const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -391,8 +399,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, [patchStudent]);
 
+  /* ---------- Introduction Tour ---------- */
+
+  const upsertTourStep = useCallback((step: TourStep) => {
+    setTourSteps((prev) => {
+      const i = prev.findIndex((s) => s.id === step.id);
+      if (i < 0) return [...prev, step];
+      const next = [...prev]; next[i] = step; return next;
+    });
+  }, [setTourSteps]);
+
+  const removeTourStep = useCallback((id: string) => {
+    setTourSteps((prev) => prev.filter((s) => s.id !== id));
+  }, [setTourSteps]);
+
+  const reorderTourSteps = useCallback((orderedIds: string[]) => {
+    setTourSteps((prev) => {
+      const map = new Map(prev.map((s) => [s.id, s]));
+      const next = orderedIds.map((id, i) => {
+        const s = map.get(id);
+        return s ? { ...s, order: (i + 1) * 10 } : null;
+      }).filter(Boolean) as TourStep[];
+      // Append any not in orderedIds (defensive, shouldn't happen).
+      for (const s of prev) {
+        if (!next.find((n) => n.id === s.id)) next.push(s);
+      }
+      return next;
+    });
+  }, [setTourSteps]);
+
+  const markTourSeen = useCallback((id: string) => {
+    patchStudent(id, { hasSeenTour: true });
+  }, [patchStudent]);
+
   const value: AppContextValue = {
-    users, currentUserId, studentData, subjects, planTemplates, adminTab,
+    users, currentUserId, studentData, subjects, planTemplates, tourSteps, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
@@ -407,6 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addUser, assignStudentToMentor, setAdminTab,
     setAssessment,
     setPlanTemplates, upsertPlanTemplate, removePlanTemplate, adoptPlanTemplate, startBlankPlan,
+    setTourSteps, upsertTourStep, removeTourStep, reorderTourSteps, markTourSeen,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,4 +1,4 @@
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -1074,3 +1074,72 @@ export const DEFAULT_PLAN_TEMPLATES: PlanTemplate[] = [
   },
 ];
 
+
+/* ==================== INTRODUCTION TOUR ==================== */
+
+/**
+ * Default tour steps anchored against `data-tour="..."` attributes on the page.
+ * Admins can reorder / edit / add / remove these from the Admin → Tour steps tab.
+ * Steps with `screen` will auto-route the app to that screen before the step fires.
+ */
+export const DEFAULT_TOUR_STEPS: TourStep[] = [
+  {
+    id: "intro",
+    order: 0,
+    title: "Welcome — quick tour",
+    body: "We'll walk through the main features of your prep app. Click Next to continue, or Skip anytime.",
+    target: "__center__",
+    screen: "home",
+  },
+  {
+    id: "day-path",
+    order: 10,
+    title: "Your day-by-day path",
+    body: "This is your prep path. Each circle is a day with one or more topics. Clear a day's quiz to unlock the next.",
+    target: '[data-tour="day-path"]',
+    side: "right",
+    screen: "home",
+  },
+  {
+    id: "current-day",
+    order: 20,
+    title: "Today's topic",
+    body: "Tap your current day to open notes, quizzes, previous-year questions, and mains practice for that topic.",
+    target: '[data-tour="current-day"]',
+    side: "bottom",
+    screen: "home",
+  },
+  {
+    id: "streak",
+    order: 30,
+    title: "Streak & points",
+    body: "Stay consistent — your streak and points show up here. Clearing quizzes on first try earns bonuses.",
+    target: '[data-tour="streak"]',
+    side: "bottom",
+    screen: "home",
+  },
+  {
+    id: "edit-chart",
+    order: 40,
+    title: "Adjust your plan",
+    body: "Need to change your plan? Use Edit chart — your mentor will be asked to re-approve any changes.",
+    target: '[data-tour="edit-chart"]',
+    side: "left",
+    screen: "home",
+  },
+  {
+    id: "tour-restart",
+    order: 50,
+    title: "Take the tour again anytime",
+    body: "Hit this button in the top bar whenever you want to revisit the tour.",
+    target: '[data-tour="restart-tour"]',
+    side: "bottom",
+  },
+  {
+    id: "outro",
+    order: 60,
+    title: "You're all set",
+    body: "That's the whirlwind tour. Your mentor sees everything you do, so don't worry about getting it perfect — just keep going.",
+    target: "__center__",
+  },
+];
