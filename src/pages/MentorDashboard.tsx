@@ -102,7 +102,8 @@ export function MentorDashboard() {
 }
 
 function StudentRow({ userId, name, email, onOpen }: { userId: string; name: string; email: string; onOpen: () => void }) {
-  const { getStudent, levelInfo, completedDays } = useAppState();
+  const { getStudent, levelInfo, completedDays, batchForStudent } = useAppState();
+  const batch = batchForStudent(userId);
   const s = getStudent(userId);
   const info = levelInfo(userId);
   const totalDays = s.chart.days.length || 1;
@@ -133,6 +134,11 @@ function StudentRow({ userId, name, email, onOpen }: { userId: string; name: str
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-semibold text-slate-900 truncate">{name}</div>
           {statusBadge}
+          {batch && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-indigo-700 px-2 py-0.5 rounded bg-indigo-50">
+              {batch.name}
+            </span>
+          )}
           {redFlag && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-rose-700 px-2 py-0.5 rounded bg-rose-100">
               🚩 needs help

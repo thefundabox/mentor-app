@@ -4,12 +4,12 @@ import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
-  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS,
+  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
-  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question,
+  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -60,7 +60,17 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats") => void;
+
+  // Batches / cohorts (admin-managed)
+  upsertBatch: (b: Batch) => void;
+  archiveBatch: (id: string) => void;
+  unarchiveBatch: (id: string) => void;
+  assignStudentToBatch: (studentId: string, batchId: string | null) => void;
+  /** All students whose batchId matches the given batch id. */
+  batchStudents: (batchId: string) => User[];
+  /** The Batch object for a student, or null. */
+  batchForStudent: (studentId: string) => Batch | null;
 
   // assessment (per-student, captured once on signup)
   setAssessment: (studentId: string, assessment: Assessment) => void;
@@ -116,7 +126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
   const [foundationPool, setFoundationPool] = useLocalStorage<Record<string, Question[]>>("v5_foundationPool", FOUNDATION_QS);
   const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v5_placementPool", PLACEMENT_MCQS);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "stats">("v5_adminTab", "people");
+  const [batches, setBatches] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -500,6 +511,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlacementPool((prev) => prev.filter((_, i) => i !== idx));
   }, [setPlacementPool]);
 
+  /* ---------- Batches / cohorts ---------- */
+
+  const upsertBatch = useCallback((b: Batch) => {
+    setBatches((prev) => {
+      const i = prev.findIndex((x) => x.id === b.id);
+      if (i < 0) return [...prev, b];
+      const next = [...prev]; next[i] = b; return next;
+    });
+  }, [setBatches]);
+
+  const archiveBatch = useCallback((id: string) => {
+    setBatches((prev) => prev.map((b) => b.id === id ? { ...b, archived: true } : b));
+  }, [setBatches]);
+
+  const unarchiveBatch = useCallback((id: string) => {
+    setBatches((prev) => prev.map((b) => b.id === id ? { ...b, archived: false } : b));
+  }, [setBatches]);
+
+  const assignStudentToBatch = useCallback((studentId: string, batchId: string | null) => {
+    setUsers((prev) => prev.map((u) =>
+      u.id === studentId && u.role === "student"
+        ? { ...u, batchId: batchId || undefined }
+        : u
+    ));
+  }, [setUsers]);
+
+  const batchStudents = useCallback((batchId: string): User[] => {
+    return users.filter((u) => u.role === "student" && u.batchId === batchId);
+  }, [users]);
+
+  const batchForStudent = useCallback((studentId: string): Batch | null => {
+    const u = users.find((x) => x.id === studentId);
+    if (!u || !u.batchId) return null;
+    return batches.find((b) => b.id === u.batchId) || null;
+  }, [users, batches]);
+
   const value: AppContextValue = {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
@@ -521,6 +568,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setQuizPool, upsertQuizQuestion, addQuizQuestion, removeQuizQuestion,
     setFoundationPool, upsertFoundationQuestion, addFoundationQuestion, removeFoundationQuestion,
     setPlacementPool, upsertPlacementQuestion, addPlacementQuestion, removePlacementQuestion,
+    batches,
+    upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

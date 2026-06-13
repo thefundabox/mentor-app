@@ -1,4 +1,4 @@
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -880,6 +880,7 @@ export const SEED_USERS: User[] = [
     name: "Aamir Parwez",
     role: "student",
     mentorId: MENTOR_ID,
+    batchId: "batch_ras_2026_morning",
     createdAt: ms(20),
   },
   {
@@ -888,6 +889,7 @@ export const SEED_USERS: User[] = [
     name: "Neha Joshi",
     role: "student",
     mentorId: MENTOR_ID,
+    batchId: "batch_ras_2026_morning",
     createdAt: ms(15),
   },
 ];
@@ -1141,5 +1143,30 @@ export const DEFAULT_TOUR_STEPS: TourStep[] = [
     title: "You're all set",
     body: "That's the whirlwind tour. Your mentor sees everything you do, so don't worry about getting it perfect — just keep going.",
     target: "__center__",
+  },
+];
+
+/* ==================== DEFAULT BATCHES ==================== */
+
+export const DEFAULT_BATCHES: Batch[] = [
+  {
+    id: "batch_ras_2026_morning",
+    name: "RAS 2026 — Morning",
+    vertical: "RAS",
+    description: "Daily 7–10 AM. Targeted at first-time aspirants.",
+    startDate: ms(20),
+    mentorIds: [MENTOR_ID],
+    defaultPlanTemplateId: "tpl_month_balanced",
+    createdAt: ms(60),
+  },
+  {
+    id: "batch_ras_2026_evening",
+    name: "RAS 2026 — Evening",
+    vertical: "RAS",
+    description: "Daily 7–10 PM. For working professionals.",
+    startDate: ms(15),
+    mentorIds: [MENTOR_RAVI],
+    defaultPlanTemplateId: "tpl_overall_full",
+    createdAt: ms(45),
   },
 ];

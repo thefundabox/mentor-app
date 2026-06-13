@@ -146,6 +146,8 @@ export interface User {
   role: Role;
   /** For students: id of their mentor */
   mentorId?: string;
+  /** For students: the cohort/batch they're enrolled in. */
+  batchId?: string;
   createdAt: number;
 }
 
@@ -168,6 +170,28 @@ export interface Assessment {
   /** % of placement MCQs answered correctly. null if there were no MCQs. */
   placementScore: number | null;
   submittedAt: number;
+}
+
+/** A cohort/batch within the institute — groups students under a shared schedule and mentor(s). */
+export interface Batch {
+  id: string;
+  /** Display name, e.g. "RAS 2026 Morning". */
+  name: string;
+  /** Free-form vertical/exam tag, e.g. "RAS", "UPSC", "Banking". */
+  vertical: string;
+  /** Optional short description shown to students. */
+  description?: string;
+  /** Calendar start of the batch (ms). Day 1 of plans is anchored here. */
+  startDate: number;
+  /** Optional end (ms). */
+  endDate?: number;
+  /** Mentor ids assigned to this batch. */
+  mentorIds: string[];
+  /** Optional default plan template that new students in this batch are nudged toward. */
+  defaultPlanTemplateId?: string;
+  /** Soft-delete flag. */
+  archived?: boolean;
+  createdAt: number;
 }
 
 /** A single step in the Introduction Tour. Steps are admin-editable. */
@@ -251,6 +275,8 @@ export interface AppState {
   foundationPool: Record<string, Question[]>;
   /** Admin-editable placement check shown during the signup assessment. */
   placementPool: Question[];
+  /** Admin-managed cohorts (batches) within the institute. */
+  batches: Batch[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -260,5 +286,5 @@ export interface AppState {
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "stats";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats";
 }
