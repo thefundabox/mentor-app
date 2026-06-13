@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
 import {
   Users, BookOpen, BarChart3, Plus, Pencil, Trash2,
-  ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown, HelpCircle, GraduationCap, FileText,
+  ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown, HelpCircle, GraduationCap, FileText, Calendar,
 } from "lucide-react";
-import type { SubjectCatalogEntry, PlanTemplate, CommitmentScope, TourStep, Question, Batch, Test, TestSection } from "@/types";
+import type { SubjectCatalogEntry, PlanTemplate, CommitmentScope, TourStep, Question, Batch, Test, TestSection, TestSchedule } from "@/types";
 import { SCOPE_LABEL } from "@/types";
 import { conceptLabel } from "@/data";
 
@@ -1261,7 +1261,7 @@ function BatchEditor({
 /* ==================== Tests tab ==================== */
 
 function TestsTab() {
-  const { tests, upsertTest, archiveTest, unarchiveTest, removeTest } = useAppState();
+  const { tests, upsertTest, archiveTest, unarchiveTest, removeTest, schedulesForTest, batches, upsertTestSchedule, removeTestSchedule } = useAppState();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -1335,11 +1335,122 @@ function TestsTab() {
                   </Button>
                 </div>
               </div>
-              {t.description && <p className="text-sm text-slate-600">{t.description}</p>}
+              {t.description && <p className="text-sm text-slate-600 mb-3">{t.description}</p>}
+
+              {/* Scheduling sub-section */}
+              <TestSchedulesPanel
+                test={t}
+                schedules={schedulesForTest(t.id)}
+                batches={batches.filter((b) => !b.archived)}
+                onAdd={upsertTestSchedule}
+                onRemove={removeTestSchedule}
+              />
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function TestSchedulesPanel({ test, schedules, batches, onAdd, onRemove }: {
+  test: Test;
+  schedules: TestSchedule[];
+  batches: Batch[];
+  onAdd: (s: TestSchedule) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [closeDate, setCloseDate] = useState("");
+  const [batchIds, setBatchIds] = useState<string[]>([]);
+
+  const submit = () => {
+    if (!releaseDate) return;
+    onAdd({
+      id: `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+      testId: test.id,
+      batchIds,
+      releaseAt: new Date(releaseDate).getTime(),
+      closeAt: closeDate ? new Date(closeDate).getTime() : undefined,
+    });
+    setAdding(false);
+    setBatchIds([]);
+    setCloseDate("");
+  };
+
+  const toggleBatch = (id: string) => {
+    setBatchIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="flex items-center gap-2 mb-2">
+        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+        <div className="text-[10px] uppercase font-bold text-slate-500">Schedules ({schedules.length})</div>
+        {!adding && <button onClick={() => setAdding(true)} className="text-xs text-indigo-600 hover:text-indigo-800 ml-auto">+ schedule</button>}
+      </div>
+
+      {schedules.length === 0 && !adding && (
+        <div className="text-[11px] text-slate-400">No schedule — students see this test as always available.</div>
+      )}
+
+      {schedules.map((s) => {
+        const targetBatches = s.batchIds.length === 0
+          ? "All batches"
+          : s.batchIds.map((id) => batches.find((b) => b.id === id)?.name).filter(Boolean).join(", ") || "—";
+        const released = s.releaseAt <= Date.now();
+        const closed = !!s.closeAt && s.closeAt < Date.now();
+        const tone = closed ? "text-rose-600" : released ? "text-emerald-600" : "text-amber-600";
+        return (
+          <div key={s.id} className="flex items-center justify-between gap-2 py-1 text-xs">
+            <div className="min-w-0">
+              <div className={`font-semibold ${tone}`}>
+                {closed ? "Closed" : released ? "Live" : "Scheduled"} · {new Date(s.releaseAt).toLocaleDateString()}
+                {s.closeAt && <> → {new Date(s.closeAt).toLocaleDateString()}</>}
+              </div>
+              <div className="text-slate-500 truncate">→ {targetBatches}</div>
+            </div>
+            <button onClick={() => onRemove(s.id)} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
+          </div>
+        );
+      })}
+
+      {adding && (
+        <div className="mt-2 p-2 bg-slate-50 rounded-lg space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500">Release date</label>
+              <input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)}
+                className="mt-0.5 w-full px-2 py-1.5 rounded border border-slate-200 text-xs" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500">Close date (opt)</label>
+              <input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)}
+                className="mt-0.5 w-full px-2 py-1.5 rounded border border-slate-200 text-xs" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">Target batches (empty = all)</label>
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {batches.map((b) => (
+                <button key={b.id} onClick={() => toggleBatch(b.id)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                    batchIds.includes(b.id)
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold"
+                      : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}>
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setAdding(false)} className="text-xs text-slate-500 px-2">cancel</button>
+            <Button size="sm" onClick={submit}>Add</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

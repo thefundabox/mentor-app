@@ -10,7 +10,7 @@ import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
-  Test, TestAttempt,
+  Test, TestAttempt, TestSchedule,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -83,6 +83,14 @@ interface AppContextValue extends AppState {
     maxScore: number;
     sectionScores: Record<string, { right: number; wrong: number; unattempted: number; marks: number }>;
   }) => void;
+
+  // Test scheduling (admin-managed)
+  upsertTestSchedule: (s: TestSchedule) => void;
+  removeTestSchedule: (id: string) => void;
+  /** Schedules targeting the given test, optionally filtered to active windows. */
+  schedulesForTest: (testId: string) => TestSchedule[];
+  /** Schedules visible to a given student (matching their batch + currently in window). */
+  activeSchedulesForStudent: (studentId: string) => TestSchedule[];
 
   // Batches / cohorts (admin-managed)
   upsertBatch: (b: Batch) => void;
@@ -161,6 +169,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>("v5_announcements", []);
   const [tests, setTests] = useLocalStorage<Test[]>("v5_tests", DEFAULT_TESTS);
   const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>("v5_testAttempts", []);
+  const [testSchedules, setTestSchedules] = useLocalStorage<TestSchedule[]>("v5_testSchedules", []);
   const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
@@ -678,6 +687,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } : a));
   }, [setTestAttempts]);
 
+  /* ---------- Test scheduling ---------- */
+
+  const upsertTestSchedule = useCallback((s: TestSchedule) => {
+    setTestSchedules((prev) => {
+      const i = prev.findIndex((x) => x.id === s.id);
+      if (i < 0) return [...prev, s];
+      const next = [...prev]; next[i] = s; return next;
+    });
+  }, [setTestSchedules]);
+
+  const removeTestSchedule = useCallback((id: string) => {
+    setTestSchedules((prev) => prev.filter((s) => s.id !== id));
+  }, [setTestSchedules]);
+
+  const schedulesForTest = useCallback((testId: string): TestSchedule[] => {
+    return testSchedules.filter((s) => s.testId === testId);
+  }, [testSchedules]);
+
+  const activeSchedulesForStudent = useCallback((studentId: string): TestSchedule[] => {
+    const u = users.find((x) => x.id === studentId);
+    if (!u) return [];
+    const now = Date.now();
+    return testSchedules.filter((s) => {
+      const batchOk = s.batchIds.length === 0 || (u.batchId && s.batchIds.includes(u.batchId));
+      const released = s.releaseAt <= now;
+      const open = !s.closeAt || s.closeAt > now;
+      return batchOk && released && open;
+    });
+  }, [testSchedules, users]);
+
   const value: AppContextValue = {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
@@ -703,10 +742,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
-    tests, testAttempts, activeTestId, activeAttemptId,
+    tests, testAttempts, testSchedules, activeTestId, activeAttemptId,
     upsertTest, archiveTest, unarchiveTest, removeTest,
     setActiveTestId, setActiveAttemptId,
     startTestAttempt, saveTestAnswers, finishTestAttempt,
+    upsertTestSchedule, removeTestSchedule, schedulesForTest, activeSchedulesForStudent,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

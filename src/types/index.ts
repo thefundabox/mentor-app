@@ -172,6 +172,18 @@ export interface Assessment {
   submittedAt: number;
 }
 
+/** A scheduling rule that pins a test to specific batches with a release window. */
+export interface TestSchedule {
+  id: string;
+  testId: string;
+  /** Empty array = institute-wide (every batch). */
+  batchIds: string[];
+  /** ms when the test unlocks. Required. */
+  releaseAt: number;
+  /** Optional ms when it closes (after which students can't start it). */
+  closeAt?: number;
+}
+
 /** A single section inside a Test — typically scoped to one or two subjects. */
 export interface TestSection {
   id: string;
@@ -348,6 +360,8 @@ export interface AppState {
   tests: Test[];
   /** Student test attempt records. */
   testAttempts: TestAttempt[];
+  /** Scheduling rules pinning tests to batches with release/close dates. */
+  testSchedules: TestSchedule[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
