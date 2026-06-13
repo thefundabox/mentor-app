@@ -1,17 +1,38 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle } from "lucide-react";
-import { hasRedFlag } from "@/lib/analytics";
+import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle, Filter } from "lucide-react";
+import { hasRedFlag, cohortConceptStats } from "@/lib/analytics";
+import { conceptLabel } from "@/data";
 
 export function MentorDashboard() {
-  const { currentUser, students, getStudent, setViewingStudentId, setRoute } = useAppState();
+  const { currentUser, students, getStudent, setViewingStudentId, setRoute, batches } = useAppState();
+  const [batchFilter, setBatchFilter] = useState<string | "all">("all");
   if (!currentUser) return null;
 
-  const pendingApprovals = useMemo(
-    () => students.filter((u) => getStudent(u.id).chart.status === "pending_approval"),
-    [students, getStudent]
+  // Batches this mentor is assigned to (for the chip strip).
+  const myBatches = useMemo(
+    () => batches.filter((b) => !b.archived && b.mentorIds.includes(currentUser.id)),
+    [batches, currentUser]
   );
+
+  const filteredStudents = useMemo(
+    () => batchFilter === "all" ? students : students.filter((u) => u.batchId === batchFilter),
+    [students, batchFilter]
+  );
+
+  const pendingApprovals = useMemo(
+    () => filteredStudents.filter((u) => getStudent(u.id).chart.status === "pending_approval"),
+    [filteredStudents, getStudent]
+  );
+
+  const cohortStats = useMemo(() => {
+    const data = filteredStudents.map((u) => getStudent(u.id));
+    return cohortConceptStats(data)
+      .filter((c) => c.right + c.wrong >= 2)
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 8);
+  }, [filteredStudents, getStudent]);
 
   const stats = useMemo(() => {
     let totalAttempts = 0;
@@ -19,7 +40,7 @@ export function MentorDashboard() {
     let stuck = 0;
     let activeToday = 0;
     const oneDay = 86400000;
-    for (const u of students) {
+    for (const u of filteredStudents) {
       const s = getStudent(u.id);
       totalAttempts += s.attempts.length;
       avgSum += s.attempts.reduce((a, b) => a + b.score, 0);
@@ -29,12 +50,12 @@ export function MentorDashboard() {
       if (s.lastActivityAt && Date.now() - s.lastActivityAt < oneDay) activeToday += 1;
     }
     return {
-      students: students.length,
+      students: filteredStudents.length,
       avgScore: totalAttempts === 0 ? null : Math.round(avgSum / totalAttempts),
       stuck,
       activeToday,
     };
-  }, [students, getStudent]);
+  }, [filteredStudents, getStudent]);
 
   const openStudent = (id: string) => {
     setViewingStudentId(id);
@@ -49,6 +70,21 @@ export function MentorDashboard() {
           Hi {currentUser.name.split(" ")[0]} — {students.length} student{students.length === 1 ? "" : "s"} under your watch
         </h1>
       </div>
+
+      {myBatches.length > 0 && (
+        <div className="mb-5 flex items-center gap-2 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <BatchChip active={batchFilter === "all"} label={`All (${students.length})`} onClick={() => setBatchFilter("all")} />
+          {myBatches.map((b) => {
+            const count = students.filter((u) => u.batchId === b.id).length;
+            return (
+              <BatchChip key={b.id} active={batchFilter === b.id}
+                label={`${b.name} (${count})`}
+                onClick={() => setBatchFilter(b.id)} />
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard label="Students" value={stats.students} />
@@ -81,18 +117,52 @@ export function MentorDashboard() {
         </div>
       )}
 
+      {cohortStats.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <h2 className="font-semibold text-slate-900">Cohort weak topics</h2>
+            <div className="text-xs text-slate-500">
+              {batchFilter === "all" ? "across all your students" : `for ${myBatches.find((b) => b.id === batchFilter)?.name || "this batch"}`}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {cohortStats.map((c) => {
+              const accuracyPct = Math.round(c.accuracy * 100);
+              const total = c.right + c.wrong;
+              const tone =
+                accuracyPct >= 70 ? "bg-emerald-500"
+                : accuracyPct >= 50 ? "bg-amber-500"
+                : "bg-rose-500";
+              return (
+                <div key={c.concept} className="flex items-center gap-3 text-sm">
+                  <div className="w-40 sm:w-56 truncate text-slate-700">{conceptLabel(c.concept)}</div>
+                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${tone}`} style={{ width: `${Math.max(2, accuracyPct)}%` }}></div>
+                  </div>
+                  <div className="w-14 text-right text-xs font-semibold text-slate-700">{accuracyPct}%</div>
+                  <div className="hidden sm:block w-16 text-right text-[11px] text-slate-500">{total} qs</div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 text-[11px] text-slate-400">Sorted lowest accuracy first. Run a refresher session on these.</div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">All students</h2>
+          <h2 className="font-semibold text-slate-900">{batchFilter === "all" ? "All students" : "Students in batch"}</h2>
           <div className="text-xs text-slate-500">click a row to drill in</div>
         </div>
         <div className="divide-y divide-slate-100">
-          {students.map((u) => (
+          {filteredStudents.map((u) => (
             <StudentRow key={u.id} userId={u.id} name={u.name} email={u.email} onOpen={() => openStudent(u.id)} />
           ))}
-          {students.length === 0 && (
+          {filteredStudents.length === 0 && (
             <div className="p-8 text-center text-slate-500 text-sm">
-              No students yet. They'll appear here after they sign up.
+              {batchFilter === "all"
+                ? "No students yet. They'll appear here after they sign up."
+                : "No students in this batch yet."}
             </div>
           )}
         </div>
@@ -175,6 +245,19 @@ function Badge({ color, text }: { color: "emerald" | "amber" | "rose" | "slate";
     slate:   "text-slate-600 bg-slate-100",
   };
   return <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${map[color]}`}>{text}</span>;
+}
+
+function BatchChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+        active
+          ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+      }`}>
+      {label}
+    </button>
+  );
 }
 
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent?: "amber" }) {

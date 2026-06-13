@@ -25,6 +25,28 @@ export function hasRedFlag(s: StudentData): boolean {
   return stuckDays(s).length > 0;
 }
 
+/** Aggregate concept stats across many students (cohort heatmap). */
+export function cohortConceptStats(studentDataList: StudentData[]): ConceptScore[] {
+  const sum: Record<string, ConceptStat> = {};
+  for (const s of studentDataList) {
+    for (const a of s.attempts) {
+      if (!a.byConcept) continue;
+      for (const [c, st] of Object.entries(a.byConcept)) {
+        const cur = sum[c] || { right: 0, wrong: 0 };
+        cur.right += st.right;
+        cur.wrong += st.wrong;
+        sum[c] = cur;
+      }
+    }
+  }
+  return Object.entries(sum).map(([concept, { right, wrong }]) => ({
+    concept,
+    right,
+    wrong,
+    accuracy: right + wrong === 0 ? 0 : right / (right + wrong),
+  }));
+}
+
 export interface ConceptScore {
   concept: string;
   right: number;
