@@ -67,11 +67,16 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
             <div className="text-sm text-slate-500">{user.email}</div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Stat label="Level" value={info.level} />
           <Stat label="Points" value={info.total.toLocaleString()} icon={<Star className="w-3 h-3 fill-amber-500 text-amber-500" />} />
           <Stat label="Days" value={`${completed}/${totalDays || "—"}`} />
           <Stat label="Attempts" value={s.attempts.length} />
+          {totalDays > 0 && (
+            <Button variant="secondary" onClick={() => { setViewingStudentId(studentId); setRoute("onboarding"); }}>
+              <Pencil className="w-4 h-4" /> Edit plan
+            </Button>
+          )}
         </div>
       </div>
 
