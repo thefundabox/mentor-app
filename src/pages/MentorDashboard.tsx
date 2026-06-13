@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle, Filter } from "lucide-react";
 import { hasRedFlag, cohortConceptStats } from "@/lib/analytics";
 import { conceptLabel } from "@/data";
+import { AnnouncementComposer } from "@/components/AnnouncementComposer";
 
 export function MentorDashboard() {
   const { currentUser, students, getStudent, setViewingStudentId, setRoute, batches } = useAppState();
@@ -116,6 +117,8 @@ export function MentorDashboard() {
           </div>
         </div>
       )}
+
+      <AnnouncementComposer scopedBatchId={batchFilter} />
 
       {cohortStats.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">

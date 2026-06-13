@@ -3,6 +3,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { HabitsCard } from "@/components/HabitsCard";
+import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
@@ -78,6 +79,8 @@ export function StudentHome() {
         </div>
         <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
       </div>
+
+      <AnnouncementsBanner studentId={user.id} />
 
       <HabitsCard student={s} completedDays={completed} />
 

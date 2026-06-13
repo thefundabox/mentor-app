@@ -9,7 +9,7 @@ import {
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
-  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch,
+  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -72,6 +72,13 @@ interface AppContextValue extends AppState {
   /** The Batch object for a student, or null. */
   batchForStudent: (studentId: string) => Batch | null;
 
+  // Announcements
+  postAnnouncement: (batchId: string | null, body: string, expiresAt?: number) => Announcement;
+  deleteAnnouncement: (id: string) => void;
+  dismissAnnouncement: (id: string, userId: string) => void;
+  /** Active (non-expired) announcements visible to a given student. Oldest first. */
+  announcementsForStudent: (studentId: string) => Announcement[];
+
   // assessment (per-student, captured once on signup)
   setAssessment: (studentId: string, assessment: Assessment) => void;
 
@@ -127,6 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [foundationPool, setFoundationPool] = useLocalStorage<Record<string, Question[]>>("v5_foundationPool", FOUNDATION_QS);
   const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v5_placementPool", PLACEMENT_MCQS);
   const [batches, setBatches] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
+  const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>("v5_announcements", []);
   const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
@@ -549,6 +557,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return batches.find((b) => b.id === u.batchId) || null;
   }, [users, batches]);
 
+  /* ---------- Announcements ---------- */
+
+  const postAnnouncement = useCallback((batchId: string | null, body: string, expiresAt?: number): Announcement => {
+    const ann: Announcement = {
+      id: `ann_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      batchId,
+      body: body.trim(),
+      postedAt: Date.now(),
+      postedBy: currentUserId || "system",
+      expiresAt,
+      dismissedBy: [],
+    };
+    setAnnouncements((prev) => [...prev, ann]);
+    return ann;
+  }, [setAnnouncements, currentUserId]);
+
+  const deleteAnnouncement = useCallback((id: string) => {
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+  }, [setAnnouncements]);
+
+  const dismissAnnouncement = useCallback((id: string, userId: string) => {
+    setAnnouncements((prev) => prev.map((a) =>
+      a.id === id && !a.dismissedBy.includes(userId)
+        ? { ...a, dismissedBy: [...a.dismissedBy, userId] }
+        : a
+    ));
+  }, [setAnnouncements]);
+
+  const announcementsForStudent = useCallback((studentId: string): Announcement[] => {
+    const u = users.find((x) => x.id === studentId);
+    if (!u) return [];
+    const now = Date.now();
+    return announcements
+      .filter((a) => !a.expiresAt || a.expiresAt > now)
+      .filter((a) => a.batchId === null || a.batchId === u.batchId)
+      .filter((a) => !a.dismissedBy.includes(studentId))
+      .sort((a, b) => a.postedAt - b.postedAt);
+  }, [users, announcements]);
+
   const value: AppContextValue = {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
@@ -572,6 +619,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlacementPool, upsertPlacementQuestion, addPlacementQuestion, removePlacementQuestion,
     batches,
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
+    announcements,
+    postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

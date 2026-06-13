@@ -172,6 +172,20 @@ export interface Assessment {
   submittedAt: number;
 }
 
+/** A timed message posted by a mentor or admin to a batch (or institute-wide). */
+export interface Announcement {
+  id: string;
+  /** null = institute-wide (every student sees it). Otherwise the batch this targets. */
+  batchId: string | null;
+  body: string;
+  postedAt: number;
+  postedBy: string;
+  /** Optional expiry; after this the announcement stops showing. */
+  expiresAt?: number;
+  /** User ids who have dismissed this on their side. */
+  dismissedBy: string[];
+}
+
 /** A cohort/batch within the institute — groups students under a shared schedule and mentor(s). */
 export interface Batch {
   id: string;
@@ -277,6 +291,8 @@ export interface AppState {
   placementPool: Question[];
   /** Admin-managed cohorts (batches) within the institute. */
   batches: Batch[];
+  /** Mentor/admin-posted announcements (batch-targeted or institute-wide). */
+  announcements: Announcement[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
