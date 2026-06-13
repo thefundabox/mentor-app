@@ -245,6 +245,12 @@ export interface AppState {
   planTemplates: PlanTemplate[];
   /** Admin-editable Introduction Tour steps. */
   tourSteps: TourStep[];
+  /** Admin-editable main quiz question bank (conceptual + analytical). */
+  quizPool: Question[];
+  /** Admin-editable foundation questions per concept, used for adaptive remediation. */
+  foundationPool: Record<string, Question[]>;
+  /** Admin-editable placement check shown during the signup assessment. */
+  placementPool: Question[];
   loginRoleIntent: Role | null;
   route: Route;
   activeDay: number | null;
@@ -254,5 +260,5 @@ export interface AppState {
   /** When mentor is viewing a specific student */
   viewingStudentId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "stats";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "stats";
 }

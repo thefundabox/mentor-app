@@ -4,11 +4,12 @@ import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
+  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
-  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep,
+  SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
 
@@ -59,7 +60,7 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "stats") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "stats") => void;
 
   // assessment (per-student, captured once on signup)
   setAssessment: (studentId: string, assessment: Assessment) => void;
@@ -79,6 +80,20 @@ interface AppContextValue extends AppState {
   removeTourStep: (id: string) => void;
   reorderTourSteps: (orderedIds: string[]) => void;
   markTourSeen: (studentId: string) => void;
+
+  // Question pools (admin-managed)
+  setQuizPool: (next: Question[]) => void;
+  upsertQuizQuestion: (idx: number, q: Question) => void;
+  addQuizQuestion: (q: Question) => void;
+  removeQuizQuestion: (idx: number) => void;
+  setFoundationPool: (next: Record<string, Question[]>) => void;
+  upsertFoundationQuestion: (concept: string, idx: number, q: Question) => void;
+  addFoundationQuestion: (concept: string, q: Question) => void;
+  removeFoundationQuestion: (concept: string, idx: number) => void;
+  setPlacementPool: (next: Question[]) => void;
+  upsertPlacementQuestion: (idx: number, q: Question) => void;
+  addPlacementQuestion: (q: Question) => void;
+  removePlacementQuestion: (idx: number) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -98,7 +113,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
   const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
   const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "stats">("v5_adminTab", "people");
+  const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
+  const [foundationPool, setFoundationPool] = useLocalStorage<Record<string, Question[]>>("v5_foundationPool", FOUNDATION_QS);
+  const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v5_placementPool", PLACEMENT_MCQS);
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "stats">("v5_adminTab", "people");
 
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) || null,
@@ -432,8 +450,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchStudent(id, { hasSeenTour: true });
   }, [patchStudent]);
 
+  /* ---------- Question pools (admin-managed) ---------- */
+
+  const upsertQuizQuestion = useCallback((idx: number, q: Question) => {
+    setQuizPool((prev) => {
+      const next = [...prev];
+      if (idx >= 0 && idx < next.length) next[idx] = q;
+      return next;
+    });
+  }, [setQuizPool]);
+  const addQuizQuestion = useCallback((q: Question) => {
+    setQuizPool((prev) => [...prev, q]);
+  }, [setQuizPool]);
+  const removeQuizQuestion = useCallback((idx: number) => {
+    setQuizPool((prev) => prev.filter((_, i) => i !== idx));
+  }, [setQuizPool]);
+
+  const upsertFoundationQuestion = useCallback((concept: string, idx: number, q: Question) => {
+    setFoundationPool((prev) => {
+      const list = prev[concept] ? [...prev[concept]] : [];
+      if (idx >= 0 && idx < list.length) list[idx] = q;
+      return { ...prev, [concept]: list };
+    });
+  }, [setFoundationPool]);
+  const addFoundationQuestion = useCallback((concept: string, q: Question) => {
+    setFoundationPool((prev) => ({ ...prev, [concept]: [...(prev[concept] || []), q] }));
+  }, [setFoundationPool]);
+  const removeFoundationQuestion = useCallback((concept: string, idx: number) => {
+    setFoundationPool((prev) => {
+      const list = (prev[concept] || []).filter((_, i) => i !== idx);
+      const next = { ...prev };
+      if (list.length === 0) delete next[concept];
+      else next[concept] = list;
+      return next;
+    });
+  }, [setFoundationPool]);
+
+  const upsertPlacementQuestion = useCallback((idx: number, q: Question) => {
+    setPlacementPool((prev) => {
+      const next = [...prev];
+      if (idx >= 0 && idx < next.length) next[idx] = q;
+      return next;
+    });
+  }, [setPlacementPool]);
+  const addPlacementQuestion = useCallback((q: Question) => {
+    setPlacementPool((prev) => [...prev, q]);
+  }, [setPlacementPool]);
+  const removePlacementQuestion = useCallback((idx: number) => {
+    setPlacementPool((prev) => prev.filter((_, i) => i !== idx));
+  }, [setPlacementPool]);
+
   const value: AppContextValue = {
-    users, currentUserId, studentData, subjects, planTemplates, tourSteps, adminTab,
+    users, currentUserId, studentData, subjects, planTemplates, tourSteps,
+    quizPool, foundationPool, placementPool, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
@@ -449,6 +518,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAssessment,
     setPlanTemplates, upsertPlanTemplate, removePlanTemplate, adoptPlanTemplate, startBlankPlan,
     setTourSteps, upsertTourStep, removeTourStep, reorderTourSteps, markTourSeen,
+    setQuizPool, upsertQuizQuestion, addQuizQuestion, removeQuizQuestion,
+    setFoundationPool, upsertFoundationQuestion, addFoundationQuestion, removeFoundationQuestion,
+    setPlacementPool, upsertPlacementQuestion, addPlacementQuestion, removePlacementQuestion,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { topicQuestions, shuffle, FOUNDATION_QS } from "@/data";
+import { shuffle } from "@/data";
 import { Button } from "@/components/ui/button";
 import { X, ArrowRight } from "lucide-react";
 import type { Question, QuizResult, ConceptStat } from "@/types";
@@ -22,15 +22,14 @@ interface RemediationState {
   wrongAnswerExplain: string;
 }
 
-function buildAttempt(topicId: string, seed: number): Question[] {
-  const pool = topicQuestions(topicId);
+function buildAttempt(pool: Question[], seed: number): Question[] {
   const conceptual = shuffle(pool.filter((q) => q.type === "conceptual"), seed).slice(0, 8);
   const analytical = shuffle(pool.filter((q) => q.type === "analytical"), seed + 1).slice(0, 8);
   return [...conceptual, ...analytical].map((q, i) => ({ ...q, _idx: i }));
 }
 
 export function QuizScreen({ dayNum }: QuizScreenProps) {
-  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared } = useAppState();
+  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, quizPool, foundationPool } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
@@ -46,7 +45,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   if (!slot || !resolvedTopicId) return null;
   const topicId: string = resolvedTopicId;
 
-  const questions = useMemo(() => buildAttempt(slot.topicId, attemptSeed), [slot.topicId, attemptSeed]);
+  const questions = useMemo(() => buildAttempt(quizPool, attemptSeed), [quizPool, attemptSeed]);
 
   const [i, setI] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -72,7 +71,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     setAnswers(newAnswers);
 
     if (!isCorrect) {
-      const found = (FOUNDATION_QS[q.concept] || []).slice(0, 2);
+      const found = (foundationPool[q.concept] || []).slice(0, 2);
       if (found.length) {
         setRemediation({
           qs: found.map((f) => ({ ...f, _foundation: true })),

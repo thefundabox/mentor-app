@@ -3,10 +3,11 @@ import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import {
   Users, BookOpen, BarChart3, Plus, Pencil, Trash2,
-  ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown,
+  ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown, HelpCircle,
 } from "lucide-react";
-import type { SubjectCatalogEntry, PlanTemplate, CommitmentScope, TourStep } from "@/types";
+import type { SubjectCatalogEntry, PlanTemplate, CommitmentScope, TourStep, Question } from "@/types";
 import { SCOPE_LABEL } from "@/types";
+import { conceptLabel } from "@/data";
 
 export function AdminDashboard() {
   const { adminTab, setAdminTab } = useAppState();
@@ -21,15 +22,17 @@ export function AdminDashboard() {
         <TabButton active={adminTab === "people"}  onClick={() => setAdminTab("people")}  icon={<Users className="w-4 h-4" />} label="People" />
         <TabButton active={adminTab === "catalog"} onClick={() => setAdminTab("catalog")} icon={<BookOpen className="w-4 h-4" />} label="Subject master" />
         <TabButton active={adminTab === "plans"}   onClick={() => setAdminTab("plans")}   icon={<Layout className="w-4 h-4" />} label="Default plans" />
-        <TabButton active={adminTab === "tour"}    onClick={() => setAdminTab("tour")}    icon={<Compass className="w-4 h-4" />} label="Tour steps" />
-        <TabButton active={adminTab === "stats"}   onClick={() => setAdminTab("stats")}   icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
+        <TabButton active={adminTab === "tour"}      onClick={() => setAdminTab("tour")}      icon={<Compass className="w-4 h-4" />} label="Tour steps" />
+        <TabButton active={adminTab === "questions"} onClick={() => setAdminTab("questions")} icon={<HelpCircle className="w-4 h-4" />} label="Questions" />
+        <TabButton active={adminTab === "stats"}     onClick={() => setAdminTab("stats")}     icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
       </div>
 
-      {adminTab === "people"  && <PeopleTab />}
-      {adminTab === "catalog" && <CatalogTab />}
-      {adminTab === "plans"   && <PlansTab />}
-      {adminTab === "tour"    && <TourTab />}
-      {adminTab === "stats"   && <StatsTab />}
+      {adminTab === "people"    && <PeopleTab />}
+      {adminTab === "catalog"   && <CatalogTab />}
+      {adminTab === "plans"     && <PlansTab />}
+      {adminTab === "tour"      && <TourTab />}
+      {adminTab === "questions" && <QuestionsTab />}
+      {adminTab === "stats"     && <StatsTab />}
     </div>
   );
 }
@@ -714,6 +717,281 @@ function TourStepEditor({
         </div>
 
         <button onClick={onRemove} className="p-1 text-slate-400 hover:text-rose-600 transition"><Trash2 className="w-4 h-4" /></button>
+      </div>
+    </div>
+  );
+}
+
+/* ==================== Questions tab ==================== */
+
+function QuestionsTab() {
+  const [sub, setSub] = useState<"quiz" | "foundation" | "placement">("quiz");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-slate-100 pb-3">
+        <SubTabButton active={sub === "quiz"}       label="Quiz pool"   onClick={() => setSub("quiz")} />
+        <SubTabButton active={sub === "foundation"} label="Foundation" onClick={() => setSub("foundation")} />
+        <SubTabButton active={sub === "placement"}  label="Placement"  onClick={() => setSub("placement")} />
+      </div>
+
+      {sub === "quiz"       && <QuizPoolEditor />}
+      {sub === "foundation" && <FoundationPoolEditor />}
+      {sub === "placement"  && <PlacementPoolEditor />}
+    </div>
+  );
+}
+
+function SubTabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition ${
+        active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+      }`}>{label}</button>
+  );
+}
+
+function QuizPoolEditor() {
+  const { quizPool, upsertQuizQuestion, addQuizQuestion, removeQuizQuestion } = useAppState();
+
+  const addNew = () => {
+    addQuizQuestion({
+      type: "conceptual",
+      concept: "",
+      q: "New question",
+      options: ["Option A", "Option B", "Option C", "Option D"],
+      correct: 0,
+      why: "",
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-slate-500">
+          Pool of {quizPool.length} questions used to build a quiz attempt. 8 conceptual + 8 analytical are sampled per attempt.
+        </p>
+        <Button onClick={addNew}><Plus className="w-4 h-4" /> Add question</Button>
+      </div>
+      {quizPool.map((q, idx) => (
+        <QuestionCard
+          key={idx}
+          q={q}
+          onChange={(patch) => upsertQuizQuestion(idx, { ...q, ...patch })}
+          onRemove={() => removeQuizQuestion(idx)}
+          showType
+        />
+      ))}
+      {quizPool.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+          No quiz questions. Quizzes will be empty until you add some.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FoundationPoolEditor() {
+  const { foundationPool, upsertFoundationQuestion, addFoundationQuestion, removeFoundationQuestion } = useAppState();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [newConcept, setNewConcept] = useState("");
+
+  const concepts = Object.keys(foundationPool).sort();
+
+  const addConceptBucket = () => {
+    const slug = newConcept.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!slug || foundationPool[slug]) return;
+    addFoundationQuestion(slug, {
+      type: "conceptual",
+      concept: slug,
+      q: "New foundation question",
+      options: ["Option A", "Option B", "Option C", "Option D"],
+      correct: 0,
+      why: "",
+    });
+    setExpanded((prev) => ({ ...prev, [slug]: true }));
+    setNewConcept("");
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        Foundation questions are shown as remediation when a student misses a main quiz question. Grouped by concept tag.
+      </p>
+
+      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <div className="text-xs font-bold uppercase text-slate-500 mb-2">Add concept bucket</div>
+        <div className="flex gap-2">
+          <input value={newConcept} onChange={(e) => setNewConcept(e.target.value)}
+            placeholder="concept-tag (e.g. mughal-expansion)"
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm" />
+          <Button onClick={addConceptBucket} disabled={!newConcept.trim()}><Plus className="w-4 h-4" /> Add</Button>
+        </div>
+      </div>
+
+      {concepts.map((concept) => {
+        const list = foundationPool[concept] || [];
+        const isOpen = !!expanded[concept];
+        return (
+          <div key={concept} className="bg-white border border-slate-200 rounded-2xl">
+            <button onClick={() => setExpanded((prev) => ({ ...prev, [concept]: !isOpen }))}
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 rounded-2xl transition">
+              <div className="flex items-center gap-2">
+                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+                <span className="font-semibold text-slate-900">{conceptLabel(concept)}</span>
+                <span className="text-xs text-slate-500">{list.length} question{list.length === 1 ? "" : "s"}</span>
+              </div>
+              <code className="text-xs text-slate-400">{concept}</code>
+            </button>
+            {isOpen && (
+              <div className="p-4 pt-0 space-y-3">
+                {list.map((q, idx) => (
+                  <QuestionCard
+                    key={idx}
+                    q={q}
+                    onChange={(patch) => upsertFoundationQuestion(concept, idx, { ...q, ...patch, concept })}
+                    onRemove={() => removeFoundationQuestion(concept, idx)}
+                  />
+                ))}
+                <Button variant="secondary" onClick={() => addFoundationQuestion(concept, {
+                  type: "conceptual", concept, q: "New question", options: ["A", "B", "C", "D"], correct: 0, why: "",
+                })}>
+                  <Plus className="w-4 h-4" /> Add foundation question
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {concepts.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+          No foundation questions. Wrong answers won't trigger remediation.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlacementPoolEditor() {
+  const { placementPool, upsertPlacementQuestion, addPlacementQuestion, removePlacementQuestion } = useAppState();
+
+  const addNew = () => {
+    addPlacementQuestion({
+      type: "conceptual",
+      concept: "",
+      q: "New placement question",
+      options: ["Option A", "Option B", "Option C", "Option D"],
+      correct: 0,
+      why: "",
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-slate-500">
+          {placementPool.length} placement question{placementPool.length === 1 ? "" : "s"} shown during signup assessment. Keep this short — under 5 is ideal.
+        </p>
+        <Button onClick={addNew}><Plus className="w-4 h-4" /> Add question</Button>
+      </div>
+      {placementPool.map((q, idx) => (
+        <QuestionCard
+          key={idx}
+          q={q}
+          onChange={(patch) => upsertPlacementQuestion(idx, { ...q, ...patch })}
+          onRemove={() => removePlacementQuestion(idx)}
+        />
+      ))}
+      {placementPool.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+          No placement questions. The signup assessment will skip the placement check.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionCard({
+  q, onChange, onRemove, showType = false,
+}: {
+  q: Question;
+  onChange: (patch: Partial<Question>) => void;
+  onRemove: () => void;
+  showType?: boolean;
+}) {
+  const updateOption = (k: number, value: string) => {
+    const next = [...q.options];
+    next[k] = value;
+    onChange({ options: next });
+  };
+  const addOption = () => onChange({ options: [...q.options, "New option"] });
+  const removeOption = (k: number) => {
+    if (q.options.length <= 2) return;
+    const next = q.options.filter((_, i) => i !== k);
+    onChange({ options: next, correct: q.correct >= next.length ? 0 : q.correct });
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="flex gap-3">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-2">
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500">Question</label>
+              <textarea value={q.q} onChange={(e) => onChange({ q: e.target.value })} rows={2}
+                className="mt-0.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm resize-y" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500">Concept tag</label>
+              <input value={q.concept} onChange={(e) => onChange({ concept: e.target.value })}
+                placeholder="e.g. mughal-expansion"
+                className="mt-0.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm font-mono" />
+            </div>
+            {showType && (
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-500">Type</label>
+                <select value={q.type} onChange={(e) => onChange({ type: e.target.value as Question["type"] })}
+                  className="mt-0.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm">
+                  <option value="conceptual">Conceptual</option>
+                  <option value="analytical">Analytical</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">Options · pick the correct one</label>
+            <div className="mt-0.5 space-y-1.5">
+              {q.options.map((opt, k) => (
+                <div key={k} className="flex items-center gap-2">
+                  <input type="radio" name={`correct-${q.q}-${k}`} checked={q.correct === k}
+                    onChange={() => onChange({ correct: k })} className="accent-emerald-600" />
+                  <span className="w-5 text-xs font-bold text-slate-500">{String.fromCharCode(65 + k)}.</span>
+                  <input value={opt} onChange={(e) => updateOption(k, e.target.value)}
+                    className="flex-1 px-3 py-1 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm" />
+                  <button onClick={() => removeOption(k)} disabled={q.options.length <= 2}
+                    className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addOption} className="text-xs font-medium text-slate-500 hover:text-slate-900 flex items-center gap-1">
+                <Plus className="w-3 h-3" /> add option
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">Why (explanation)</label>
+            <textarea value={q.why} onChange={(e) => onChange({ why: e.target.value })} rows={2}
+              className="mt-0.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 focus:border-slate-400 outline-none text-sm resize-y" />
+          </div>
+        </div>
+
+        <button onClick={onRemove} className="p-1 text-slate-400 hover:text-rose-600 transition self-start">
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

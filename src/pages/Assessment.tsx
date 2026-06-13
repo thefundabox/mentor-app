@@ -6,7 +6,6 @@ import {
   ASSESSMENT_TIME,
   ROADBLOCK_OPTIONS,
   SELF_RATED_LEVELS,
-  PLACEMENT_MCQS,
 } from "@/data";
 import type { Assessment as AssessmentT, SelfRatedLevel } from "@/types";
 
@@ -15,7 +14,7 @@ interface AssessmentProps {
 }
 
 export function Assessment({ studentId }: AssessmentProps) {
-  const { setAssessment, setRoute } = useAppState();
+  const { setAssessment, setRoute, placementPool } = useAppState();
 
   const [timeMins, setTimeMins] = useState<number>(ASSESSMENT_TIME.defaultMins);
   const [level, setLevel] = useState<SelfRatedLevel>("intermediate");
@@ -23,18 +22,18 @@ export function Assessment({ studentId }: AssessmentProps) {
   const [mcqAnswers, setMcqAnswers] = useState<Record<string, number>>({});
 
   const allMcqsAnswered = useMemo(
-    () => PLACEMENT_MCQS.every((_q, idx) => mcqAnswers[String(idx)] !== undefined),
-    [mcqAnswers]
+    () => placementPool.every((_q, idx) => mcqAnswers[String(idx)] !== undefined),
+    [mcqAnswers, placementPool]
   );
   const canSubmit = !!roadblockId && allMcqsAnswered;
 
   const submit = () => {
-    const correctCount = PLACEMENT_MCQS.reduce(
+    const correctCount = placementPool.reduce(
       (n, q, idx) => n + (mcqAnswers[String(idx)] === q.correct ? 1 : 0),
       0
     );
-    const placementScore = PLACEMENT_MCQS.length
-      ? Math.round((correctCount / PLACEMENT_MCQS.length) * 100)
+    const placementScore = placementPool.length
+      ? Math.round((correctCount / placementPool.length) * 100)
       : null;
 
     const a: AssessmentT = {
@@ -140,13 +139,13 @@ export function Assessment({ studentId }: AssessmentProps) {
         </div>
 
         {/* Placement check */}
-        {PLACEMENT_MCQS.length > 0 && (
+        {placementPool.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="text-xs font-bold uppercase tracking-wide text-indigo-700 mb-3">
-              Placement check · {PLACEMENT_MCQS.length} question{PLACEMENT_MCQS.length === 1 ? "" : "s"}
+              Placement check · {placementPool.length} question{placementPool.length === 1 ? "" : "s"}
             </div>
             <div className="space-y-5">
-              {PLACEMENT_MCQS.map((q, idx) => {
+              {placementPool.map((q, idx) => {
                 const key = String(idx);
                 const picked = mcqAnswers[key];
                 return (
