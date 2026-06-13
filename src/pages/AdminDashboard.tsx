@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
+import { BulkImportPanel } from "@/components/BulkImportPanel";
 import {
   Users, BookOpen, BarChart3, Plus, Pencil, Trash2,
   ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown, HelpCircle, GraduationCap,
@@ -76,6 +77,8 @@ function PeopleTab() {
 
   return (
     <div className="space-y-6">
+      <BulkImportPanel />
+
       <div className="bg-white border border-slate-200 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Add a mentor</h2>

@@ -373,7 +373,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* ---------- user ops (admin) ---------- */
 
   const addUser = useCallback((u: Omit<User, "id" | "createdAt"> & { id?: string }) => {
-    const created: User = { id: u.id || `u_${u.role}_${Date.now()}`, createdAt: Date.now(), ...u } as User;
+    // Append a small random suffix so rapid-fire calls (bulk import) don't collide on Date.now().
+    const fallbackId = `u_${u.role}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const created: User = { id: u.id || fallbackId, createdAt: Date.now(), ...u } as User;
     setUsers((prev) => [...prev, created]);
     if (created.role === "student") {
       setStudentData((prev) => prev[created.id] ? prev : { ...prev, [created.id]: emptyStudentData() });
