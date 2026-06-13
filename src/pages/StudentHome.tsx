@@ -4,11 +4,12 @@ import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { HabitsCard } from "@/components/HabitsCard";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
+import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
 import { Check, Lock, Trophy, Flame, Star, Circle, Send, Hourglass } from "lucide-react";
 import { SCOPE_LABEL, SCOPE_DAYS, type CommitmentScope } from "@/types";
 
 export function StudentHome() {
-  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive } = useAppState();
+  const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, levelInfo, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive, batchForStudent } = useAppState();
   const { startTour } = useTour();
   const findTopic = findTopicLive;
 
@@ -39,6 +40,9 @@ export function StudentHome() {
   const info = levelInfo(user.id);
   const approvedThrough = s.chart.approvedThrough;
   const scope = s.chart.commitmentScope;
+  const batch = batchForStudent(user.id);
+  const pacing = batch ? pacingStatus(batch, currentDay) : null;
+  const daysToStart = batch ? daysUntilBatchStart(batch) : 0;
   // Whether the student has cleared everything in the currently-approved slice
   // and there are still days beyond it that need a new commitment.
   const sliceCleared = approvedThrough > 0 && completed.length >= approvedThrough;
@@ -79,6 +83,27 @@ export function StudentHome() {
         </div>
         <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
       </div>
+
+      {batch && (
+        <div className="mb-5 p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-[10px] uppercase font-bold text-slate-500">{batch.vertical}</div>
+            <div className="text-sm font-semibold text-slate-900">{batch.name}</div>
+          </div>
+          {pacing && pacing.status !== "not-started" && (
+            <div className="text-xs">
+              {pacing.status === "on-schedule" && <span className="text-emerald-700 font-semibold">✓ on schedule (Day {pacing.calendarDay} today)</span>}
+              {pacing.status === "ahead" && <span className="text-indigo-700 font-semibold">⏩ {pacing.delta} day{pacing.delta === 1 ? "" : "s"} ahead (calendar Day {pacing.calendarDay})</span>}
+              {pacing.status === "behind" && <span className="text-amber-700 font-semibold">⏰ {-pacing.delta} day{-pacing.delta === 1 ? "" : "s"} behind (calendar Day {pacing.calendarDay})</span>}
+            </div>
+          )}
+          {pacing && pacing.status === "not-started" && (
+            <div className="text-xs text-slate-600 font-semibold">
+              Starts in {daysToStart} day{daysToStart === 1 ? "" : "s"} · {formatDate(batch.startDate)}
+            </div>
+          )}
+        </div>
+      )}
 
       <AnnouncementsBanner studentId={user.id} />
 
@@ -159,8 +184,13 @@ export function StudentHome() {
                     {isDone ? <Check className="w-6 h-6" /> : isLocked ? <Lock className="w-5 h-5" /> : dayNum}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-2">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
                       <span>Day {dayNum}{hasMulti ? ` · ${topics.length} topics` : ""}</span>
+                      {batch && (
+                        <span className="text-[10px] normal-case font-medium text-slate-500">
+                          {formatDate(dateForBatchDay(batch, dayNum))}
+                        </span>
+                      )}
                       {beyondCommitment && (
                         <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                           beyond commitment
