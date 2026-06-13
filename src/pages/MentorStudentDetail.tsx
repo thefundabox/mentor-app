@@ -3,14 +3,14 @@ import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText } from "lucide-react";
 import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
-          approveChart, requestChartChanges, updateOverride, addOverride } = useAppState();
+          approveChart, requestChartChanges, updateOverride, addOverride, tests, testAttempts } = useAppState();
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);
   const info = levelInfo(studentId);
@@ -107,6 +107,9 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           bestScore,
         });
       }} />
+
+      {/* Student's test attempts */}
+      <StudentTestsCard studentId={studentId} tests={tests} testAttempts={testAttempts} />
 
       {/* Commitment summary (always visible if chart exists) */}
       {totalDays > 0 && s.chart.status === "approved" && (
@@ -328,6 +331,54 @@ function AssessmentField({ label, value }: { label: string; value: string | numb
     <div>
       <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
       <div className="text-sm font-semibold text-slate-900 mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function StudentTestsCard({ studentId, tests, testAttempts }: {
+  studentId: string;
+  tests: import("@/types").Test[];
+  testAttempts: import("@/types").TestAttempt[];
+}) {
+  const myAttempts = testAttempts.filter((a) => a.studentId === studentId && a.finishedAt !== undefined);
+  if (myAttempts.length === 0) return null;
+
+  // One row per (test, best attempt)
+  const byTest = new Map<string, import("@/types").TestAttempt>();
+  for (const a of myAttempts) {
+    const cur = byTest.get(a.testId);
+    if (!cur || (a.score ?? 0) > (cur.score ?? 0)) byTest.set(a.testId, a);
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <FileText className="w-4 h-4 text-slate-500" />
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Test attempts</div>
+      </div>
+      <div className="space-y-1.5">
+        {[...byTest.values()].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0)).map((a) => {
+          const test = tests.find((t) => t.id === a.testId);
+          if (!test) return null;
+          const pct = a.maxScore ? Math.round((a.score! / a.maxScore) * 100) : 0;
+          const tone = pct >= 70 ? "text-emerald-700" : pct >= 40 ? "text-amber-700" : "text-rose-700";
+          const totalAttempts = myAttempts.filter((x) => x.testId === a.testId).length;
+          return (
+            <div key={a.id} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-slate-50">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-900 truncate">{test.title}</div>
+                <div className="text-[11px] text-slate-500">
+                  Best of {totalAttempts} attempt{totalAttempts === 1 ? "" : "s"} ·
+                  {a.finishedAt ? ` ${new Date(a.finishedAt).toLocaleDateString()}` : ""}
+                </div>
+              </div>
+              <div className={`font-bold tabular-nums ${tone}`}>
+                {a.score?.toFixed(2)} / {a.maxScore} <span className="text-xs ml-1">({pct}%)</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

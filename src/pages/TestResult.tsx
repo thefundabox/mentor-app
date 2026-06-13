@@ -1,11 +1,37 @@
+import { useMemo } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
-import { Trophy, ArrowLeft, ListChecks } from "lucide-react";
+import { Trophy, ArrowLeft, ListChecks, Users, TrendingUp } from "lucide-react";
+import { cohortStatsForAttempt } from "@/lib/analytics";
 
 export function TestResult() {
-  const { activeTestId, activeAttemptId, tests, testAttempts, setRoute, setActiveTestId, setActiveAttemptId } = useAppState();
+  const { activeTestId, activeAttemptId, tests, testAttempts, setRoute, setActiveTestId, setActiveAttemptId, batchForStudent, users, currentUser } = useAppState();
   const test = tests.find((t) => t.id === activeTestId);
   const attempt = testAttempts.find((a) => a.id === activeAttemptId);
+
+  // Compute cohort stats vs. students in the same batch (or all students if no batch).
+  const cohort = useMemo(() => {
+    if (!attempt || !currentUser) return null;
+    const myBatch = batchForStudent(currentUser.id);
+    const cohortStudentIds = new Set(
+      myBatch
+        ? users.filter((u) => u.role === "student" && u.batchId === myBatch.id).map((u) => u.id)
+        : users.filter((u) => u.role === "student").map((u) => u.id)
+    );
+    const cohortAttempts = testAttempts
+      .filter((a) => a.testId === attempt.testId)
+      .filter((a) => cohortStudentIds.has(a.studentId));
+    return cohortStatsForAttempt(attempt, cohortAttempts);
+  }, [attempt, currentUser, batchForStudent, users, testAttempts]);
+
+  // Previous attempts by this student of the same test.
+  const previousAttempts = useMemo(() => {
+    if (!attempt) return [];
+    return testAttempts
+      .filter((a) => a.testId === attempt.testId && a.studentId === attempt.studentId && a.id !== attempt.id)
+      .filter((a) => a.finishedAt !== undefined)
+      .sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+  }, [testAttempts, attempt]);
 
   if (!test || !attempt || attempt.score === undefined) {
     return (
@@ -47,6 +73,44 @@ export function TestResult() {
         <div className="text-sm text-slate-500 mt-1">out of {attempt.maxScore} marks · {pct}%</div>
       </div>
 
+      {cohort && cohort.cohortAttemptCount > 1 && (
+        <div className="mt-8 bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-slate-500" />
+            <h2 className="font-semibold text-slate-900">Cohort comparison</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <CohortField label="Cohort avg" value={`${cohort.cohortAvg?.toFixed(2)}`} sub={`of ${cohort.maxScore}`} />
+            <CohortField label="Cohort best" value={`${cohort.cohortBest?.toFixed(2)}`} sub={`of ${cohort.maxScore}`} />
+            <CohortField label="Your rank" value={`#${cohort.rank}`} sub={`of ${cohort.cohortAttemptCount}`} />
+            <CohortField label="Percentile" value={`${cohort.percentile}`} sub="higher is better" />
+          </div>
+        </div>
+      )}
+
+      {previousAttempts.length > 0 && (
+        <div className="mt-6 bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="w-4 h-4 text-slate-500" />
+            <h2 className="font-semibold text-slate-900">Your attempts so far ({previousAttempts.length + 1})</h2>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-sm bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+              <span className="font-semibold text-indigo-700">This attempt</span>
+              <span className="font-bold text-indigo-700 tabular-nums">{attempt.score?.toFixed(2)} / {attempt.maxScore}</span>
+            </div>
+            {previousAttempts.slice(0, 4).map((a) => (
+              <div key={a.id} className="flex items-center justify-between text-sm px-3 py-1.5">
+                <span className="text-slate-600">
+                  {a.finishedAt ? new Date(a.finishedAt).toLocaleDateString() : "—"}
+                </span>
+                <span className="font-semibold text-slate-700 tabular-nums">{a.score?.toFixed(2)} / {a.maxScore}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-8 bg-white border border-slate-200 rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <ListChecks className="w-4 h-4 text-slate-500" />
@@ -83,6 +147,16 @@ export function TestResult() {
       <div className="mt-6 flex justify-end gap-2">
         <Button onClick={back}>Back to tests</Button>
       </div>
+    </div>
+  );
+}
+
+function CohortField({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase font-semibold text-slate-500">{label}</div>
+      <div className="text-lg font-bold text-slate-900 tabular-nums">{value}</div>
+      {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
     </div>
   );
 }
