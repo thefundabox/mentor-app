@@ -16,6 +16,7 @@ import type {
 import { SCOPE_DAYS } from "@/types";
 import { scheduleNextReview, isTopicRajasthanSpecific, type ReviewSignal } from "@/lib/scheduler";
 import type { SessionItem } from "@/lib/selector";
+import { recordConfusion } from "@/lib/confusion";
 
 interface AppContextValue extends AppState {
   currentUser: User | null;
@@ -172,6 +173,19 @@ interface AppContextValue extends AppState {
   // from SmartPractice (picker) to SmartSessionScreen (runner).
   activeSession: SessionItem[] | null;
   setActiveSession: (next: SessionItem[] | null) => void;
+
+  /**
+   * Adaptive PR 4: record a wrong-distractor pick into the student's
+   * confusionPairs list. Caller passes the concept the question tests, the
+   * label of the distractor the student picked (typically the option text),
+   * and the topicId for routing remediation.
+   */
+  recordStudentConfusion: (
+    studentId: string,
+    correctConcept: string,
+    confusedWith: string,
+    topicId: string,
+  ) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -348,6 +362,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const s = getStudent(id);
     return s.chart.status === "approved" && day <= s.chart.approvedThrough;
   }, [getStudent]);
+
+  /* ---------- Adaptive PR 4: confusion-pair recording ------------------ */
+
+  const recordStudentConfusion = useCallback((
+    studentId: string,
+    correctConcept: string,
+    confusedWith: string,
+    topicId: string,
+  ) => {
+    patchStudent(studentId, (s) => ({
+      ...s,
+      confusionPairs: recordConfusion(
+        s.confusionPairs ?? [],
+        correctConcept,
+        confusedWith,
+        topicId,
+      ),
+    }));
+  }, [patchStudent]);
 
   /* ---------- Adaptive PR 2: scheduler integration --------------------- */
 
@@ -852,6 +885,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentAffairs, setCurrentAffairs,
     applyTopicScheduling,
     activeSession, setActiveSession,
+    recordStudentConfusion,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

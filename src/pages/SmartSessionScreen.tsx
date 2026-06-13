@@ -17,11 +17,17 @@
  * so the scheduler's confidence math now starts producing meaningful values.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MapPin, SkipForward, X, Check, AlertTriangle } from "lucide-react";
+import { ArrowRight, MapPin, SkipForward, X, Check, AlertTriangle, Info } from "lucide-react";
 import type { SessionItem, SessionReason } from "@/lib/selector";
+import {
+  computeNegativeMarkingReport,
+  shouldAttemptRecommendation,
+  type AttemptOutcome,
+} from "@/lib/negativeMarking";
+import { getTopConfusions } from "@/lib/confusion";
 
 interface AnswerRecord {
   item: SessionItem;
@@ -43,7 +49,8 @@ const REASON_LABEL: Record<SessionReason, { label: string; tone: string }> = {
 
 export function SmartSessionScreen() {
   const {
-    currentUser, activeSession, setActiveSession, setRoute, applyTopicScheduling, subjects,
+    currentUser, activeSession, setActiveSession, setRoute, applyTopicScheduling,
+    subjects, getStudent, recordStudentConfusion,
   } = useAppState();
 
   const items = activeSession ?? [];
@@ -74,9 +81,11 @@ export function SmartSessionScreen() {
 
   // ---- End-of-session summary -------------------------------------------
   if (done) {
+    const studentNow = getStudent(currentUser.id);
     return (
       <SessionSummary
         answers={answers}
+        confusionPairs={studentNow.confusionPairs ?? []}
         onAgain={() => {
           setActiveSession(null);
           setRoute("smart_practice");
@@ -98,14 +107,27 @@ export function SmartSessionScreen() {
 
   const finalize = (next: AnswerRecord[]) => {
     setAnswers(next);
+    const just = next[next.length - 1];
     // Push every answer through the scheduler immediately so the next
     // session's due-queue reflects this one. We tag CA later (PR 5).
     applyTopicScheduling(currentUser.id, item.topicId, {
-      wasCorrect: next[next.length - 1].wasCorrect,
-      wasSkipped: next[next.length - 1].wasSkipped,
-      responseTimeMs: next[next.length - 1].responseTimeMs,
+      wasCorrect: just.wasCorrect,
+      wasSkipped: just.wasSkipped,
+      responseTimeMs: just.responseTimeMs,
       isCurrentAffairs: false,
     });
+    // PR 4: when the student picks a wrong distractor (not skip), record the
+    // (correctConcept, chosen-option-text) pair so we can show muddled
+    // concept-pairs in the summary and on the eventual mentor dashboard.
+    if (!just.wasSkipped && !just.wasCorrect && just.selectedOption >= 0) {
+      const distractor = item.question.options[just.selectedOption] ?? `option_${just.selectedOption}`;
+      recordStudentConfusion(
+        currentUser.id,
+        item.question.concept || "unknown",
+        distractor,
+        item.topicId,
+      );
+    }
     if (i + 1 < total) {
       setI(i + 1);
     } else {
@@ -141,6 +163,15 @@ export function SmartSessionScreen() {
 
   const reasonMeta = REASON_LABEL[item.reason];
   const progressPercent = ((i + 1) / total) * 100;
+
+  // PR 4: live skip-recommendation hint based on the student's history with
+  // this topic. We only show "consider skipping" when there's a real signal
+  // (>=3 prior attempts AND <60% accuracy) — otherwise the hint feels noisy.
+  const student = getStudent(currentUser.id);
+  const topicRecord = (student.topicRecords ?? []).find((r) => r.topicId === item.topicId);
+  const reco = shouldAttemptRecommendation(topicRecord);
+  const showSkipHint = reco === "skip"
+    && (topicRecord?.attemptsTotal ?? 0) >= 3;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -181,6 +212,16 @@ export function SmartSessionScreen() {
             </span>
           )}
         </div>
+
+        {showSkipHint && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2">
+            <Info className="w-4 h-4 text-rose-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-rose-800">
+              <span className="font-semibold">You usually get this topic wrong.</span>{" "}
+              In the real exam, skipping a wrong answer beats a guess (−0.33 marks). Skip if you're not sure.
+            </div>
+          </div>
+        )}
 
         <h2 className="text-2xl font-bold text-slate-900 mb-6 leading-snug">{q.q}</h2>
 
@@ -225,35 +266,82 @@ export function SmartSessionScreen() {
 }
 
 function SessionSummary({
-  answers, onAgain, onHome, subjectName, topicName,
+  answers, confusionPairs, onAgain, onHome, subjectName, topicName,
 }: {
   answers: AnswerRecord[];
+  confusionPairs: import("@/types").ConfusionPair[];
   onAgain: () => void;
   onHome: () => void;
   subjectName: (id: string) => string;
   topicName: (subjectId: string, topicId: string) => string;
 }) {
+  // Convert AnswerRecord[] → AttemptOutcome[] for the analyzer. We default to
+  // standard prelims scoring (1 mark, 1/3 negative); a future PR can flex this
+  // per session type (mains, custom mock, etc.).
+  const outcomes: AttemptOutcome[] = useMemo(
+    () => answers.map((a) => ({
+      skipped: a.wasSkipped,
+      wasCorrect: a.wasCorrect,
+      responseTimeMs: a.responseTimeMs,
+    })),
+    [answers],
+  );
+  const report = useMemo(() => computeNegativeMarkingReport(outcomes), [outcomes]);
+
+  const topConfusions = useMemo(() => getTopConfusions(confusionPairs, 5), [confusionPairs]);
+
   const total = answers.length;
-  const correct = answers.filter((a) => a.wasCorrect).length;
-  const wrong = answers.filter((a) => !a.wasCorrect && !a.wasSkipped).length;
-  const skipped = answers.filter((a) => a.wasSkipped).length;
-  const acc = total ? Math.round((correct / total) * 100) : 0;
-  // Wrong + slow (>20s) = likely should have skipped (negative-marking lens).
-  const shouldHaveSkipped = answers.filter((a) => !a.wasCorrect && !a.wasSkipped && a.responseTimeMs > 20000).length;
-  const marksHypothetical = correct - wrong / 3;
+  const acc = total ? Math.round((report.correct / total) * 100) : 0;
+  const gap = report.skipRecommendedScore - report.actualScore;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
       <h1 className="text-3xl font-bold text-slate-900 mb-1">Session done</h1>
       <p className="text-sm text-slate-600 mb-6">
-        {correct} correct, {wrong} wrong, {skipped} skipped — {acc}% accuracy.
+        {report.correct} correct, {report.wrong} wrong, {report.skipped} skipped — {acc}% accuracy.
       </p>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <Tile label="Accuracy"           value={`${acc}%`}                       accent="indigo" />
-        <Tile label="Hypothetical marks" value={marksHypothetical.toFixed(2)}    accent="amber"  sub="with 1/3 neg" />
-        <Tile label="Should have skipped" value={shouldHaveSkipped.toString()}   accent="rose"   sub="slow & wrong" />
+        <Tile label="Actual score"           value={fmt(report.actualScore)}            accent="indigo" sub="your real result" />
+        <Tile label="Marks lost to neg"      value={fmt(report.marksLostToNegative)}    accent="rose"   sub={`${report.wrong} wrong × −0.33`} />
+        <Tile label="If you'd skipped right" value={fmt(report.skipRecommendedScore)}   accent="amber"  sub={gap > 0 ? `+${fmt(gap)} better` : "same"} />
       </div>
+
+      {report.shouldHaveSkipped > 0 && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-700 mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="text-sm font-semibold text-amber-900 mb-0.5">
+              {report.shouldHaveSkipped} answer{report.shouldHaveSkipped === 1 ? "" : "s"} you should have skipped
+            </div>
+            <div className="text-xs text-amber-800">
+              Slow ({SKIP_RECOMMEND_SECS}s+) AND wrong. In the real exam, leaving these blank would have saved {fmt(report.shouldHaveSkipped / 3)} mark{report.shouldHaveSkipped > 1 ? "s" : ""}.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {topConfusions.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-slate-100 text-xs uppercase font-bold tracking-wide text-slate-500">
+            Concepts you're muddling
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {topConfusions.map((cp) => (
+              <li key={cp.id} className="px-4 py-3">
+                <div className="text-sm text-slate-900">
+                  <span className="font-semibold">{cp.correctConcept}</span>
+                  <span className="text-slate-400"> ↔ </span>
+                  <span className="text-slate-700">"{truncate(cp.confusedWith, 60)}"</span>
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {cp.count}× · last seen {timeAgo(cp.lastOccurredAt)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden mb-6">
         <div className="px-4 py-3 border-b border-slate-100 text-xs uppercase font-bold tracking-wide text-slate-500">
@@ -288,6 +376,21 @@ function SessionSummary({
       </div>
     </div>
   );
+}
+
+const SKIP_RECOMMEND_SECS = 20;
+function fmt(n: number): string {
+  return (Math.round(n * 100) / 100).toFixed(2);
+}
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1) + "…";
+}
+function timeAgo(ms: number): string {
+  const delta = Math.max(0, Date.now() - ms);
+  if (delta < 60_000) return "just now";
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
+  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h ago`;
+  return `${Math.floor(delta / 86_400_000)}d ago`;
 }
 
 function EmptyState({ onBack }: { onBack: () => void }) {
