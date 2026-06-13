@@ -3,8 +3,13 @@ import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
 import { shuffle } from "@/data";
 import { Button } from "@/components/ui/button";
-import { X, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
+import {
+  QuizPathTracker,
+  type MainCellState,
+  type FoundationDrill,
+} from "@/components/QuizPathTracker";
 
 interface QuizScreenProps {
   dayNum: number;
@@ -58,6 +63,19 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   const [questionStart, setQuestionStart] = useState<number>(() => Date.now());
   const [perQuestion, setPerQuestion] = useState<QuestionAttempt[]>([]);
 
+  // Path tracker state. `pathMain` mirrors the main-question row; it stays
+  // in lockstep with the main flow regardless of remediation. `activeDrill`
+  // is non-null only while the student is inside a foundation drill — once
+  // the drill ends we collapse it into a `foundationDots` count on the
+  // originating main cell and clear activeDrill back to null.
+  const [pathMain, setPathMain] = useState<MainCellState[]>(() =>
+    Array.from({ length: questions.length }, (_, idx) => ({
+      result: idx === 0 ? ("current" as const) : ("pending" as const),
+      foundationDots: 0,
+    })),
+  );
+  const [activeDrill, setActiveDrill] = useState<FoundationDrill | null>(null);
+
   // Reset the question timer on every fresh question (main or remediation).
   useEffect(() => {
     setQuestionStart(Date.now());
@@ -66,6 +84,39 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   const q = remediation ? remediation.qs[remediation.i] : questions[i];
   const total = questions.length;
 
+  // Shared finalize: same scoring/result logic the main-correct branch had
+  // inline. Pulled out so the foundation-completes-on-last-Q branch can
+  // call it too (PR 7-tracker change: drills no longer re-attempt the
+  // failed main Q, so the last-Q-drill case has to finalize directly).
+  function finalizeQuiz(allAnswers: Answer[], allPerQuestion: QuestionAttempt[]) {
+    const correctCount = allAnswers.filter((a) => a.correct).length;
+    const byConcept: Record<string, ConceptStat> = {};
+    allAnswers.forEach((a) => {
+      const c = byConcept[a.concept] || { right: 0, wrong: 0 };
+      if (a.correct) c.right += 1; else c.wrong += 1;
+      byConcept[a.concept] = c;
+    });
+    const attemptsForTopic = student.attempts.filter((a) => a.day === dayNum && a.topicId === topicId).length;
+    const isFirstTry = attemptsForTopic === 0;
+    const score = Math.round((correctCount / total) * 100);
+    const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, {
+      day: dayNum, topicId, score, when: Date.now(), byConcept,
+      perQuestion: allPerQuestion,
+    });
+    const result: QuizResult = {
+      score, correct: correctCount, total,
+      missedConcepts: [...new Set(allAnswers.filter((a) => !a.correct).map((a) => a.concept))],
+      byConcept,
+      pointsAwarded,
+      firstTry: isFirstTry,
+      topicId,
+      dayClearedNow,
+      topicsRemainingInDay,
+    };
+    setLastResult(result);
+    setRoute("results");
+  }
+
   function handleSubmit() {
     if (chosen === null) return;
     const isCorrect = chosen === q.correct;
@@ -73,11 +124,50 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
 
     // Remediation answers don't go into the perQuestion log: they're a
     // teaching moment, not a graded item. Same reason confusion isn't
-    // recorded for foundation Qs.
-    if (remediation) {
+    // recorded for foundation Qs. They DO advance the path tracker so the
+    // student can see how far into the drill they are.
+    if (remediation && activeDrill) {
       const nextI = remediation.i + 1;
-      if (nextI < remediation.qs.length) setRemediation({ ...remediation, i: nextI });
-      else setRemediation(null);
+      const drillResults = [...activeDrill.results];
+      drillResults[remediation.i] = isCorrect ? "correct" : "wrong";
+
+      if (nextI < remediation.qs.length) {
+        drillResults[nextI] = "current";
+        setActiveDrill({ ...activeDrill, results: drillResults });
+        setRemediation({ ...remediation, i: nextI });
+      } else {
+        // Drill done. Two things happen together:
+        //   - Tracker: collapse foundation cells into a foundationDots count
+        //     under the originating main cell, mark the next main cell current.
+        //   - Quiz state: advance the main cursor `i` past the failed Q so the
+        //     student moves forward to the next main question (was a quirk in
+        //     the original code that they re-attempted the same Q; the
+        //     tracker design assumes — and the user's mental model expects —
+        //     forward progress here, and the scoring already recorded the
+        //     wrong answer for the failed Q so re-attempting isn't needed).
+        setPathMain((prev) => {
+          const next = [...prev];
+          next[activeDrill.mainIdx] = {
+            ...next[activeDrill.mainIdx],
+            foundationDots: drillResults.length,
+          };
+          const nextMain = activeDrill.mainIdx + 1;
+          if (nextMain < next.length) {
+            next[nextMain] = { ...next[nextMain], result: "current" };
+          }
+          return next;
+        });
+        setActiveDrill(null);
+        setRemediation(null);
+        if (i + 1 < total) {
+          setI(i + 1);
+        } else {
+          // Drill was on the last main Q — finalize using the answers/perQ
+          // that were already recorded when the failed main answer fired.
+          finalizeQuiz(answers, perQuestion);
+          return;
+        }
+      }
       setChosen(null);
       return;
     }
@@ -108,6 +198,17 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     if (!isCorrect) {
       const found = (foundationPool[q.concept] || []).slice(0, 2);
       if (found.length) {
+        // Wrong main + foundations queued: mark this main cell wrong and
+        // open a drill. Foundation cells render vertically under this column.
+        setPathMain((prev) => {
+          const next = [...prev];
+          next[i] = { ...next[i], result: "wrong" };
+          return next;
+        });
+        setActiveDrill({
+          mainIdx: i,
+          results: found.map((_, k) => (k === 0 ? "current" : "pending")),
+        });
         setRemediation({
           qs: found.map((f) => ({ ...f, _foundation: true })),
           i: 0,
@@ -118,57 +219,37 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
       }
     }
 
+    // Either correct, OR wrong-with-no-foundations: mark this main cell
+    // and advance the cursor.
+    setPathMain((prev) => {
+      const next = [...prev];
+      next[i] = { ...next[i], result: isCorrect ? "correct" : "wrong" };
+      if (i + 1 < next.length) {
+        next[i + 1] = { ...next[i + 1], result: "current" };
+      }
+      return next;
+    });
+
     setChosen(null);
     if (i + 1 < total) {
       setI(i + 1);
     } else {
-      const correctCount = newAnswers.filter((a) => a.correct).length;
-      const byConcept: Record<string, ConceptStat> = {};
-      newAnswers.forEach((a) => {
-        const c = byConcept[a.concept] || { right: 0, wrong: 0 };
-        if (a.correct) c.right += 1; else c.wrong += 1;
-        byConcept[a.concept] = c;
-      });
-      const attemptsForTopic = student.attempts.filter((a) => a.day === dayNum && a.topicId === topicId).length;
-      const isFirstTry = attemptsForTopic === 0;
-      const score = Math.round((correctCount / total) * 100);
-      const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, {
-        day: dayNum, topicId, score, when: Date.now(), byConcept,
-        perQuestion: nextPerQuestion,
-      });
-      const result: QuizResult = {
-        score, correct: correctCount, total,
-        missedConcepts: [...new Set(newAnswers.filter((a) => !a.correct).map((a) => a.concept))],
-        byConcept,
-        pointsAwarded,
-        firstTry: isFirstTry,
-        topicId: topicId,
-        dayClearedNow,
-        topicsRemainingInDay,
-      };
-      setLastResult(result);
-      setRoute("results");
+      finalizeQuiz(newAnswers, nextPerQuestion);
     }
   }
 
   if (!q) return null;
 
-  const progressPercent = ((i + 1) / total) * 100;
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center gap-4">
-          <button onClick={() => setRoute("topic")} className="text-slate-400 hover:text-slate-700 transition">
-            <X className="w-5 h-5" />
-          </button>
-          <div className="flex-1">
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${Math.min(progressPercent, 100)}%` }} />
-            </div>
-          </div>
-          <div className="text-xs font-medium text-slate-500 w-16 text-right">{i + 1} / {total}</div>
-        </div>
+        <QuizPathTracker
+          main={pathMain}
+          activeDrill={activeDrill}
+          currentIndex={activeDrill ? activeDrill.mainIdx + 1 : i + 1}
+          total={total}
+          onClose={() => setRoute("topic")}
+        />
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
