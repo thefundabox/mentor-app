@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MapPin, SkipForward, X, Check, AlertTriangle, Info } from "lucide-react";
+import { ArrowRight, MapPin, SkipForward, Check, AlertTriangle, Info } from "lucide-react";
 import type { SessionItem, SessionReason } from "@/lib/selector";
 import { CA_SUBJECT_ID } from "@/lib/selector";
 import {
@@ -29,6 +29,7 @@ import {
   type AttemptOutcome,
 } from "@/lib/negativeMarking";
 import { getTopConfusions } from "@/lib/confusion";
+import { QuizPathTracker, type MainCellState } from "@/components/QuizPathTracker";
 
 interface AnswerRecord {
   item: SessionItem;
@@ -62,6 +63,20 @@ export function SmartSessionScreen() {
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [done, setDone] = useState(false);
   const [recorded, setRecorded] = useState(false);
+
+  // 2D path tracker state. Smart Practice is flat — no foundation drilling —
+  // so foundationDots stays 0 and we never set an activeDrill. Cells go
+  // pending → current → (correct | wrong | skipped) as the student moves.
+  const [pathMain, setPathMain] = useState<MainCellState[]>([]);
+  // Re-seed pathMain whenever a new session begins (item list changes).
+  useEffect(() => {
+    setPathMain(items.map((_, idx) => ({
+      result: idx === 0 ? ("current" as const) : ("pending" as const),
+      foundationDots: 0,
+    })));
+    // Only depend on items.length — items themselves are stable for a session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
 
   // Reset the question timer every time the index advances.
   useEffect(() => {
@@ -168,6 +183,18 @@ export function SmartSessionScreen() {
         item.topicId,
       );
     }
+    // Tracker: flip the current cell to its final state and ring the next.
+    setPathMain((prev) => {
+      const nextArr = [...prev];
+      nextArr[i] = {
+        ...nextArr[i],
+        result: just.wasSkipped ? "skipped" : just.wasCorrect ? "correct" : "wrong",
+      };
+      if (i + 1 < nextArr.length) {
+        nextArr[i + 1] = { ...nextArr[i + 1], result: "current" };
+      }
+      return nextArr;
+    });
     if (i + 1 < total) {
       setI(i + 1);
     } else {
@@ -202,7 +229,6 @@ export function SmartSessionScreen() {
   };
 
   const reasonMeta = REASON_LABEL[item.reason];
-  const progressPercent = ((i + 1) / total) * 100;
 
   // PR 4: live skip-recommendation hint based on the student's history with
   // this topic. We only show "consider skipping" when there's a real signal
@@ -216,26 +242,13 @@ export function SmartSessionScreen() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center gap-4">
-          <button
-            onClick={() => { setActiveSession(null); setRoute("smart_practice"); }}
-            className="text-slate-400 hover:text-slate-700 transition"
-            aria-label="Exit session"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <div className="flex-1">
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-600 transition-all duration-300"
-                style={{ width: `${Math.min(progressPercent, 100)}%` }}
-              />
-            </div>
-          </div>
-          <div className="text-xs font-medium text-slate-500 w-16 text-right">
-            {i + 1} / {total}
-          </div>
-        </div>
+        <QuizPathTracker
+          main={pathMain}
+          activeDrill={null}
+          currentIndex={i + 1}
+          total={total}
+          onClose={() => { setActiveSession(null); setActiveSessionMeta(null); setRoute("smart_practice"); }}
+        />
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8">

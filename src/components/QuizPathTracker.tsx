@@ -17,9 +17,13 @@
  * Pure presentation. Caller (QuizScreen) owns the state.
  */
 
-import { Check, X } from "lucide-react";
+import { Check, SkipForward, X } from "lucide-react";
 
-export type CellResult = "pending" | "current" | "correct" | "wrong";
+/**
+ * Cell lifecycle. The day quiz uses pending / current / correct / wrong;
+ * Smart Practice adds `skipped` for the "don't attempt" button there.
+ */
+export type CellResult = "pending" | "current" | "correct" | "wrong" | "skipped";
 
 export interface MainCellState {
   result: CellResult;
@@ -62,6 +66,8 @@ function mainClass(r: CellResult): string {
       return "bg-emerald-500 text-white";
     case "wrong":
       return "bg-rose-500 text-white";
+    case "skipped":
+      return "bg-slate-300 text-slate-600";
     case "pending":
     default:
       return "bg-slate-100 text-slate-400";
@@ -123,7 +129,9 @@ export function QuizPathTracker({
                     ? <Check className="w-3 h-3" />
                     : cell.result === "wrong"
                       ? <X className="w-3 h-3" />
-                      : idx + 1}
+                      : cell.result === "skipped"
+                        ? <SkipForward className="w-2.5 h-2.5" />
+                        : idx + 1}
                 </div>
               );
             })}
