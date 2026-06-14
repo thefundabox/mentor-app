@@ -221,20 +221,30 @@ export function Dashboard({ studentId }: { studentId: string }) {
         </section>
       )}
 
-      {/* Syllabus coverage summary + collapsible details */}
-      <SyllabusCoverageSection metrics={metrics} />
+      {/*
+        Syllabus coverage + All subjects — paired into a 2-col grid on lg+
+        so they read in parallel rather than stacking back-to-back. On
+        mobile they keep the natural single-column flow. `items-start`
+        keeps each section anchored to the top of its column even when
+        their heights diverge (which they often will, given the
+        collapsible topic lists inside the coverage card).
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
+        {/* Syllabus coverage summary + collapsible details */}
+        <SyllabusCoverageSection metrics={metrics} />
 
-      {/* Subject breakdown table */}
-      <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 text-xs uppercase font-bold tracking-wide text-slate-500">
-          All subjects
-        </div>
-        <ul className="divide-y divide-slate-100">
-          {metrics.subjects.map((s) => (
-            <SubjectRow key={s.subjectId} row={s} />
-          ))}
-        </ul>
-      </section>
+        {/* Subject breakdown table */}
+        <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 text-xs uppercase font-bold tracking-wide text-slate-500">
+            All subjects
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {metrics.subjects.map((s) => (
+              <SubjectRow key={s.subjectId} row={s} />
+            ))}
+          </ul>
+        </section>
+      </div>
 
       {/* Confusion pairs */}
       {metrics.topConfusions.length > 0 && (
