@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Trophy, Sparkles, ArrowRight, Star, Zap, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { getTopConfusions } from "@/lib/confusion";
+import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 interface ResultsProps { dayNum: number; }
 
@@ -134,7 +135,7 @@ export function Results({ dayNum }: ResultsProps) {
         {/* PR 7: nudge into Smart Practice's weak-area drill when the
           * student has accumulated topic history. Doesn't show on the very
           * first attempt — they'd land on an empty drill. */}
-        {(student.topicRecords?.length ?? 0) >= 2 && (
+        {SMART_PRACTICE_ENABLED && (student.topicRecords?.length ?? 0) >= 2 && (
           <div className="mt-4 text-left p-4 rounded-xl bg-indigo-50 border border-indigo-200">
             <div className="text-sm font-semibold text-indigo-900">
               <Sparkles className="w-4 h-4 inline mr-1 -mt-0.5" />

@@ -22,6 +22,7 @@ import { MentorDashboard } from "@/pages/MentorDashboard";
 import { MentorStudentDetail } from "@/pages/MentorStudentDetail";
 import { AdminDashboard } from "@/pages/AdminDashboard";
 import { motion } from "framer-motion";
+import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
   const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId } = useAppState();
@@ -74,8 +75,8 @@ function AppContent() {
     else if (route === "take_test") content = <TakeTest />;
     else if (route === "test_result") content = <TestResult />;
     else if (route === "pyq_archive") content = <PYQArchive />;
-    else if (route === "smart_practice") content = <SmartPractice />;
-    else if (route === "smart_session") content = <SmartSessionScreen />;
+    else if (route === "smart_practice" && SMART_PRACTICE_ENABLED) content = <SmartPractice />;
+    else if (route === "smart_session" && SMART_PRACTICE_ENABLED) content = <SmartSessionScreen />;
     else if (route === "dashboard") content = <Dashboard studentId={currentUser.id} />;
     else content = <StudentHome />;
   }

@@ -27,6 +27,7 @@ import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
   type NegativeMarkingRisk, type TopicStatus, type TrendDirection,
 } from "@/lib/dashboardMetrics";
+import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 import { HabitsCard } from "@/components/HabitsCard";
 import { StatTile } from "@/components/StatTile";
 import { SCOPE_LABEL } from "@/types";
@@ -97,9 +98,11 @@ export function Dashboard({ studentId }: { studentId: string }) {
         </div>
         {!isMentorView && (
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => setRoute("smart_practice")}>
-              <Sparkles className="w-4 h-4" /> Smart practice
-            </Button>
+            {SMART_PRACTICE_ENABLED && (
+              <Button onClick={() => setRoute("smart_practice")}>
+                <Sparkles className="w-4 h-4" /> Smart practice
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setRoute("home")}>
               <MapIcon className="w-4 h-4" /> Journey
             </Button>
@@ -324,7 +327,7 @@ function NegMarkingCard({
           <p className="text-xs text-slate-600 mt-1">
             Based on {sessions} session{sessions === 1 ? "" : "s"} so far · {shouldHaveSkipped} slow-and-wrong answers across them
           </p>
-          {!isMentorView && sessions > 0 && (
+          {SMART_PRACTICE_ENABLED && !isMentorView && sessions > 0 && (
             <Button className="mt-3" variant="secondary" onClick={onPractice}>
               <Sparkles className="w-4 h-4" /> Run a practice session
             </Button>

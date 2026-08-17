@@ -8,6 +8,7 @@ import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles } from "lucide-react";
 import { SCOPE_DAYS, type CommitmentScope } from "@/types";
+import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 export function StudentHome() {
   const { currentUser, getStudent, setRoute, setActiveDay, setActiveTopicId, topicCleared, dayCleared, completedDays, submitChartForApproval, findTopicLive, batchForStudent } = useAppState();
@@ -76,9 +77,11 @@ export function StudentHome() {
           </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button onClick={() => setRoute("smart_practice")}>
-            <Sparkles className="w-4 h-4" /> Smart practice
-          </Button>
+          {SMART_PRACTICE_ENABLED && (
+            <Button onClick={() => setRoute("smart_practice")}>
+              <Sparkles className="w-4 h-4" /> Smart practice
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setRoute("tests")}>
             <FileText className="w-4 h-4" /> Mock tests
           </Button>
