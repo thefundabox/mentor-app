@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Sparkles, MapPin,
   AlertTriangle, ChevronDown, ChevronRight, Check, Circle, Hourglass, Trophy,
-  Star, Flame, Library, FileText, Map as MapIcon, Pencil,
+  Star, Flame, Library, FileText, Map as MapIcon, Pencil, Sun, BarChart3,
 } from "lucide-react";
 import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
@@ -44,6 +44,19 @@ export function Dashboard({ studentId }: { studentId: string }) {
   // that case — there's no prior page to return to. Mentors viewing a
   // student's dashboard always see the back link (they navigated in).
   const showBackLink = isMentorView;
+
+  /**
+   * Student self-view splits into two tabs: "Today" carries everything the
+   * student acts on this morning, "Detailed stats" carries the analytics.
+   * Nothing is removed — it's one click away.
+   *
+   * Mentors are deliberately excluded from the split. Reading the analytics
+   * IS the mentor's job on this page, so tabbing them would add a click to
+   * every visit and hide half of what they came for.
+   */
+  const [tab, setTab] = useState<"today" | "stats">("today");
+  const showToday = isMentorView || tab === "today";
+  const showStats = isMentorView || tab === "stats";
 
   const metrics: DashboardMetrics = useMemo(
     () => computeDashboard(student, subjects, testAttempts, studentId, Date.now()),
@@ -119,10 +132,19 @@ export function Dashboard({ studentId }: { studentId: string }) {
         )}
       </header>
 
+      {!isMentorView && (
+        <div className="flex gap-1 border-b border-slate-200">
+          <DashTabButton active={tab === "today"} onClick={() => setTab("today")}
+            icon={<Sun className="w-4 h-4" />} label="Today" />
+          <DashTabButton active={tab === "stats"} onClick={() => setTab("stats")}
+            icon={<BarChart3 className="w-4 h-4" />} label="Detailed stats" />
+        </div>
+      )}
+
       {/* Today strip — habits + stats + active commitment. Self-view only;
         * mentors see the readiness numbers but don't need the daily-tracking
         * widgets (those belong to the student's own session). */}
-      {!isMentorView && (
+      {!isMentorView && tab === "today" && (
         <section>
           <HabitsCard
             student={student}
@@ -159,6 +181,7 @@ export function Dashboard({ studentId }: { studentId: string }) {
       )}
 
       {/* Readiness scores */}
+      {showToday && (
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ReadinessTile
           label="Prelims readiness"
@@ -175,7 +198,10 @@ export function Dashboard({ studentId }: { studentId: string }) {
           sub="Rajasthan-flagged content only"
         />
       </section>
+      )}
 
+      {showStats && (
+      <>
       {/* Negative marking risk */}
       <NegMarkingCard
         risk={metrics.negativeMarkingRisk}
@@ -269,7 +295,22 @@ export function Dashboard({ studentId }: { studentId: string }) {
           </ul>
         </section>
       )}
+      </>
+      )}
     </div>
+  );
+}
+
+function DashTabButton({ active, onClick, icon, label }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
+}) {
+  return (
+    <button onClick={onClick}
+      className={`px-4 py-3 text-sm font-semibold flex items-center gap-2 border-b-2 -mb-px transition ${
+        active ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"
+      }`}>
+      {icon}{label}
+    </button>
   );
 }
 
