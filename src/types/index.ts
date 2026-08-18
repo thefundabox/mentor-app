@@ -558,6 +558,7 @@ export type Route =
   | "take_test"
   | "test_result"
   | "pyq_archive"
+  | "discussion"
   | "smart_practice"
   | "smart_session"
   | "dashboard"

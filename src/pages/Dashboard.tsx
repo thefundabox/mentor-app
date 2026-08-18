@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Sparkles, MapPin,
   AlertTriangle, ChevronDown, ChevronRight, Check, Circle, Hourglass, Trophy,
-  Star, Flame, Library, FileText, Map as MapIcon, Pencil, Sun, BarChart3,
+  Star, Flame, Library, FileText, Map as MapIcon, Pencil, Sun, BarChart3, MessagesSquare,
 } from "lucide-react";
 import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
@@ -118,6 +118,9 @@ export function Dashboard({ studentId }: { studentId: string }) {
             )}
             <Button variant="secondary" onClick={() => setRoute("home")}>
               <MapIcon className="w-4 h-4" /> Journey
+            </Button>
+            <Button variant="secondary" onClick={() => setRoute("discussion")}>
+              <MessagesSquare className="w-4 h-4" /> Discussion
             </Button>
             <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
               <Library className="w-4 h-4" /> PYQ bank
