@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocalStorage } from "./useLocalStorage";
+import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
@@ -20,9 +21,24 @@ import type { SessionItem, SessionMode } from "@/lib/selector";
 import { recordConfusion } from "@/lib/confusion";
 import { deactivateExpiredTopics } from "@/lib/currentAffairs";
 
+/** Result of a sign-in / sign-up attempt. */
+export interface AuthResult {
+  error?: string;
+  /** True when signup succeeded but Supabase is waiting on email confirmation. */
+  needsConfirmation?: boolean;
+}
+
 interface AppContextValue extends AppState {
   currentUser: User | null;
+  /** Local-only fallback sign-in. Used when Supabase is not configured. */
   loginAs: (role: Role, email: string, name: string) => void;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
+  /** True while the session/profile is being resolved on first paint. */
+  authLoading: boolean;
+  authError: string | null;
+  /** True when the app is running against a real Supabase project. */
+  authEnabled: boolean;
   logout: () => void;
   setLoginRoleIntent: (role: Role | null) => void;
   setRoute: (route: Route) => void;
@@ -249,6 +265,98 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [users, currentUserId]
   );
 
+  /* ---------- Supabase auth ------------------------------------------------
+   *
+   * Identity comes from Supabase; everything else still lives in localStorage.
+   * The bridge between them is EMAIL, not id: a signed-in profile is matched
+   * to an existing local user by email so the seeded demo data (Aamir's
+   * cleared days, Neha's pending plan) survives the move to real UUIDs.
+   *
+   * `role` is always taken from the profile row, never from local storage —
+   * that is the entire point of the migration. A tampered local record is
+   * overwritten on every sign-in.
+   */
+
+  const [authProfile, setAuthProfile] = useState<ProfileRow | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(isSupabaseConfigured);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Read `users` inside the auth effect without making it a dependency —
+  // depending on it would re-run reconciliation on every unrelated user edit.
+  const usersRef = useRef(users);
+  useEffect(() => { usersRef.current = users; }, [users]);
+
+  useEffect(() => {
+    if (!supabase) { setAuthLoading(false); return; }
+    let cancelled = false;
+
+    const loadProfile = async (userId: string | undefined) => {
+      if (!userId) {
+        if (!cancelled) { setAuthProfile(null); setAuthLoading(false); }
+        return;
+      }
+      const { data, error } = await supabase!
+        .from("profiles").select("*").eq("id", userId).single();
+      if (cancelled) return;
+      if (error) {
+        setAuthError(`Could not load your profile: ${error.message}`);
+        setAuthProfile(null);
+      } else {
+        setAuthError(null);
+        setAuthProfile(data as ProfileRow);
+      }
+      setAuthLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => loadProfile(data.session?.user?.id));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthLoading(true);
+      loadProfile(session?.user?.id);
+    });
+
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+  }, []);
+
+  // Reconcile the authenticated profile with the local user list.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    if (!authProfile) {
+      setCurrentUserId(null);
+      return;
+    }
+
+    const email = authProfile.email.toLowerCase();
+    const existing = usersRef.current.find((u) => u.email.toLowerCase() === email);
+    // Keep the seed id when one exists — studentData is keyed by it.
+    const localId = existing?.id ?? authProfile.id;
+
+    const merged: User = {
+      ...existing,
+      id: localId,
+      email,
+      name: authProfile.name || existing?.name || email.split("@")[0],
+      role: authProfile.role,
+      mentorId: existing?.mentorId ?? authProfile.mentor_id ?? undefined,
+      createdAt: existing?.createdAt ?? (Date.parse(authProfile.created_at) || Date.now()),
+    };
+
+    setUsers((prev) => {
+      const i = prev.findIndex((u) => u.id === localId);
+      if (i === -1) return [...prev, merged];
+      const next = [...prev];
+      next[i] = merged;
+      return next;
+    });
+
+    if (merged.role === "student") {
+      setStudentData((prev) => (prev[localId] ? prev : { ...prev, [localId]: emptyStudentData() }));
+    }
+
+    setCurrentUserId(localId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authProfile]);
+
   const students = useMemo(() => users.filter((u) => u.role === "student"), [users]);
   const mentors = useMemo(() => users.filter((u) => u.role === "mentor"), [users]);
 
@@ -276,7 +384,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoute("auto");
   }, [users, setUsers, setStudentData, setCurrentUserId, setLoginRoleIntent, setRoute]);
 
+  const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    if (!supabase) return { error: "Sign-in is unavailable — Supabase is not configured." };
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) { setAuthError(error.message); return { error: error.message }; }
+    setLoginRoleIntent(null);
+    setRoute("auto");
+    return {};
+  }, [setRoute, setLoginRoleIntent]);
+
+  const signUp = useCallback(async (email: string, password: string, name: string): Promise<AuthResult> => {
+    if (!supabase) return { error: "Sign-up is unavailable — Supabase is not configured." };
+    setAuthError(null);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { name: name.trim() } },
+    });
+    if (error) { setAuthError(error.message); return { error: error.message }; }
+    // With "Confirm email" enabled (the Supabase default) signUp returns no
+    // session — the user must click the link before they can sign in.
+    if (!data.session) return { needsConfirmation: true };
+    setLoginRoleIntent(null);
+    setRoute("auto");
+    return {};
+  }, [setRoute, setLoginRoleIntent]);
+
   const logout = useCallback(() => {
+    // Fire-and-forget: the auth listener clears currentUserId when the session
+    // goes away, but we also clear local view state immediately so the UI does
+    // not sit on a stale screen while the network call is in flight.
+    if (supabase) void supabase.auth.signOut();
+    setAuthProfile(null);
     setCurrentUserId(null);
     setRoute("landing");
     setActiveDay(null);
@@ -907,7 +1050,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     quizPool, foundationPool, placementPool, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
-    loginAs, logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
+    loginAs, signIn, signUp, authLoading, authError, authEnabled: isSupabaseConfigured,
+    logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
