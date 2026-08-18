@@ -7,6 +7,8 @@ export interface TopicDocument {
 export interface Topic {
   id: string;
   name: string;
+  /** Taxonomy theme this microtheme sits under. Used to group the library UI. */
+  theme?: string;
   /** Optional embedded video for the topic. URL or data: URI. */
   videoUrl?: string;
   /** Optional PDFs / external doc links shown on the topic page. */

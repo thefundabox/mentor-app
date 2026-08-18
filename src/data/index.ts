@@ -1,3 +1,4 @@
+import { RPSC_SUBJECTS, resolveTopicId } from "./syllabus";
 import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
 
 /**
@@ -7,121 +8,14 @@ import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, St
  * Intentionally larger than the original demo (10 subjects, ~60 topics) so
  * the new collapsible + searchable library has something to scale against.
  */
-export const DEFAULT_SUBJECTS: SubjectCatalogEntry[] = [
-  {
-    id: "raj-history", name: "Rajasthan History", icon: "🏰", color: "amber",
-    topics: [
-      { id: "mauryan-raj", name: "Mauryan Rajasthan" },
-      { id: "pratiharas", name: "Gurjara-Pratiharas" },
-      { id: "chauhans", name: "Chauhans of Ajmer" },
-      { id: "mewar", name: "Mewar — Sisodias" },
-      { id: "marwar", name: "Marwar — Rathores" },
-      { id: "amber-jaipur", name: "Amber-Jaipur (Kachwahas)" },
-      { id: "1857-raj", name: "1857 Revolt in Rajasthan" },
-      { id: "integration-raj", name: "Integration of Princely States" },
-    ],
-  },
-  {
-    id: "polity", name: "Indian Polity", icon: "⚖️", color: "indigo",
-    topics: [
-      { id: "preamble", name: "Preamble & Basic Structure" },
-      { id: "fund-rights", name: "Fundamental Rights" },
-      { id: "dpsp", name: "DPSP & Fundamental Duties" },
-      { id: "exec", name: "President & Prime Minister" },
-      { id: "parliament", name: "Parliament" },
-      { id: "judiciary", name: "Supreme Court & Judiciary" },
-      { id: "federalism", name: "Federalism & Centre–State" },
-      { id: "panchayati-raj", name: "Panchayati Raj" },
-    ],
-  },
-  {
-    id: "raj-geo", name: "Geography of Rajasthan", icon: "🏜️", color: "emerald",
-    topics: [
-      { id: "phys-div", name: "Physical Divisions" },
-      { id: "rivers", name: "Rivers & Drainage" },
-      { id: "climate", name: "Climate" },
-      { id: "soils", name: "Soils" },
-      { id: "minerals", name: "Minerals" },
-      { id: "wildlife", name: "Wildlife & Sanctuaries" },
-      { id: "agriculture-raj", name: "Agriculture of Rajasthan" },
-    ],
-  },
-  {
-    id: "indian-history", name: "Modern Indian History", icon: "📜", color: "rose",
-    topics: [
-      { id: "british-rise", name: "Rise of British Power" },
-      { id: "revolt-1857", name: "Revolt of 1857" },
-      { id: "moderates", name: "Moderates & Extremists" },
-      { id: "gandhi-era", name: "Gandhian Era" },
-      { id: "partition", name: "Partition & Independence" },
-      { id: "constituent", name: "Making of the Constitution" },
-    ],
-  },
-  {
-    id: "geo-india", name: "Geography of India", icon: "🌏", color: "sky",
-    topics: [
-      { id: "physiography", name: "Physiography" },
-      { id: "monsoon", name: "Indian Monsoon System" },
-      { id: "river-systems", name: "River Systems" },
-      { id: "climate-india", name: "Climate Zones" },
-      { id: "minerals-india", name: "Minerals & Industries" },
-    ],
-  },
-  {
-    id: "economy", name: "Indian Economy", icon: "💹", color: "violet",
-    topics: [
-      { id: "national-income", name: "National Income" },
-      { id: "planning", name: "Planning & NITI Aayog" },
-      { id: "banking", name: "Banking & RBI" },
-      { id: "budget", name: "Union Budget" },
-      { id: "fiscal-policy", name: "Fiscal Policy" },
-      { id: "external-sector", name: "External Sector & Trade" },
-      { id: "poverty-employment", name: "Poverty & Employment" },
-    ],
-  },
-  {
-    id: "raj-art-culture", name: "Rajasthani Art & Culture", icon: "🎨", color: "pink",
-    topics: [
-      { id: "miniature-paintings", name: "Miniature Painting Schools" },
-      { id: "folk-dances", name: "Folk Dances" },
-      { id: "folk-music", name: "Folk Music & Instruments" },
-      { id: "festivals-fairs", name: "Festivals & Fairs" },
-      { id: "handicrafts", name: "Handicrafts" },
-      { id: "architecture", name: "Architecture of Rajasthan" },
-    ],
-  },
-  {
-    id: "science-tech", name: "Science & Tech", icon: "🧪", color: "teal",
-    topics: [
-      { id: "space", name: "Space — ISRO Missions" },
-      { id: "biotech", name: "Biotechnology" },
-      { id: "it-cyber", name: "IT & Cyber Security" },
-      { id: "energy", name: "Energy — Conventional & Renewable" },
-      { id: "defense-tech", name: "Defence Technology" },
-    ],
-  },
-  {
-    id: "environment", name: "Environment & Ecology", icon: "🌳", color: "lime",
-    topics: [
-      { id: "biodiversity", name: "Biodiversity & Conservation" },
-      { id: "climate-change", name: "Climate Change & Treaties" },
-      { id: "pollution", name: "Pollution & Waste" },
-      { id: "ecosystems", name: "Ecosystems" },
-      { id: "environmental-laws", name: "Environmental Laws" },
-    ],
-  },
-  {
-    id: "current-affairs", name: "Current Affairs", icon: "🗞️", color: "orange",
-    topics: [
-      { id: "ca-international", name: "International Relations" },
-      { id: "ca-national", name: "National — Last 6 Months" },
-      { id: "ca-economy", name: "Economy & Markets" },
-      { id: "ca-sports", name: "Sports & Awards" },
-      { id: "ca-summits", name: "Summits & Conferences" },
-      { id: "ca-reports", name: "Government Reports & Indices" },
-    ],
-  },
-];
+/**
+ * Default subject catalog — the RPSC RAS Prelims syllabus, expressed as the
+ * 243 microthemes of the Master Taxonomy. See src/data/syllabus.ts.
+ *
+ * The previous hand-written catalog (10 invented subjects, 63 topics) is gone;
+ * LEGACY_TOPIC_ALIASES keeps charts that referenced it working.
+ */
+export const DEFAULT_SUBJECTS: SubjectCatalogEntry[] = RPSC_SUBJECTS;
 
 /** Back-compat: code that still imports SUBJECTS gets the default catalog. */
 export const SUBJECTS: Subject[] = DEFAULT_SUBJECTS;
@@ -763,8 +657,9 @@ export const MAINS_PROMPT: MainsPrompt = {
 // Utility functions
 /** Find a (subject, topic) pair by topicId in a catalog. Falls back to DEFAULT_SUBJECTS when omitted. */
 export function findTopic(topicId: string, catalog: Subject[] = DEFAULT_SUBJECTS) {
+  const id = resolveTopicId(topicId);
   for (const s of catalog) {
-    const t = s.topics.find((t) => t.id === topicId);
+    const t = s.topics.find((t) => t.id === id);
     if (t) return { subject: s, topic: t };
   }
   return null;
@@ -901,7 +796,7 @@ export const SEED_USERS: User[] = [
 const multiChart = (rows: string[][]): DaySlot[][] => rows.map((ids) =>
   ids.map((id) => {
     const t = findTopic(id);
-    return { subjectId: t!.subject.id, topicId: id };
+    return { subjectId: t!.subject.id, topicId: t!.topic.id };
   })
 );
 
@@ -1184,9 +1079,9 @@ export const DEFAULT_TESTS: Test[] = [
     type: "full-length",
     durationMins: 180,
     sections: [
-      { id: "sec_history",  name: "History & Culture", subjectIds: ["raj-history", "raj-art-culture", "indian-history"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
-      { id: "sec_polity",   name: "Polity & Constitution", subjectIds: ["polity"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
-      { id: "sec_geo_econ", name: "Geography & Economy",   subjectIds: ["raj-geo", "geo-india", "economy"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+      { id: "sec_history",  name: "History & Culture", subjectIds: ["raj-hist", "ind-hist"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+      { id: "sec_polity",   name: "Polity & Constitution", subjectIds: ["pol-ind"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
+      { id: "sec_geo_econ", name: "Geography & Economy",   subjectIds: ["geo-raj", "geo-wi", "eco-ind"], questionCount: 50, marksPerQuestion: 2, negativeMarks: 0.66 },
     ],
     createdAt: Date.now() - 30 * 86400000,
   },
@@ -1197,7 +1092,7 @@ export const DEFAULT_TESTS: Test[] = [
     type: "sectional",
     durationMins: 30,
     sections: [
-      { id: "sec_polity_only", name: "Polity", subjectIds: ["polity"], questionCount: 20, marksPerQuestion: 1, negativeMarks: 0.33 },
+      { id: "sec_polity_only", name: "Polity", subjectIds: ["pol-ind"], questionCount: 20, marksPerQuestion: 1, negativeMarks: 0.33 },
     ],
     createdAt: Date.now() - 10 * 86400000,
   },
@@ -1216,35 +1111,35 @@ export const DEFAULT_PYQ_BANK: PYQ[] = [
   ...PYQS_MEWAR.map((p, i) => ({
     ...p,
     id: `pyq_mewar_${i}`,
-    subjectIds: ["raj-history"],
+    subjectIds: ["raj-hist"],
     topicIds: ["mewar"],
     marks: 2,
   })),
-  { id: "pyq_polity_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["polity"], topicIds: ["preamble"],
+  { id: "pyq_polity_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["pol-ind"], topicIds: ["preamble"],
     q: "The words 'Socialist' and 'Secular' were added to the Preamble by which Constitutional Amendment?",
     a: "42nd Amendment, 1976",
     explain: "Indira Gandhi's 42nd Amendment also added 'Integrity' to the preamble — known as the 'Mini-Constitution' amendment." },
-  { id: "pyq_polity_2017_01", year: "RAS 2017", marks: 2, subjectIds: ["polity"], topicIds: ["fund-rights"],
+  { id: "pyq_polity_2017_01", year: "RAS 2017", marks: 2, subjectIds: ["pol-ind"], topicIds: ["fund-rights"],
     q: "Which Article of the Indian Constitution abolishes untouchability?",
     a: "Article 17",
     explain: "Article 17 falls under Right to Equality (Articles 14-18) and makes untouchability a punishable offence." },
-  { id: "pyq_geo_2019_01", year: "RAS 2019", marks: 2, subjectIds: ["raj-geo"], topicIds: ["rivers"],
+  { id: "pyq_geo_2019_01", year: "RAS 2019", marks: 2, subjectIds: ["geo-raj"], topicIds: ["rivers"],
     q: "Which river is known as the 'Lifeline of Mewar'?",
     a: "Banas",
     explain: "Banas originates in the Khamnor hills, flowing through Mewar — a major tributary of the Chambal." },
-  { id: "pyq_geo_2018_01", year: "RAS 2018", marks: 2, subjectIds: ["raj-geo"], topicIds: ["minerals"],
+  { id: "pyq_geo_2018_01", year: "RAS 2018", marks: 2, subjectIds: ["geo-raj"], topicIds: ["minerals"],
     q: "Which district of Rajasthan is the largest producer of zinc?",
     a: "Bhilwara",
     explain: "Rampura-Agucha mines in Bhilwara are among the largest zinc reserves in the country." },
-  { id: "pyq_econ_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["economy"], topicIds: ["banking"],
+  { id: "pyq_econ_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["eco-ind"], topicIds: ["banking"],
     q: "RBI was nationalised in which year?",
     a: "1949",
     explain: "RBI was established 1935, nationalised on 1 January 1949 under the Reserve Bank (Transfer to Public Ownership) Act, 1948." },
-  { id: "pyq_modern_2016_01", year: "RAS 2016", marks: 2, subjectIds: ["indian-history"], topicIds: ["gandhi-era"],
+  { id: "pyq_modern_2016_01", year: "RAS 2016", marks: 2, subjectIds: ["ind-hist"], topicIds: ["gandhi-era"],
     q: "Which session of Indian National Congress is known as the 'Quit India' session?",
     a: "Bombay session, August 1942",
     explain: "AICC at Gowalia Tank, 8 August 1942 — Gandhi delivered the 'Do or Die' speech." },
-  { id: "pyq_art_2021_01", year: "RAS 2021", marks: 2, subjectIds: ["raj-art-culture"], topicIds: ["folk-dances"],
+  { id: "pyq_art_2021_01", year: "RAS 2021", marks: 2, subjectIds: ["raj-hist"], topicIds: ["folk-dances"],
     q: "Ghoomar is the traditional folk dance of which community?",
     a: "Bhils",
     explain: "Originally a Bhil tribal dance; adopted by Rajput women as a courtly performance and now a state symbol." },

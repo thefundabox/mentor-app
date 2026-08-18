@@ -5,6 +5,7 @@ import {
 } from "@dnd-kit/core";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppState } from "@/hooks/useAppState";
+import { subjectTheme } from "@/data/syllabus";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight, GripVertical, Send, AlertCircle, X,
@@ -338,7 +339,7 @@ function SubjectLibrary({
           const visibleTopics = matchedTopics ?? subject.topics;
           return (
             <div key={subject.id} className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className={`flex items-center justify-between gap-2 px-3 py-2.5 bg-${subject.color}-50`}>
+              <div className={`flex items-center justify-between gap-2 px-3 py-2.5 ${subjectTheme(subject.color).bg}`}>
                 <button onClick={() => toggle(subject.id)} className="flex items-center gap-2 flex-1 text-left">
                   {open ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
                   <DraggableSubjectHeader subject={subject} />
@@ -380,7 +381,7 @@ function DraggableSubjectHeader({ subject }: { subject: SubjectCatalogEntry }) {
       className={`flex items-center gap-2 select-none cursor-grab active:cursor-grabbing ${isDragging ? "opacity-50" : ""}`}>
       <GripVertical className="w-4 h-4 text-slate-400" />
       <span className="text-xl">{subject.icon}</span>
-      <span className={`font-semibold text-${subject.color}-900 text-sm`}>{subject.name}</span>
+      <span className={`font-semibold ${subjectTheme(subject.color).text} text-sm`}>{subject.name}</span>
       <span className="text-xs text-slate-500">({subject.topics.length})</span>
     </div>
   );

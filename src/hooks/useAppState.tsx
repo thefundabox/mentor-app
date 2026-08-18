@@ -230,7 +230,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
   const [activeTestId, setActiveTestId] = useLocalStorage<string | null>("v5_activeTestId", null);
   const [activeAttemptId, setActiveAttemptId] = useLocalStorage<string | null>("v5_activeAttemptId", null);
-  const [subjects, setSubjects] = useLocalStorage<SubjectCatalogEntry[]>("v5_subjects", DEFAULT_SUBJECTS);
+  const [subjects, setSubjects] = // v6: the catalog was replaced wholesale with the RPSC syllabus (243
+  // microthemes). Bumping the key is what actually delivers it — existing
+  // installs have the old 63-topic catalog cached under v5_subjects and would
+  // otherwise never see the new one. Charts survive via LEGACY_TOPIC_ALIASES.
+  useLocalStorage<SubjectCatalogEntry[]>("v6_subjects", DEFAULT_SUBJECTS);
   const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
   const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
   const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
