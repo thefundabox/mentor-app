@@ -1,4 +1,5 @@
 import { RPSC_SUBJECTS, resolveTopicId } from "./syllabus";
+import { GEOGRAPHY_QUESTIONS } from "./questions.geography";
 import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
 
 /**
@@ -665,8 +666,30 @@ export function findTopic(topicId: string, catalog: Subject[] = DEFAULT_SUBJECTS
   return null;
 }
 
+/**
+ * Questions for a topic.
+ *
+ * Real RAS past questions are served where we have them. Coverage is currently
+ * Geography only (88 questions / 27 microthemes out of 243) — the remaining
+ * subjects still fall back to the legacy Mewar pool so the day-quiz loop keeps
+ * working end to end.
+ *
+ * That fallback is a placeholder, not a feature: serving Mewar questions for
+ * "Soils of Rajasthan" is misleading, and it should be removed as soon as each
+ * subject has its own bank. `hasRealQuestions()` exists so the UI can tell the
+ * difference.
+ */
 export function topicQuestions(topicId: string): Question[] {
-  return topicId === "mewar" ? QPOOL_MEWAR : QPOOL_MEWAR;
+  const id = resolveTopicId(topicId);
+  const real = GEOGRAPHY_QUESTIONS[id];
+  if (real && real.length) return real;
+  return QPOOL_MEWAR;
+}
+
+/** True when the topic has genuine past-paper questions rather than the fallback pool. */
+export function hasRealQuestions(topicId: string): boolean {
+  const real = GEOGRAPHY_QUESTIONS[resolveTopicId(topicId)];
+  return !!real && real.length > 0;
 }
 
 export function topicNotes(topicId: string): string | null {
