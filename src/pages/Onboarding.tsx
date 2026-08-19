@@ -6,7 +6,7 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppState } from "@/hooks/useAppState";
 import { subjectTheme } from "@/data/syllabus";
-import { hasRealQuestions } from "@/data";
+
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight, GripVertical, Send, AlertCircle, X,
@@ -389,6 +389,7 @@ function DraggableSubjectHeader({ subject }: { subject: SubjectCatalogEntry }) {
 }
 
 function DraggableTopic({ subject, topic, highlight }: { subject: SubjectCatalogEntry; topic: { id: string; name: string }; highlight?: boolean | "" }) {
+  const { topicHasQuestions } = useAppState();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `topic-${subject.id}-${topic.id}`,
     data: { subjectId: subject.id, topicId: topic.id, topicName: topic.name, subjectName: subject.name, icon: subject.icon, color: subject.color },
@@ -404,7 +405,7 @@ function DraggableTopic({ subject, topic, highlight }: { subject: SubjectCatalog
       {/* Only 68 of 243 microthemes have a real question bank. Surfacing that
         * here lets a student build a plan they can actually clear by quiz,
         * rather than discovering the gap a day at a time. */}
-      {hasRealQuestions(topic.id) && (
+      {topicHasQuestions(topic.id) && (
         <span
           title="Has real RAS past questions"
           className="ml-auto text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5 flex-shrink-0"

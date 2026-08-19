@@ -5,11 +5,12 @@ import {
   loadStudent, loadStudents, loadStudentProfiles, saveChart, saveProgress,
   insertOverride, decideOverride, markOverrideSeenRemote,
 } from "@/lib/studentStore";
+import { loadCoverage, type Coverage } from "@/lib/questionStore";
 import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
-  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES, DEFAULT_TESTS,
+  QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES, DEFAULT_TESTS, hasRealQuestions,
   DEFAULT_PYQ_BANK, DEFAULT_CURRENT_AFFAIRS,
 } from "@/data";
 import type {
@@ -75,6 +76,10 @@ interface AppContextValue extends AppState {
   topicCleared: (studentId: string, day: number, topicId: string) => boolean;
   /** Clear a topic that has no question bank, by studying it. Awards no points. */
   markTopicStudied: (studentId: string, day: number, topicId: string) => void;
+  /** Per-microtheme question counts from Postgres, keyed by topic id. */
+  questionCoverage: Record<string, Coverage>;
+  /** True when a topic has questions in the bundled banks OR in Postgres. */
+  topicHasQuestions: (topicId: string) => boolean;
   dayCleared: (studentId: string, day: number) => boolean;
   completedDays: (studentId: string) => number[];
 
@@ -382,6 +387,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * mentor approving a chart cannot clobber a quiz result written seconds
    * earlier by the student.
    */
+
+  // Which microthemes have questions in Postgres. One small round trip covers
+  // all 243, instead of asking per topic.
+  const [questionCoverage, setQuestionCoverage] = useState<Record<string, Coverage>>({});
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authProfile) return;
+    let cancelled = false;
+    void loadCoverage().then((c) => { if (!cancelled) setQuestionCoverage(c); });
+    return () => { cancelled = true; };
+  }, [authProfile]);
+
+  const topicHasQuestions = useCallback((topicId: string) => {
+    if (hasRealQuestions(topicId)) return true;          // bundled past papers
+    return (questionCoverage[topicId]?.total ?? 0) > 0;  // model bank in Postgres
+  }, [questionCoverage]);
 
   const [dataLoading, setDataLoading] = useState(false);
   const [dataSynced, setDataSynced] = useState(false);
@@ -1196,7 +1216,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
     finishQuiz, addOverride, updateOverride, markOverrideSeen, addMainsScore, markPyqReviewed,
-    topicCleared, markTopicStudied, dayCleared, completedDays,
+    topicCleared, markTopicStudied, questionCoverage, topicHasQuestions, dayCleared, completedDays,
     levelInfo,
     findTopicLive,
     setSubjects, upsertSubject, archiveSubject, upsertTopic, removeTopic,

@@ -17,7 +17,7 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, findTopicLive: findTopic } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, topicHasQuestions, findTopicLive: findTopic } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
@@ -41,7 +41,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   const notes = topicNotes(slot.topicId);
   // 68 of 243 microthemes have a real question bank. The rest are cleared by
   // studying rather than by a quiz on unrelated content.
-  const hasBank = topicQuestions(resolvedTopicId).length > 0;
+  const hasBank = topicQuestions(resolvedTopicId).length > 0 || topicHasQuestions(resolvedTopicId);
   const studied = topicCleared(user.id, dayNum, resolvedTopicId);
   if (!info) return null;
 
