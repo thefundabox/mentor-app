@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { QuestionImportPanel } from "@/components/QuestionImportPanel";
+import { releaseTopic, holdTopic } from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
 import {
@@ -866,45 +867,102 @@ function QuestionsTab() {
   );
 }
 
-/** Which microthemes have questions, and how deep. Drives where to author next. */
+/**
+ * Which microthemes have questions, how deep, and — critically — how many are
+ * RELEASED to students.
+ *
+ * Questions land unreviewed. An authored answer key is a claim until somebody
+ * qualified checks it, so nothing reaches a student until an admin releases
+ * the topic here. That is the whole point of this screen.
+ */
 function CoverageTab() {
-  const { subjects, questionCoverage, topicHasQuestions } = useAppState();
-  const rows = subjects.map((s) => {
-    const withQ = s.topics.filter((t) => topicHasQuestions(t.id));
-    const total = s.topics.reduce((n, t) => n + (questionCoverage[t.id]?.total ?? 0), 0);
-    return { id: s.id, name: s.name, icon: s.icon, covered: withQ.length, topics: s.topics.length, total };
-  });
-  const allTopics = subjects.reduce((n, s) => n + s.topics.length, 0);
-  const allCovered = rows.reduce((n, r) => n + r.covered, 0);
-  const allQuestions = rows.reduce((n, r) => n + r.total, 0);
+  const { subjects, questionCoverage, currentUser } = useAppState();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [local, setLocal] = useState<Record<string, number>>({});
+  const isAdmin = currentUser?.role === "admin";
+
+  const reviewedOf = (id: string) => local[id] ?? questionCoverage[id]?.reviewed ?? 0;
+
+  const rows = subjects.flatMap((s) =>
+    s.topics
+      .map((t) => ({ subject: s, topic: t, cov: questionCoverage[t.id] }))
+      .filter((r) => r.cov && r.cov.total > 0),
+  );
+  const totalQ = rows.reduce((n, r) => n + (r.cov?.total ?? 0), 0);
+  const releasedQ = rows.reduce((n, r) => n + reviewedOf(r.topic.id), 0);
+
+  async function toggle(topicId: string, release: boolean, total: number) {
+    setBusy(topicId); setNote(null);
+    const res = release ? await releaseTopic(topicId) : await holdTopic(topicId);
+    setBusy(null);
+    if (res.error) { setNote(res.error); return; }
+    setLocal((p) => ({ ...p, [topicId]: release ? total : 0 }));
+    setNote(release ? `Released ${total} question${total === 1 ? "" : "s"} to students.` : "Topic held back from students.");
+  }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-        <div className="text-xs uppercase font-bold tracking-wide text-slate-500">Question coverage</div>
-        <div className="text-xs text-slate-600">
-          <strong>{allCovered}</strong> / {allTopics} microthemes · <strong>{allQuestions}</strong> in Postgres
-        </div>
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-sm text-indigo-900">
+        <strong>{releasedQ}</strong> of <strong>{totalQ}</strong> questions are released to students.
+        Questions are held back until you release them — an authored answer key is
+        unverified until someone checks it, and a wrong key teaches a student the wrong fact.
       </div>
-      <ul className="divide-y divide-slate-100">
-        {rows.map((r) => {
-          const pct = r.topics ? Math.round((r.covered / r.topics) * 100) : 0;
-          return (
-            <li key={r.id} className="px-5 py-3">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-semibold text-slate-900 truncate">{r.icon} {r.name}</span>
-                <span className="text-slate-600 flex-shrink-0">
-                  {r.covered}/{r.topics} topics · {r.total} Q
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full ${pct >= 75 ? "bg-emerald-500" : pct >= 40 ? "bg-indigo-500" : pct > 0 ? "bg-amber-500" : "bg-slate-200"}`}
-                     style={{ width: `${Math.max(2, pct)}%` }} />
-              </div>
+
+      {note && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">{note}</div>
+      )}
+      {!isAdmin && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Only admins can release questions.
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 text-xs uppercase font-bold tracking-wide text-slate-500">
+          Question coverage by microtheme
+        </div>
+        <ul className="divide-y divide-slate-100">
+          {rows.length === 0 && (
+            <li className="px-5 py-6 text-sm text-slate-500 text-center">
+              No questions in the bank yet. Upload some from the Upload tab.
             </li>
-          );
-        })}
-      </ul>
+          )}
+          {rows.map(({ subject, topic, cov }) => {
+            const rev = reviewedOf(topic.id);
+            const total = cov?.total ?? 0;
+            const released = rev > 0;
+            return (
+              <li key={topic.id} className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900 truncate">
+                    {subject.icon} {topic.name}
+                  </div>
+                  <div className="text-xs text-slate-500 font-mono">{topic.id}</div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-xs text-slate-600">
+                    {total} Q · <span className="text-slate-400">
+                      {cov?.easy ?? 0}/{cov?.moderate ?? 0}/{cov?.hard ?? 0}
+                    </span>
+                  </span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    released ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                    {released ? `${rev} released` : "held"}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    disabled={!isAdmin || busy === topic.id}
+                    onClick={() => toggle(topic.id, !released, total)}
+                  >
+                    {busy === topic.id ? "…" : released ? "Hold" : "Release"}
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }

@@ -68,28 +68,56 @@ export async function loadCoverage(): Promise<Record<string, Coverage>> {
  * `tilt` biases selection toward harder items — the bank is generated with a
  * spread across all three tiers, but a RAS aspirant practising for the real
  * paper should mostly meet tier 2 and 3. Ordering is left to the caller.
+ *
+ * Only REVIEWED questions are served. An authored answer key is a claim until
+ * somebody qualified has checked it, and a wrong key in an exam-prep app is
+ * worse than a missing question — the student learns the wrong fact and never
+ * finds out. Admins release a topic from Admin -> Questions -> Coverage.
+ * Pass `includeUnreviewed` only for admin preview surfaces.
  */
 export async function loadTopicQuestions(
   topicId: string,
-  opts: { limit?: number; tilt?: "hard" | "even" } = {},
+  opts: { limit?: number; tilt?: "hard" | "even"; includeUnreviewed?: boolean } = {},
 ): Promise<Question[]> {
   if (!supabase) return [];
-  const { limit = 40, tilt = "hard" } = opts;
+  const { limit = 40, tilt = "hard", includeUnreviewed = false } = opts;
 
   let query = supabase.from("questions").select("*").eq("topic_id", topicId);
+  if (!includeUnreviewed) query = query.eq("reviewed", true);
   if (tilt === "hard") query = query.gte("difficulty_tier", 2);
 
   const { data, error } = await query.limit(limit);
   if (error || !data) return [];
 
   const qs = (data as QuestionRow[]).map(toQuestion);
-  // Fall back to the full range if the hard-tilted filter came back thin.
+  // Fall back to the full difficulty range if the hard-tilted filter came back
+  // thin — but never fall back past the reviewed gate.
   if (tilt === "hard" && qs.length < Math.min(8, limit)) {
-    const { data: all } = await supabase
-      .from("questions").select("*").eq("topic_id", topicId).limit(limit);
-    return ((all ?? []) as QuestionRow[]).map(toQuestion);
+    let all = supabase.from("questions").select("*").eq("topic_id", topicId);
+    if (!includeUnreviewed) all = all.eq("reviewed", true);
+    const { data: rest } = await all.limit(limit);
+    return ((rest ?? []) as QuestionRow[]).map(toQuestion);
   }
   return qs;
+}
+
+/**
+ * Release every question for a topic to students (sets reviewed = true).
+ * Admin-only: the RLS policy rejects this for anyone else.
+ */
+export async function releaseTopic(topicId: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: "Not connected to Supabase." };
+  const { error } = await supabase
+    .from("questions").update({ reviewed: true }).eq("topic_id", topicId);
+  return error ? { error: error.message } : {};
+}
+
+/** Pull a topic back from students (sets reviewed = false). */
+export async function holdTopic(topicId: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: "Not connected to Supabase." };
+  const { error } = await supabase
+    .from("questions").update({ reviewed: false }).eq("topic_id", topicId);
+  return error ? { error: error.message } : {};
 }
 
 /** How many questions exist for a topic, without fetching them. */

@@ -399,8 +399,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [authProfile]);
 
   const topicHasQuestions = useCallback((topicId: string) => {
-    if (hasRealQuestions(topicId)) return true;          // bundled past papers
-    return (questionCoverage[topicId]?.total ?? 0) > 0;  // model bank in Postgres
+    if (hasRealQuestions(topicId)) return true;             // bundled past papers
+    // Only RELEASED questions count. Unreviewed rows exist in the bank but are
+    // not served, so a topic backed solely by them is still study-only.
+    return (questionCoverage[topicId]?.reviewed ?? 0) > 0;
   }, [questionCoverage]);
 
   const [dataLoading, setDataLoading] = useState(false);
