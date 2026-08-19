@@ -542,6 +542,16 @@ export interface StudentData {
   confusionPairs?: ConfusionPair[];
   /** Adaptive: log of finished Smart Practice sessions; powers the dashboard's trend + risk score. */
   smartSessions?: SmartSessionRecord[];
+  /**
+   * Topics cleared by studying rather than by quiz.
+   *
+   * Only 68 of the 243 microthemes have a real question bank. Without this a
+   * student whose plan includes any of the other 175 could never clear that
+   * day, because clearing requires a quiz score >= 80. Kept separate from
+   * `attempts` on purpose: folding a synthetic 100% into quiz history would
+   * inflate every accuracy and readiness number on the dashboard.
+   */
+  studiedTopics?: { day: number; topicId: string; at: number }[];
 }
 
 export type Route =

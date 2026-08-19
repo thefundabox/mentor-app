@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
+import { topicQuestions, topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
 import {
@@ -17,7 +17,7 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, findTopicLive: findTopic } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, findTopicLive: findTopic } = useAppState();
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
@@ -39,6 +39,10 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
 
   const info = findTopic(slot.topicId);
   const notes = topicNotes(slot.topicId);
+  // 68 of 243 microthemes have a real question bank. The rest are cleared by
+  // studying rather than by a quiz on unrelated content.
+  const hasBank = topicQuestions(resolvedTopicId).length > 0;
+  const studied = topicCleared(user.id, dayNum, resolvedTopicId);
   if (!info) return null;
 
   // Most recent override on this day — drives the QuizTab status messages.
@@ -59,6 +63,11 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   };
 
   const handleBack = () => { setRoute("home"); };
+
+  const handleMarkStudied = () => {
+    if (!resolvedTopicId) return;
+    markTopicStudied(user.id, dayNum, resolvedTopicId);
+  };
 
   const handleRequestOverride = () => {
     if (!activeDay) return;
@@ -160,6 +169,9 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
                 uploaded={uploaded}
                 setUploaded={setUploaded}
                 onStartQuiz={handleStartQuiz}
+                onMarkStudied={handleMarkStudied}
+                hasBank={hasBank}
+                studied={studied}
                 dayNum={dayNum}
               />
             </>
@@ -167,6 +179,9 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           {tab === "quiz" && (
             <QuizTab
               onStartQuiz={handleStartQuiz}
+              onMarkStudied={handleMarkStudied}
+              hasBank={hasBank}
+              studied={studied}
               dayOverride={dayOverride}
               onRequestOverride={handleRequestOverride}
             />
@@ -185,12 +200,18 @@ function NotesTab({
   uploaded,
   setUploaded,
   onStartQuiz,
+  onMarkStudied,
+  hasBank,
+  studied,
   dayNum,
 }: {
   notes: string | null;
   uploaded: string | null;
   setUploaded: (name: string | null) => void;
   onStartQuiz: () => void;
+  onMarkStudied: () => void;
+  hasBank: boolean;
+  studied: boolean;
   dayNum: number;
 }) {
   return (
@@ -274,12 +295,26 @@ function NotesTab({
           <div className="text-xs uppercase font-semibold text-slate-500 mb-2">
             When you&apos;re ready
           </div>
-          <p className="text-sm text-slate-600 mb-3">
-            Score ≥ 80% on the quiz to unlock Day {dayNum + 1}.
-          </p>
-          <Button className="w-full" onClick={onStartQuiz}>
-            Start quiz <ArrowRight className="w-4 h-4" />
-          </Button>
+          {hasBank ? (
+            <>
+              <p className="text-sm text-slate-600 mb-3">
+                Score ≥ 80% on the quiz to unlock Day {dayNum + 1}.
+              </p>
+              <Button className="w-full" onClick={onStartQuiz}>
+                Start quiz <ArrowRight className="w-4 h-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600 mb-3">
+                No question bank for this microtheme yet. Work through the notes,
+                then mark it studied to move on.
+              </p>
+              <Button className="w-full" variant="secondary" disabled={studied} onClick={onMarkStudied}>
+                {studied ? "✓ Marked as studied" : "Mark as studied"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -289,14 +324,39 @@ function NotesTab({
 // --- Quiz Tab ---
 function QuizTab({
   onStartQuiz,
+  onMarkStudied,
+  hasBank,
+  studied,
   dayOverride,
   onRequestOverride,
 }: {
   onStartQuiz: () => void;
+  onMarkStudied: () => void;
+  hasBank: boolean;
+  studied: boolean;
   dayOverride: import("@/types").Override | null;
   onRequestOverride: () => void;
 }) {
   const status = dayOverride?.status;
+
+  // No bank for this microtheme — offer the honest path rather than a quiz on
+  // someone else's topic.
+  if (!hasBank) {
+    return (
+      <div className="text-center py-10">
+        <div className="text-5xl mb-3">📚</div>
+        <h3 className="text-xl font-bold text-slate-900 mb-1">No quiz for this topic yet</h3>
+        <p className="text-slate-500 mb-6 max-w-md mx-auto">
+          We only quiz on microthemes where we have real RAS past questions. This
+          one is still being built out — study the notes and mark it done to keep
+          your plan moving.
+        </p>
+        <Button variant="secondary" disabled={studied} onClick={onMarkStudied}>
+          {studied ? "✓ Marked as studied" : "Mark as studied"}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="text-center py-10">

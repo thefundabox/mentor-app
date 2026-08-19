@@ -6,6 +6,7 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppState } from "@/hooks/useAppState";
 import { subjectTheme } from "@/data/syllabus";
+import { hasRealQuestions } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight, GripVertical, Send, AlertCircle, X,
@@ -400,6 +401,17 @@ function DraggableTopic({ subject, topic, highlight }: { subject: SubjectCatalog
       <GripVertical className="w-3 h-3 text-slate-300" />
       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 flex-shrink-0" />
       <span className="text-slate-700">{topic.name}</span>
+      {/* Only 68 of 243 microthemes have a real question bank. Surfacing that
+        * here lets a student build a plan they can actually clear by quiz,
+        * rather than discovering the gap a day at a time. */}
+      {hasRealQuestions(topic.id) && (
+        <span
+          title="Has real RAS past questions"
+          className="ml-auto text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5 flex-shrink-0"
+        >
+          quiz
+        </span>
+      )}
     </div>
   );
 }

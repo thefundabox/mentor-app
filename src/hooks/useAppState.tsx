@@ -73,6 +73,8 @@ interface AppContextValue extends AppState {
 
   // multi-topic helpers
   topicCleared: (studentId: string, day: number, topicId: string) => boolean;
+  /** Clear a topic that has no question bank, by studying it. Awards no points. */
+  markTopicStudied: (studentId: string, day: number, topicId: string) => void;
   dayCleared: (studentId: string, day: number) => boolean;
   completedDays: (studentId: string) => number[];
 
@@ -602,7 +604,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isTopicClearedFor = (s: StudentData, day: number, topicId: string): boolean => {
     const hasOverride = s.overrides.some((o) => o.day === day && o.status === "approved");
     if (hasOverride) return true;
-    return s.attempts.some((a) => a.day === day && a.topicId === topicId && a.score >= 80);
+    if (s.attempts.some((a) => a.day === day && a.topicId === topicId && a.score >= 80)) return true;
+    // Topics with no question bank are cleared by studying instead.
+    return (s.studiedTopics ?? []).some((t) => t.day === day && t.topicId === topicId);
   };
 
   const isDayClearedFor = (s: StudentData, day: number): boolean => {
@@ -610,6 +614,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!topics || topics.length === 0) return false;
     return topics.every((t) => isTopicClearedFor(s, day, t.topicId));
   };
+
+  /**
+   * Mark a topic studied. Only meaningful for microthemes with no question
+   * bank — the UI offers this in place of the quiz for those topics.
+   *
+   * Deliberately awards no points: the student has not demonstrated mastery,
+   * only shown up. It clears the day so the plan keeps moving, nothing more.
+   */
+  const markTopicStudied = useCallback((id: string, day: number, topicId: string) => {
+    patchStudent(id, (s) => {
+      const already = (s.studiedTopics ?? []).some((t) => t.day === day && t.topicId === topicId);
+      if (already) return s;
+      const next: StudentData = {
+        ...s,
+        studiedTopics: [...(s.studiedTopics ?? []), { day, topicId, at: Date.now() }],
+      };
+      const nowDayCleared = isDayClearedFor(next, day);
+      return nowDayCleared
+        ? { ...next, progress: { ...next.progress, currentDay: Math.max(next.progress.currentDay, day + 1) } }
+        : next;
+    });
+  }, [patchStudent]);
 
   const topicCleared = useCallback((id: string, day: number, topicId: string) => {
     return isTopicClearedFor(getStudent(id), day, topicId);
@@ -1170,7 +1196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
     finishQuiz, addOverride, updateOverride, markOverrideSeen, addMainsScore, markPyqReviewed,
-    topicCleared, dayCleared, completedDays,
+    topicCleared, markTopicStudied, dayCleared, completedDays,
     levelInfo,
     findTopicLive,
     setSubjects, upsertSubject, archiveSubject, upsertTopic, removeTopic,

@@ -667,23 +667,15 @@ export function findTopic(topicId: string, catalog: Subject[] = DEFAULT_SUBJECTS
 }
 
 /**
- * Questions for a topic.
+ * Questions for a topic. Empty when the microtheme has no bank yet.
  *
- * Real RAS past questions are served where we have them. Coverage is currently
- * Geography only (88 questions / 27 microthemes out of 243) — the remaining
- * subjects still fall back to the legacy Mewar pool so the day-quiz loop keeps
- * working end to end.
- *
- * That fallback is a placeholder, not a feature: serving Mewar questions for
- * "Soils of Rajasthan" is misleading, and it should be removed as soon as each
- * subject has its own bank. `hasRealQuestions()` exists so the UI can tell the
- * difference.
+ * This used to fall back to the Mewar pool for every uncovered topic, which
+ * meant a student revising "Soils of Rajasthan" was quizzed on Maharana
+ * Pratap and told they had passed. Returning [] is the honest answer; the UI
+ * routes those topics to study-only completion instead of a fake quiz.
  */
 export function topicQuestions(topicId: string): Question[] {
-  const id = resolveTopicId(topicId);
-  const real = QUESTION_BANKS[id];
-  if (real && real.length) return real;
-  return QPOOL_MEWAR;
+  return QUESTION_BANKS[resolveTopicId(topicId)] ?? [];
 }
 
 /** True when the topic has genuine past-paper questions rather than the fallback pool. */
