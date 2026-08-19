@@ -37,3 +37,21 @@ select distinct substring(x from greatest(1, position('‚' in x) - 8) for 20) a
     union all select options::text from public.questions where options::text like '%‚%'
   ) s
  limit 20;
+
+
+-- A second pass was needed: three sequences were not in the first mapping and
+-- had to be identified from their raw codepoints rather than guessed. Decoding
+-- them back through MacRoman gave:
+--
+--   '‚â†'  = E2 8A A0 -> ≠
+--   '‚úì'  = E2 9C 93 -> ✓
+--   '‚Üí'  = E2 86 92 -> →
+--
+-- These came from the Chapters 7-13 extraction, whose source used ✓ and → in
+-- its explanations.
+
+update public.questions set
+  q       = replace(replace(replace(q,      '‚â†','≠'),'‚úì','✓'),'‚Üí','→'),
+  why     = replace(replace(replace(why,    '‚â†','≠'),'‚úì','✓'),'‚Üí','→'),
+  options = (replace(replace(replace(options::text,'‚â†','≠'),'‚úì','✓'),'‚Üí','→'))::jsonb
+where q like '%‚%' or why like '%‚%' or options::text like '%‚%';
