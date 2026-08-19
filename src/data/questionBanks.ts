@@ -10,13 +10,25 @@ import type { Question } from "@/types";
 import { GEOGRAPHY_QUESTIONS } from "./questions.geography";
 import { HISTORY_QUESTIONS } from "./questions.history";
 import { ECONOMICS_QUESTIONS } from "./questions.economics";
+import { ADHYAYAN_QUESTIONS } from "./questions.adhyayan";
 
 /** topicId (microtheme) -> real RAS past questions for that microtheme. */
-export const QUESTION_BANKS: Record<string, Question[]> = {
-  ...GEOGRAPHY_QUESTIONS,
-  ...HISTORY_QUESTIONS,
-  ...ECONOMICS_QUESTIONS,
-};
+function merge(...banks: Record<string, Question[]>[]): Record<string, Question[]> {
+  const out: Record<string, Question[]> = {};
+  for (const bank of banks) {
+    for (const [topicId, qs] of Object.entries(bank)) {
+      out[topicId] = (out[topicId] ?? []).concat(qs);
+    }
+  }
+  return out;
+}
+
+export const QUESTION_BANKS: Record<string, Question[]> = merge(
+  GEOGRAPHY_QUESTIONS,
+  HISTORY_QUESTIONS,
+  ECONOMICS_QUESTIONS,
+  ADHYAYAN_QUESTIONS,
+);
 
 /** Every real question, flattened. */
 export function allRealQuestions(): Question[] {
