@@ -150,7 +150,7 @@ export function Assessment({ studentId }: AssessmentProps) {
                 const picked = mcqAnswers[key];
                 return (
                   <div key={idx}>
-                    <div className="text-sm font-semibold text-slate-900 mb-2">{idx + 1}. {q.q}</div>
+                    <div className="text-sm font-semibold text-slate-900 mb-2 whitespace-pre-line">{idx + 1}. {q.q}</div>
                     <div className="space-y-1.5">
                       {q.options.map((opt, k) => (
                         <button

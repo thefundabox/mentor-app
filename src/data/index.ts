@@ -1,5 +1,5 @@
 import { RPSC_SUBJECTS, resolveTopicId } from "./syllabus";
-import { GEOGRAPHY_QUESTIONS } from "./questions.geography";
+import { QUESTION_BANKS, buildPlacementSet } from "./questionBanks";
 import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
 
 /**
@@ -681,14 +681,14 @@ export function findTopic(topicId: string, catalog: Subject[] = DEFAULT_SUBJECTS
  */
 export function topicQuestions(topicId: string): Question[] {
   const id = resolveTopicId(topicId);
-  const real = GEOGRAPHY_QUESTIONS[id];
+  const real = QUESTION_BANKS[id];
   if (real && real.length) return real;
   return QPOOL_MEWAR;
 }
 
 /** True when the topic has genuine past-paper questions rather than the fallback pool. */
 export function hasRealQuestions(topicId: string): boolean {
-  const real = GEOGRAPHY_QUESTIONS[resolveTopicId(topicId)];
+  const real = QUESTION_BANKS[resolveTopicId(topicId)];
   return !!real && real.length > 0;
 }
 
@@ -929,7 +929,18 @@ export const SELF_RATED_LEVELS: { id: "beginner" | "intermediate" | "advanced"; 
  * In a follow-up PR these will be admin-editable; for now they reuse 3 conceptual questions
  * from QPOOL_MEWAR so the placement check stays grounded in real prep material.
  */
-export const PLACEMENT_MCQS: Question[] = QPOOL_MEWAR.filter((q) => q.type === "conceptual").slice(0, 3);
+/**
+ * Placement check shown during the signup assessment.
+ *
+ * Was three invented Mewar MCQs; now a deterministic spread of real RAS
+ * Prelims questions in the formats RPSC actually uses — statement-and-code,
+ * ordering, and factual recall. Falls back to the legacy pool only if no real
+ * bank is loaded.
+ */
+export const PLACEMENT_MCQS: Question[] =
+  buildPlacementSet(5).length > 0
+    ? buildPlacementSet(5)
+    : QPOOL_MEWAR.filter((q) => q.type === "conceptual").slice(0, 3);
 
 /* ==================== DEFAULT PLAN TEMPLATES ==================== */
 

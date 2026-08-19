@@ -239,7 +239,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
   const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
   const [foundationPool, setFoundationPool] = useLocalStorage<Record<string, Question[]>>("v5_foundationPool", FOUNDATION_QS);
-  const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v5_placementPool", PLACEMENT_MCQS);
+  const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v6_placementPool", PLACEMENT_MCQS);
   const [batches, setBatches] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
   const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>("v5_announcements", []);
   const [tests, setTests] = useLocalStorage<Test[]>("v5_tests", DEFAULT_TESTS);
