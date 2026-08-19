@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
+import { QuestionImportPanel } from "@/components/QuestionImportPanel";
 import { Button } from "@/components/ui/button";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
 import {
@@ -842,21 +843,68 @@ function TourStepEditor({
 /* ==================== Questions tab ==================== */
 
 function QuestionsTab() {
-  const [sub, setSub] = useState<"quiz" | "foundation" | "placement" | "pyq">("quiz");
+  const [sub, setSub] = useState<"upload" | "coverage" | "quiz" | "foundation" | "placement" | "pyq">("upload");
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b border-slate-100 pb-3 flex-wrap">
+        <SubTabButton active={sub === "upload"}     label="Upload"     onClick={() => setSub("upload")} />
+        <SubTabButton active={sub === "coverage"}   label="Coverage"   onClick={() => setSub("coverage")} />
         <SubTabButton active={sub === "quiz"}       label="Quiz pool"   onClick={() => setSub("quiz")} />
         <SubTabButton active={sub === "foundation"} label="Foundation" onClick={() => setSub("foundation")} />
         <SubTabButton active={sub === "placement"}  label="Placement"  onClick={() => setSub("placement")} />
         <SubTabButton active={sub === "pyq"}        label="PYQ bank"   onClick={() => setSub("pyq")} />
       </div>
 
+      {sub === "upload"     && <QuestionImportPanel />}
+      {sub === "coverage"   && <CoverageTab />}
       {sub === "quiz"       && <QuizPoolEditor />}
       {sub === "foundation" && <FoundationPoolEditor />}
       {sub === "placement"  && <PlacementPoolEditor />}
       {sub === "pyq"        && <PYQBankEditor />}
+    </div>
+  );
+}
+
+/** Which microthemes have questions, and how deep. Drives where to author next. */
+function CoverageTab() {
+  const { subjects, questionCoverage, topicHasQuestions } = useAppState();
+  const rows = subjects.map((s) => {
+    const withQ = s.topics.filter((t) => topicHasQuestions(t.id));
+    const total = s.topics.reduce((n, t) => n + (questionCoverage[t.id]?.total ?? 0), 0);
+    return { id: s.id, name: s.name, icon: s.icon, covered: withQ.length, topics: s.topics.length, total };
+  });
+  const allTopics = subjects.reduce((n, s) => n + s.topics.length, 0);
+  const allCovered = rows.reduce((n, r) => n + r.covered, 0);
+  const allQuestions = rows.reduce((n, r) => n + r.total, 0);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+        <div className="text-xs uppercase font-bold tracking-wide text-slate-500">Question coverage</div>
+        <div className="text-xs text-slate-600">
+          <strong>{allCovered}</strong> / {allTopics} microthemes · <strong>{allQuestions}</strong> in Postgres
+        </div>
+      </div>
+      <ul className="divide-y divide-slate-100">
+        {rows.map((r) => {
+          const pct = r.topics ? Math.round((r.covered / r.topics) * 100) : 0;
+          return (
+            <li key={r.id} className="px-5 py-3">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-semibold text-slate-900 truncate">{r.icon} {r.name}</span>
+                <span className="text-slate-600 flex-shrink-0">
+                  {r.covered}/{r.topics} topics · {r.total} Q
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-full ${pct >= 75 ? "bg-emerald-500" : pct >= 40 ? "bg-indigo-500" : pct > 0 ? "bg-amber-500" : "bg-slate-200"}`}
+                     style={{ width: `${Math.max(2, pct)}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
