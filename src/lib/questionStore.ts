@@ -127,3 +127,50 @@ export async function countForTopic(topicId: string): Promise<number> {
     .from("questions").select("id", { count: "exact", head: true }).eq("topic_id", topicId);
   return error ? 0 : (count ?? 0);
 }
+
+
+/** A question row as the admin reviewer sees it — includes id and review state. */
+export interface ReviewRow {
+  id: string;
+  topic_id: string;
+  q: string;
+  options: string[];
+  correct: number;
+  why: string | null;
+  difficulty_tier: number;
+  question_type: string | null;
+  source_year: string | null;
+  is_model: boolean;
+  reviewed: boolean;
+}
+
+/** Load a topic's questions for review, newest first. Includes held-back rows. */
+export async function loadForReview(
+  topicId: string,
+  filter: "all" | "held" | "released" = "all",
+): Promise<ReviewRow[]> {
+  if (!supabase) return [];
+  let query = supabase
+    .from("questions")
+    .select("id,topic_id,q,options,correct,why,difficulty_tier,question_type,source_year,is_model,reviewed")
+    .eq("topic_id", topicId);
+  if (filter === "held") query = query.eq("reviewed", false);
+  if (filter === "released") query = query.eq("reviewed", true);
+  const { data, error } = await query.order("difficulty_tier").limit(500);
+  if (error || !data) return [];
+  return data as ReviewRow[];
+}
+
+/** Release or hold a single question. */
+export async function setQuestionReviewed(id: string, reviewed: boolean): Promise<{ error?: string }> {
+  if (!supabase) return { error: "Not connected to Supabase." };
+  const { error } = await supabase.from("questions").update({ reviewed }).eq("id", id);
+  return error ? { error: error.message } : {};
+}
+
+/** Permanently delete a question — for items whose answer key is simply wrong. */
+export async function deleteQuestion(id: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: "Not connected to Supabase." };
+  const { error } = await supabase.from("questions").delete().eq("id", id);
+  return error ? { error: error.message } : {};
+}

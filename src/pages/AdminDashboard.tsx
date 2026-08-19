@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { QuestionImportPanel } from "@/components/QuestionImportPanel";
+import { QuestionReview } from "@/components/QuestionReview";
 import { releaseTopic, holdTopic } from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
@@ -844,11 +845,12 @@ function TourStepEditor({
 /* ==================== Questions tab ==================== */
 
 function QuestionsTab() {
-  const [sub, setSub] = useState<"upload" | "coverage" | "quiz" | "foundation" | "placement" | "pyq">("upload");
+  const [sub, setSub] = useState<"review" | "upload" | "coverage" | "quiz" | "foundation" | "placement" | "pyq">("review");
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b border-slate-100 pb-3 flex-wrap">
+        <SubTabButton active={sub === "review"}     label="Review bank" onClick={() => setSub("review")} />
         <SubTabButton active={sub === "upload"}     label="Upload"     onClick={() => setSub("upload")} />
         <SubTabButton active={sub === "coverage"}   label="Coverage"   onClick={() => setSub("coverage")} />
         <SubTabButton active={sub === "quiz"}       label="Quiz pool"   onClick={() => setSub("quiz")} />
@@ -857,6 +859,7 @@ function QuestionsTab() {
         <SubTabButton active={sub === "pyq"}        label="PYQ bank"   onClick={() => setSub("pyq")} />
       </div>
 
+      {sub === "review"     && <QuestionReview />}
       {sub === "upload"     && <QuestionImportPanel />}
       {sub === "coverage"   && <CoverageTab />}
       {sub === "quiz"       && <QuizPoolEditor />}
