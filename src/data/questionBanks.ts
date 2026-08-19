@@ -3,15 +3,19 @@
  *
  * Every subject bank is registered here, so anything that wants "real
  * questions" — the day quiz, the placement check, future mock-test builders —
- * picks up new subjects automatically as they are extracted. Only Geography
- * exists today; adding History means one import and one spread.
+ * picks up new subjects automatically as they are extracted. Geography, Indian History and
+ * Economics are wired today; adding a subject is one import and one spread.
  */
 import type { Question } from "@/types";
 import { GEOGRAPHY_QUESTIONS } from "./questions.geography";
+import { HISTORY_QUESTIONS } from "./questions.history";
+import { ECONOMICS_QUESTIONS } from "./questions.economics";
 
 /** topicId (microtheme) -> real RAS past questions for that microtheme. */
 export const QUESTION_BANKS: Record<string, Question[]> = {
   ...GEOGRAPHY_QUESTIONS,
+  ...HISTORY_QUESTIONS,
+  ...ECONOMICS_QUESTIONS,
 };
 
 /** Every real question, flattened. */
