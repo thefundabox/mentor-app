@@ -2,6 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import {
+  loadStudent, loadStudents, loadStudentProfiles, saveChart, saveProgress,
+  insertOverride, decideOverride, markOverrideSeenRemote,
+} from "@/lib/studentStore";
+import {
   emptyStudentData, SEED_USERS, seedStudentData, DEFAULT_MENTOR_ID,
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
@@ -39,6 +43,10 @@ interface AppContextValue extends AppState {
   authError: string | null;
   /** True when the app is running against a real Supabase project. */
   authEnabled: boolean;
+  /** True while student data is being pulled from Postgres on sign-in. */
+  dataLoading: boolean;
+  /** True when student data is being persisted to Postgres rather than only localStorage. */
+  dataSynced: boolean;
   logout: () => void;
   setLoginRoleIntent: (role: Role | null) => void;
   setRoute: (route: Route) => void;
@@ -361,6 +369,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authProfile]);
 
+  /* ---------- student data sync ------------------------------------------
+   *
+   * Postgres is the source of truth once signed in; localStorage becomes a
+   * cache so the UI can paint before the network settles and still work if it
+   * never does.
+   *
+   * Pull on sign-in, then push on change (debounced). The push is split the
+   * same way the tables are — chart and progress save independently, so a
+   * mentor approving a chart cannot clobber a quiz result written seconds
+   * earlier by the student.
+   */
+
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataSynced, setDataSynced] = useState(false);
+  const studentDataRef = useRef(studentData);
+  useEffect(() => { studentDataRef.current = studentData; }, [studentData]);
+  // Suppress the push effect for the render right after a pull, otherwise the
+  // freshly-loaded data is immediately written back.
+  const skipNextPush = useRef(false);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authProfile || !currentUserId) { setDataSynced(false); return; }
+    let cancelled = false;
+
+    (async () => {
+      setDataLoading(true);
+      if (authProfile.role === "student") {
+        const res = await loadStudent(authProfile.id);
+        if (cancelled) return;
+        if (res.data) {
+          skipNextPush.current = true;
+          setStudentData((prev) => ({ ...prev, [currentUserId]: res.data! }));
+        } else if (res.isNew) {
+          // First sign-in on this account: seed the server from whatever is
+          // in local storage so existing demo progress is not lost.
+          const local = studentDataRef.current[currentUserId];
+          if (local) {
+            await saveChart(authProfile.id, local);
+            await saveProgress(authProfile.id, local);
+          }
+        }
+      } else {
+        // Mentor / admin: pull every student's record so the dashboard has
+        // real data instead of whatever happens to be in this browser.
+        const profiles = await loadStudentProfiles();
+        if (cancelled) return;
+        const remote = await loadStudents(profiles.map((p) => p.id));
+        if (cancelled) return;
+        if (profiles.length) {
+          setUsers((prev) => {
+            const next = [...prev];
+            for (const pr of profiles) {
+              const i = next.findIndex((u) => u.id === pr.id || u.email.toLowerCase() === pr.email.toLowerCase());
+              const merged: User = {
+                id: pr.id, email: pr.email, name: pr.name, role: "student",
+                mentorId: pr.mentor_id ?? undefined,
+                batchId: pr.batch_id ?? undefined,
+                createdAt: i === -1 ? Date.now() : next[i].createdAt,
+              };
+              if (i === -1) next.push(merged); else next[i] = { ...next[i], ...merged };
+            }
+            return next;
+          });
+        }
+        if (Object.keys(remote).length) {
+          skipNextPush.current = true;
+          setStudentData((prev) => ({ ...prev, ...remote }));
+        }
+      }
+      if (!cancelled) { setDataLoading(false); setDataSynced(true); }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authProfile, currentUserId]);
+
+  // Push local changes up. Students own their row; staff writes go through the
+  // explicit chart/override actions rather than this blanket sync.
+  useEffect(() => {
+    if (!dataSynced || !authProfile || authProfile.role !== "student" || !currentUserId) return;
+    if (skipNextPush.current) { skipNextPush.current = false; return; }
+    const mine = studentData[currentUserId];
+    if (!mine) return;
+    const t = setTimeout(() => {
+      void saveChart(authProfile.id, mine);
+      void saveProgress(authProfile.id, mine);
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentData, dataSynced, authProfile, currentUserId]);
+
   const students = useMemo(() => users.filter((u) => u.role === "student"), [users]);
   const mentors = useMemo(() => users.filter((u) => u.role === "mentor"), [users]);
 
@@ -644,8 +743,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { pointsAwarded, dayClearedNow, topicsRemainingInDay };
   }, [patchStudent, applyTopicScheduling]);
 
+  // Overrides live in their own table, deliberately outside the progress blob:
+  // the student raises them and the mentor decides them, so a single
+  // last-write-wins document would let one side erase the other's change.
   const addOverride = useCallback((id: string, override: Override) => {
     patchStudent(id, (s) => ({ ...s, overrides: [...s.overrides, override] }));
+    if (isSupabaseConfigured) void insertOverride(id, override);
   }, [patchStudent]);
 
   const updateOverride = useCallback((id: string, override: Override) => {
@@ -655,6 +758,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? { ...override, decidedAt: Date.now() }
       : override;
     patchStudent(id, (s) => ({ ...s, overrides: s.overrides.map((o) => o.id === stamped.id ? stamped : o) }));
+    if (isSupabaseConfigured && stamped.status !== "pending") {
+      // Rejected by RLS if the caller is not staff — the policy requires a
+      // non-staff update to leave status as 'pending'.
+      void decideOverride(stamped.id, stamped.status);
+    }
   }, [patchStudent]);
 
   const markOverrideSeen = useCallback((id: string, overrideId: number) => {
@@ -662,6 +770,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...s,
       overrides: s.overrides.map((o) => o.id === overrideId ? { ...o, seenByStudent: true } : o),
     }));
+    if (isSupabaseConfigured) void markOverrideSeenRemote(overrideId);
   }, [patchStudent]);
 
   const addMainsScore = useCallback((id: string, score: MainsScore) => {
@@ -1055,6 +1164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, signIn, signUp, authLoading, authError, authEnabled: isSupabaseConfigured,
+    dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
