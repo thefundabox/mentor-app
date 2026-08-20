@@ -9,7 +9,6 @@ import {
   Sparkles,
   Trophy,
   ArrowRight,
-  Upload,
 } from "lucide-react";
 
 interface TopicScreenProps {
@@ -33,7 +32,6 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
 
   const slot = topicsInDay.find((t) => t.topicId === resolvedTopicId);
   const [tab, setTab] = useState("notes");
-  const [uploaded, setUploaded] = useState<string | null>(null);
 
   if (!slot || !resolvedTopicId) return null;
 
@@ -166,8 +164,6 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
               <TopicMediaCard topic={info.topic} />
               <NotesTab
                 notes={notes}
-                uploaded={uploaded}
-                setUploaded={setUploaded}
                 onStartQuiz={handleStartQuiz}
                 onMarkStudied={handleMarkStudied}
                 hasBank={hasBank}
@@ -197,8 +193,6 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
 // --- Notes Tab ---
 function NotesTab({
   notes,
-  uploaded,
-  setUploaded,
   onStartQuiz,
   onMarkStudied,
   hasBank,
@@ -206,8 +200,6 @@ function NotesTab({
   dayNum,
 }: {
   notes: string | null;
-  uploaded: string | null;
-  setUploaded: (name: string | null) => void;
   onStartQuiz: () => void;
   onMarkStudied: () => void;
   hasBank: boolean;
@@ -250,47 +242,17 @@ function NotesTab({
           <div className="text-center py-12">
             <div className="text-5xl mb-3">📄</div>
             <h3 className="text-lg font-semibold text-slate-900 mb-1">
-              Notes coming soon
+              No notes for this topic yet
             </h3>
             <p className="text-slate-500 max-w-md mx-auto">
-              For this topic, notes will be AI-generated based on the syllabus,
-              or your institute can upload a PDF.
+              Study from your own material for now. Your institute adds notes as
+              each microtheme is written up.
             </p>
           </div>
         )}
       </div>
 
       <div className="space-y-3">
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-5">
-          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">
-            Source
-          </div>
-          <label className="block w-full cursor-pointer">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={(e) =>
-                setUploaded(e.target.files?.[0]?.name || null)
-              }
-              className="hidden"
-            />
-            <div className="border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-xl p-4 text-center transition">
-              <div className="text-sm font-medium text-slate-700 flex items-center justify-center gap-2">
-                {uploaded ? (
-                  <>
-                    <Upload className="w-4 h-4" /> {uploaded}
-                  </>
-                ) : (
-                  "Upload PDF notes"
-                )}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">
-                {uploaded ? "stub — not parsed" : "or use AI-generated above"}
-              </div>
-            </div>
-          </label>
-        </div>
-
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-5">
           <div className="text-xs uppercase font-semibold text-slate-500 mb-2">
             When you&apos;re ready

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { shuffle } from "@/data";
+import { shuffle, topicQuestions } from "@/data";
+import { loadTopicQuestions } from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
@@ -34,7 +35,44 @@ function buildAttempt(pool: Question[], seed: number): Question[] {
 }
 
 export function QuizScreen({ dayNum }: QuizScreenProps) {
-  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, quizPool, foundationPool, recordStudentConfusion } = useAppState();
+  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, foundationPool, recordStudentConfusion } = useAppState();
+
+  // Resolve the topic ahead of any early return, so the pool hooks below stay
+  // unconditional.
+  const preStudent = currentUser ? getStudent(currentUser.id) : null;
+  const preTopics = preStudent?.chart.days[dayNum - 1] ?? [];
+  const poolTopicId =
+    activeTopicId && preTopics.some((t) => t.topicId === activeTopicId)
+      ? activeTopicId
+      : (preTopics.find((t) => currentUser && !topicCleared(currentUser.id, dayNum, t.topicId))?.topicId
+         || preTopics[0]?.topicId
+         || null);
+
+  // Released questions for THIS microtheme, from Postgres.
+  const [remoteQs, setRemoteQs] = useState<Question[]>([]);
+  useEffect(() => {
+    if (!poolTopicId) { setRemoteQs([]); return; }
+    let cancelled = false;
+    void loadTopicQuestions(poolTopicId).then((qs) => { if (!cancelled) setRemoteQs(qs); });
+    return () => { cancelled = true; };
+  }, [poolTopicId]);
+
+  /**
+   * Questions for the topic being attempted.
+   *
+   * This used to read a single global `quizPool` (the Mewar demo set) and
+   * ignore the topic entirely, so every microtheme in the app served the same
+   * sixteen unrelated questions while the 80% gate judged students on them.
+   * Bundled past papers first, then released Postgres rows, deduped by stem.
+   * Nothing from another topic is ever mixed in.
+   */
+  const pool = useMemo(() => {
+    if (!poolTopicId) return [] as Question[];
+    const bundled = topicQuestions(poolTopicId);
+    const seen = new Set(bundled.map((x) => x.q));
+    return [...bundled, ...remoteQs.filter((x) => !seen.has(x.q))];
+  }, [poolTopicId, remoteQs]);
+
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);
@@ -50,7 +88,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   if (!slot || !resolvedTopicId) return null;
   const topicId: string = resolvedTopicId;
 
-  const questions = useMemo(() => buildAttempt(quizPool, attemptSeed), [quizPool, attemptSeed]);
+  const questions = useMemo(() => buildAttempt(pool, attemptSeed), [pool, attemptSeed]);
 
   const [i, setI] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -80,6 +118,26 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   useEffect(() => {
     setQuestionStart(Date.now());
   }, [i, remediation?.i, remediation == null]);
+
+  // No questions for this microtheme. Serving another topic's bank would put
+  // students in front of material they were never asked to study, and the 80%
+  // gate would then judge them on it -- so say so and send them back to the
+  // notes, where "Mark as studied" advances the day.
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <div className="text-5xl mb-3">📖</div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">No quiz for this topic yet</h1>
+          <p className="text-sm text-slate-600 mb-6">
+            This microtheme has no released question bank. Work through the notes and
+            mark the topic as studied to keep your plan moving.
+          </p>
+          <Button onClick={() => setRoute("topic")}>Back to the topic</Button>
+        </div>
+      </div>
+    );
+  }
 
   const q = remediation ? remediation.qs[remediation.i] : questions[i];
   const total = questions.length;
