@@ -240,7 +240,13 @@ function CatalogTab() {
                 const tid = "t_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 24) + "_" + Date.now().toString(36).slice(-4);
                 upsertTopic(s.id, { id: tid, name });
               }}
-              onRenameTopic={(tid, name) => upsertTopic(s.id, { id: tid, name })}
+              onRenameTopic={(tid, name) => {
+                // Spread the existing topic: a bare { id, name } would drop the
+                // microtheme's theme grouping, difficultyTier, rajasthanSpecific
+                // flag and any attached video / documents.
+                const prev = s.topics.find((t) => t.id === tid);
+                upsertTopic(s.id, { ...prev, id: tid, name });
+              }}
               onRemoveTopic={(tid) => removeTopic(s.id, tid)}
             />
           ))}
