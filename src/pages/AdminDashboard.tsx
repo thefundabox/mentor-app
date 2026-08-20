@@ -104,20 +104,33 @@ function SendResetLink({ email }: { email: string }) {
 }
 
 function PeopleTab() {
-  const { mentors, students, addUser, assignStudentToMentor, levelInfo, getStudent, completedDays, batchForStudent } = useAppState();
+  const { mentors, students, addUser, levelInfo, getStudent, completedDays, batchForStudent, authEnabled } = useAppState();
   const [newMentorEmail, setNewMentorEmail] = useState("");
   const [newMentorName, setNewMentorName] = useState("");
 
+  // Real accounts carry a Supabase uuid; the bundled demo people carry ids like
+  // u_student_aamir. Mixing them in a live admin view put invented students in
+  // real mentors' cohorts, so once auth is on, only real accounts are listed.
+  const isReal = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id);
+  const realMentors = useMemo(
+    () => (authEnabled ? mentors.filter((m) => isReal(m.id)) : mentors),
+    [mentors, authEnabled],
+  );
+  const realStudents = useMemo(
+    () => (authEnabled ? students.filter((s) => isReal(s.id)) : students),
+    [students, authEnabled],
+  );
+
+  // Assignment lives in Accounts above, which writes to Postgres. This is a
+  // read-only cohort view.
   const studentsByMentor = useMemo(() => {
     const out: Record<string, typeof students> = {};
-    for (const m of mentors) out[m.id] = [];
-    out["__unassigned"] = [];
-    for (const s of students) {
+    for (const m of realMentors) out[m.id] = [];
+    for (const s of realStudents) {
       if (s.mentorId && out[s.mentorId]) out[s.mentorId].push(s);
-      else out["__unassigned"].push(s);
     }
     return out;
-  }, [mentors, students]);
+  }, [realMentors, realStudents]);
 
   const [addNote, setAddNote] = useState<string | null>(null);
 
@@ -142,6 +155,9 @@ function PeopleTab() {
 
       <BulkImportPanel />
 
+      {/* Local-only mode alone. With a Supabase project the cohort view lists real
+          accounts, so a browser-only row would be invisible as well as unusable. */}
+      {!authEnabled && (
       <div className="bg-white border border-slate-200 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Add a local demo mentor</h2>
@@ -160,9 +176,10 @@ function PeopleTab() {
         </div>
         {addNote && <div className="mt-2 text-xs text-amber-800">{addNote}</div>}
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {mentors.map((m) => {
+        {realMentors.map((m) => {
           const list = studentsByMentor[m.id] || [];
           const totalDays = list.reduce((acc, s) => acc + getStudent(s.id).chart.days.length, 0);
           const totalCleared = list.reduce((acc, s) => acc + completedDays(s.id).length, 0);
@@ -204,7 +221,6 @@ function PeopleTab() {
                           <div className="text-[11px] text-slate-500">Lv {info.level} · ⭐ {info.total.toLocaleString()}</div>
                         </div>
                         <SendResetLink email={s.email} />
-                        <ReassignMentor studentId={s.id} currentMentorId={m.id} mentors={mentors} onChange={assignStudentToMentor} />
                       </div>
                     );
                   })}
@@ -218,42 +234,10 @@ function PeopleTab() {
         })}
       </div>
 
-      {studentsByMentor["__unassigned"].length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-          <h2 className="font-semibold text-amber-900 mb-3">Unassigned students ({studentsByMentor["__unassigned"].length})</h2>
-          <div className="space-y-1.5">
-            {studentsByMentor["__unassigned"].map((s) => (
-              <div key={s.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white">
-                <div className="flex-1 text-sm">
-                  <span className="font-semibold text-slate-900">{s.name}</span>
-                  <span className="text-slate-500"> · {s.email}</span>
-                </div>
-                <ReassignMentor studentId={s.id} currentMentorId={null} mentors={mentors} onChange={assignStudentToMentor} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function ReassignMentor({ studentId, currentMentorId, mentors, onChange }: {
-  studentId: string; currentMentorId: string | null;
-  mentors: { id: string; name: string }[];
-  onChange: (studentId: string, mentorId: string) => void;
-}) {
-  return (
-    <select
-      value={currentMentorId ?? ""}
-      onChange={(e) => onChange(studentId, e.target.value)}
-      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none"
-    >
-      {!currentMentorId && <option value="" disabled>Assign…</option>}
-      {mentors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-    </select>
-  );
-}
 
 /* ==================== Catalog tab ==================== */
 
