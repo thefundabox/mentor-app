@@ -111,6 +111,35 @@ export async function saveChart(studentId: string, data: StudentData): Promise<{
   return error ? { error: error.message } : {};
 }
 
+/**
+ * Update an existing chart row WITHOUT an insert.
+ *
+ * `saveChart` upserts, which PostgREST sends as INSERT ... ON CONFLICT DO
+ * UPDATE. Postgres evaluates the INSERT policy's WITH CHECK on that statement
+ * even when it resolves to an update, and that policy is `student_id =
+ * auth.uid()` -- so a mentor approving a student's chart was rejected with
+ * 42501 and the approval never left their browser. A plain UPDATE is covered by
+ * "student or staff updates chart", which does permit staff.
+ */
+export async function updateChart(studentId: string, data: StudentData): Promise<{ error?: string }> {
+  if (!supabase) return { error: NO_CLIENT };
+  const { data: rows, error } = await supabase
+    .from("student_charts")
+    .update({
+      chart: data.chart,
+      adopted_template_id: data.adoptedTemplateId ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("student_id", studentId)
+    .select("student_id");
+  if (error) return { error: error.message };
+  // RLS filters rather than errors, so "no rows" is how a blocked write looks.
+  if (!rows || rows.length === 0) {
+    return { error: "Chart not updated - no matching row, or the write was blocked by row-level security." };
+  }
+  return {};
+}
+
 /** Upsert the student-only half. Overrides and chart are excluded on purpose. */
 export async function saveProgress(studentId: string, data: StudentData): Promise<{ error?: string }> {
   if (!supabase) return { error: NO_CLIENT };

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import {
-  loadStudent, loadStudents, loadStudentProfiles, saveChart, saveProgress,
+  loadStudent, loadStudents, loadStudentProfiles, saveChart, updateChart, saveProgress,
   insertOverride, decideOverride, markOverrideSeenRemote,
 } from "@/lib/studentStore";
 import { loadCoverage, type Coverage } from "@/lib/questionStore";
@@ -445,9 +445,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataSynced, setDataSynced] = useState(false);
   const studentDataRef = useRef(studentData);
   useEffect(() => { studentDataRef.current = studentData; }, [studentData]);
+  // Read inside patchChart without making it a dependency of every chart action.
+  const authProfileRef = useRef(authProfile);
+  useEffect(() => { authProfileRef.current = authProfile; }, [authProfile]);
   // Suppress the push effect for the render right after a pull, otherwise the
   // freshly-loaded data is immediately written back.
   const skipNextPush = useRef(false);
+  // Serialized chart as last written to Postgres, so the push effect can tell a
+  // real student edit from an unrelated progress change.
+  const lastPushedChart = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !authProfile || !currentUserId) { setDataSynced(false); return; }
@@ -460,6 +466,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (res.data) {
           skipNextPush.current = true;
+          // Baseline for the push effect: what the server already holds.
+          lastPushedChart.current = JSON.stringify(res.data.chart);
           setStudentData((prev) => ({ ...prev, [currentUserId]: res.data! }));
         } else if (res.isNew) {
           // First sign-in on this account: seed the server from whatever is
@@ -468,6 +476,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (local) {
             await saveChart(authProfile.id, local);
             await saveProgress(authProfile.id, local);
+            lastPushedChart.current = JSON.stringify(local.chart);
           }
         }
       } else {
@@ -513,7 +522,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const mine = studentData[currentUserId];
     if (!mine) return;
     const t = setTimeout(() => {
-      void saveChart(authProfile.id, mine);
+      // Only write the chart when the student actually changed it. Pushing it
+      // on every progress tick would let a stale local copy overwrite a mentor's
+      // approval — the student's approvedThrough is 0 until they re-pull, so an
+      // idle quiz answer could silently re-lock every day they had just been
+      // granted. Progress is student-owned and always safe to write.
+      const serialized = JSON.stringify(mine.chart);
+      if (serialized !== lastPushedChart.current) {
+        lastPushedChart.current = serialized;
+        void saveChart(authProfile.id, mine);
+      }
       void saveProgress(authProfile.id, mine);
     }, 800);
     return () => clearTimeout(t);
@@ -703,8 +721,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const cur = studentDataRef.current[id] || emptyStudentData();
     const next: StudentData = { ...mutate(cur), lastActivityAt: Date.now() };
     setStudentData((prev) => ({ ...prev, [id]: next }));
-    // RLS permits this for the owning student and for any mentor/admin.
-    if (isSupabaseConfigured) void saveChart(id, next);
+    if (!isSupabaseConfigured) return;
+    // Staff must NOT upsert. PostgREST sends an upsert as INSERT .. ON CONFLICT
+    // DO UPDATE, and Postgres applies the INSERT policy's WITH CHECK
+    // (student_id = auth.uid()) even when it resolves to an update -- so a
+    // mentor's approval was rejected and thrown away by a bare `void`. A plain
+    // UPDATE is covered by "student or staff updates chart".
+    const isSelf = authProfileRef.current?.id === id;
+    void (async () => {
+      const res = isSelf ? await saveChart(id, next) : await updateChart(id, next);
+      // Surfaced, not swallowed: a silent failure here is what made the mentor
+      // believe a plan was approved when nothing had been written.
+      if (res.error) setAuthError(`Could not save the plan: ${res.error}`);
+    })();
   }, [setStudentData]);
 
   const setChart = useCallback((id: string, chart: ChartState) => {
