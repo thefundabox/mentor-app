@@ -27,9 +27,11 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* font-sans, not a hardcoded stack: this rule used to pin the system fonts
+       and silently beat theme.fontFamily, so adding Inter to the Tailwind config
+       had no effect at all. */
+    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   * {
