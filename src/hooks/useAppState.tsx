@@ -54,6 +54,8 @@ interface AppContextValue extends AppState {
   /** True while the session/profile is being resolved on first paint. */
   authLoading: boolean;
   authError: string | null;
+  /** Dismiss the global error banner. */
+  clearAuthError: () => void;
   /** True when the app is running against a real Supabase project. */
   authEnabled: boolean;
   /** True while student data is being pulled from Postgres on sign-in. */
@@ -667,6 +669,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoute("auto");
     return {};
   }, [setRoute]);
+
+  const clearAuthError = useCallback(() => setAuthError(null), []);
 
   const logout = useCallback(() => {
     // Fire-and-forget: the auth listener clears currentUserId when the session
@@ -1373,7 +1377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentUser, students, mentors,
     loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
     listProfiles, setUserRole, setUserMentor,
-    authLoading, authError, authEnabled: isSupabaseConfigured,
+    authLoading, authError, clearAuthError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,

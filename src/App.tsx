@@ -28,7 +28,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError } = useAppState();
 
   useEffect(() => {
     if (route !== "auto") return;
@@ -96,6 +96,23 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50">
       {showTopBar && <TopBar />}
+      {/* Global error banner. Until this existed, authError rendered only on the
+          Login screen, so a failed save elsewhere -- a mentor's plan approval
+          being refused by RLS, for instance -- was completely silent and the UI
+          happily showed the change as if it had been written. */}
+      {!!currentUser && !!authError && (
+        <div className="bg-rose-50 border-b border-rose-200">
+          <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-start gap-3">
+            <div className="flex-1 text-sm text-rose-800">{authError}</div>
+            <button
+              onClick={clearAuthError}
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 shrink-0"
+            >
+              dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <motion.div
         key={route + (activeDay || "") + (currentUser?.id || "none")}
         initial={{ opacity: 0, y: 4 }}
