@@ -43,13 +43,19 @@ function toTemplate(r: Row): PlanTemplateRow {
   };
 }
 
-/** Every plan a signed-in user may see. Archived ones are excluded. */
-export async function loadPlanTemplates(): Promise<PlanTemplateRow[]> {
-  if (!supabase) return [];
+/**
+ * Every plan a signed-in user may see. Archived ones are excluded.
+ *
+ * Returns the error rather than swallowing it: a failed read here leaves
+ * defaultTemplate null, which looks identical to "no default published" and
+ * silently drops every student back to the chart builder.
+ */
+export async function loadPlanTemplates(): Promise<{ rows: PlanTemplateRow[]; error?: string }> {
+  if (!supabase) return { rows: [] };
   const { data, error } = await supabase
     .from("plan_templates").select("*").eq("archived", false).order("created_at");
-  if (error || !data) return [];
-  return (data as Row[]).map(toTemplate);
+  if (error) return { rows: [], error: error.message };
+  return { rows: (data ?? []).map((r) => toTemplate(r as Row)) };
 }
 
 /**

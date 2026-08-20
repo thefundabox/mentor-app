@@ -495,7 +495,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isSupabaseConfigured || !authProfile) return;
     let cancelled = false;
-    void loadPlanTemplates().then((t) => { if (!cancelled) setRemoteTemplates(t); });
+    void loadPlanTemplates().then((res) => {
+      if (cancelled) return;
+      if (res.error) setAuthError(`Could not load study plans: ${res.error}`);
+      setRemoteTemplates(res.rows);
+    });
     return () => { cancelled = true; };
   }, [authProfile]);
   const defaultTemplate = useMemo(
