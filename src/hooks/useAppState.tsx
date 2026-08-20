@@ -247,7 +247,14 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // v3 keys — schema changed from single-topic to multi-topic days; ignore old data.
-  const [users, setUsers] = useLocalStorage<User[]>("v5_users", SEED_USERS);
+  // v6: the seed student's email was a real address (aamir.parwez@gmail.com).
+  // Auth reconciliation matches an incoming profile to a seed row by email and
+  // keeps the seed's id, so signing up on that address adopted the demo
+  // student's fabricated progress. Bumping the key is what actually delivers
+  // the corrected seed -- existing installs have the old row cached under
+  // v5_users and would otherwise keep the collision forever. Real accounts are
+  // re-added by reconciliation on sign-in and by loadStudentProfiles for staff.
+  const [users, setUsers] = useLocalStorage<User[]>("v6_users", SEED_USERS);
   const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v5_studentData", seedStudentData());
   const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v5_currentUserId", null);
   const [route, setRoute] = useLocalStorage<Route>("v5_route", "auto");

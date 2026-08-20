@@ -789,7 +789,12 @@ export const SEED_USERS: User[] = [
   },
   {
     id: STUDENT_AAMIR,
-    email: "aamir.parwez@gmail.com",
+    // Must NOT be a real address anyone might sign up with. The auth
+    // reconciliation matches an incoming profile to a seed row by email and
+    // keeps the seed's id, so a real signup on this address silently adopts
+    // this demo student's fabricated progress (approvedThrough: 8) instead of
+    // starting clean. Every other seed uses example.com for the same reason.
+    email: "aamir.p@example.com",
     name: "Aamir Parwez",
     role: "student",
     mentorId: MENTOR_ID,
