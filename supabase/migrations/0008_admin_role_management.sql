@@ -14,7 +14,7 @@
 -- leave `authenticated` holding UPDATE on `name` alone. Admins authenticate as
 -- that same Postgres role, so they have no privilege on `role` or `mentor_id`.
 --
--- The obvious repair — granting update(role) to authenticated — would be a
+-- The obvious repair -- granting update(role) to authenticated -- would be a
 -- serious mistake. The "update own profile" policy permits any user to update
 -- their own row, and an RLS policy cannot restrict WHICH columns a statement
 -- touches. Every student could then set role = 'admin' on themselves: exactly
