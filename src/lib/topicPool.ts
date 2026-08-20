@@ -5,11 +5,12 @@ import type { Question } from "@/types";
 /**
  * How many questions one attempt may contain.
  *
- * The quiz used to hard-slice 8 conceptual + 8 analytical, so a microtheme with
- * a 101-question bank still served sixteen. The cap now exists only to keep a
- * single sitting reasonable; everything released for the topic is eligible.
+ * No cap: an attempt is the topic's whole released bank. This was 8 conceptual
+ * + 8 analytical, then 30; both silently withheld most of a 101-question
+ * chapter from the student who had asked to practise it. The parameter stays on
+ * buildAttempt so a caller can still ask for a shorter paper.
  */
-export const ATTEMPT_CAP = 30;
+export const ATTEMPT_CAP = Number.POSITIVE_INFINITY;
 
 /**
  * Every released question for one microtheme: bundled past papers first, then
@@ -18,7 +19,8 @@ export const ATTEMPT_CAP = 30;
 export async function loadPool(topicId: string): Promise<Question[]> {
   const bundled = topicQuestions(topicId);
   const seen = new Set(bundled.map((q) => q.q));
-  const remote = await loadTopicQuestions(topicId, { limit: 200, tilt: "even" });
+  // High limit: the whole bank for one microtheme, not a sample of it.
+  const remote = await loadTopicQuestions(topicId, { limit: 1000, tilt: "even" });
   return [...bundled, ...remote.filter((q) => !seen.has(q.q))];
 }
 
@@ -33,7 +35,7 @@ export function buildAttempt(pool: Question[], seed: number, cap = ATTEMPT_CAP):
   const conceptual = shuffle(pool.filter((q) => q.type === "conceptual"), seed);
   const analytical = shuffle(pool.filter((q) => q.type === "analytical"), seed + 1);
 
-  const half = Math.floor(cap / 2);
+  const half = cap === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : Math.floor(cap / 2);
   // Whatever one side cannot fill, the other may take.
   const takeC = Math.min(conceptual.length, Math.max(half, cap - analytical.length));
   const takeA = Math.min(analytical.length, cap - takeC);

@@ -231,13 +231,13 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
                     </span>
                   )}
                 </div>
-                <p className="font-semibold text-slate-900 mb-3 whitespace-pre-line">{question.q}</p>
+                <p className="font-semibold text-slate-900 mb-3 whitespace-pre-line leading-[1.6] text-[0.9375rem] sm:text-base">{question.q}</p>
                 <div className="space-y-1.5 mb-3">
                   {question.options.map((opt, oi) => {
                     const isCorrect = oi === question.correct;
                     const isPick = oi === pick;
                     return (
-                      <div key={oi} className={`text-sm rounded-lg px-3 py-2 border flex items-start gap-2 ${
+                      <div key={oi} className={`text-sm leading-[1.6] rounded-lg px-3 py-2 border flex items-start gap-2 ${
                         isCorrect ? "border-emerald-300 bg-emerald-50 text-emerald-900"
                           : isPick ? "border-rose-300 bg-rose-50 text-rose-900"
                           : "border-slate-200 text-slate-600"
@@ -339,7 +339,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
         )}
       </div>
 
-      <div className="flex-1 max-w-3xl mx-auto w-full px-5 py-8">
+      <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-8 sm:py-10">
         <motion.div key={current} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-[11px] uppercase tracking-wide font-semibold text-indigo-600">
@@ -359,7 +359,10 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
             </button>
           </div>
 
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug mb-6 whitespace-pre-line">
+          {/* RPSC stems are often a lead-in plus four numbered statements. Bold
+              2xl at tight leading turned that into a wall; this is set for
+              reading a paragraph, not for a headline. */}
+          <h1 className="text-[1.0625rem] sm:text-[1.1875rem] font-semibold text-slate-900 leading-[1.65] tracking-[-0.005em] mb-7 whitespace-pre-line [&>*]:mt-2">
             {q.q}
           </h1>
 
@@ -370,7 +373,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
                 <button
                   key={oi}
                   onClick={() => choose(oi)}
-                  className={`w-full text-left rounded-xl border-2 px-4 py-3.5 flex items-start gap-3 transition ${
+                  className={`w-full text-left rounded-xl border-2 px-4 py-3.5 flex items-start gap-3 transition text-[0.9375rem] sm:text-base leading-[1.6] ${
                     picked
                       ? "border-indigo-500 bg-indigo-50"
                       : "border-slate-200 bg-white hover:border-slate-300"
