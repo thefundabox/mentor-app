@@ -28,7 +28,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError, defaultTemplate, adoptPlanTemplate } = useAppState();
 
   useEffect(() => {
     if (route !== "auto") return;
@@ -39,7 +39,14 @@ function AppContent() {
     const noPlanYet = !s || s.chart.days.filter((d) => d.length > 0).length === 0;
     // Brand-new student: no assessment AND no plan -> intake first.
     if (noPlanYet && !s?.assessment) { setRoute("assessment"); return; }
-    // Has assessment but hasn't picked / built a plan yet.
+    // Has assessment but no plan. If the institute publishes a default, apply it
+    // and carry on — most students should never meet the chart builder. Anyone
+    // who wants to build their own reaches it from the plan screen.
+    if (noPlanYet && defaultTemplate) {
+      adoptPlanTemplate(currentUser.id, defaultTemplate.id);
+      setRoute("onboarding");
+      return;
+    }
     if (noPlanYet) { setRoute("choose_plan"); return; }
     if (s.chart.status === "draft") { setRoute("onboarding"); return; }
     if (s.chart.status === "pending_approval" || s.chart.status === "changes_requested") {
@@ -48,7 +55,7 @@ function AppContent() {
     // Fully onboarded student lands on Dashboard (the daily readiness view),
     // not the day path. The journey is one click away via the nav.
     setRoute("dashboard");
-  }, [route, currentUser, getStudent, setRoute]);
+  }, [route, currentUser, getStudent, setRoute, defaultTemplate, adoptPlanTemplate]);
 
   useEffect(() => {
     if (route === "landing" || route === "login") return;

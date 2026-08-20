@@ -9,7 +9,11 @@ interface ChoosePlanProps {
 }
 
 export function ChoosePlan({ studentId }: ChoosePlanProps) {
-  const { planTemplates, adoptPlanTemplate, startBlankPlan, setRoute } = useAppState();
+  const { planTemplates, remotePlanTemplates, defaultTemplate, adoptPlanTemplate, startBlankPlan, setRoute } = useAppState();
+  // Published plans win over the bundled demo seeds; the seeds are only a
+  // fallback for a local-only install with no Supabase project.
+  const plans = remotePlanTemplates.length > 0 ? remotePlanTemplates : planTemplates;
+  const others = plans.filter((t) => t.id !== defaultTemplate?.id);
 
   const adopt = (tpl: PlanTemplate) => {
     adoptPlanTemplate(studentId, tpl.id);
@@ -24,14 +28,35 @@ export function ChoosePlan({ studentId }: ChoosePlanProps) {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="mb-8">
         <div className="text-sm font-semibold text-indigo-600 mb-1">Pick a starting point</div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Adopt a default plan, or build your own</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          {defaultTemplate ? "Your institute's plan" : "Adopt a plan, or build your own"}
+        </h1>
         <p className="text-slate-600 mt-2 max-w-2xl">
-          Defaults are curated by your institute admin. Whichever you pick, you can tweak it before sending to your mentor for approval.
+          {defaultTemplate
+            ? "This is the plan your institute recommends. You can adjust any day before sending it to your mentor for approval."
+            : "Plans are curated by your institute admin. Whichever you pick, you can tweak it before sending to your mentor for approval."}
         </p>
       </div>
 
+      {defaultTemplate && (
+        <div className="mb-6 p-6 rounded-2xl border-2 border-indigo-200 bg-indigo-50/40">
+          <div className="text-xs uppercase font-bold text-indigo-700 mb-1">Recommended</div>
+          <div className="text-xl font-bold text-slate-900 mb-1">{defaultTemplate.name}</div>
+          <p className="text-sm text-slate-600 mb-4 max-w-2xl">{defaultTemplate.blurb}</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <Button onClick={() => adopt(defaultTemplate)}>
+              Start this plan <ArrowRight className="w-4 h-4" />
+            </Button>
+            <span className="text-xs text-slate-500">
+              {defaultTemplate.days.length} days &middot;{" "}
+              {defaultTemplate.days.reduce((n, d) => n + d.length, 0)} topics
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {planTemplates.map((t) => (
+        {others.map((t) => (
           <TemplateCard key={t.id} template={t} onAdopt={() => adopt(t)} />
         ))}
         <button
@@ -52,7 +77,7 @@ export function ChoosePlan({ studentId }: ChoosePlanProps) {
         </button>
       </div>
 
-      {planTemplates.length === 0 && (
+      {plans.length === 0 && (
         <div className="mt-6 text-sm text-slate-500">
           No default plans are set up yet. Use "Build my own" to start from a blank chart.
         </div>

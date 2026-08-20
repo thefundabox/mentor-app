@@ -534,6 +534,8 @@ export interface StudentData {
   assessment?: Assessment;
   /** If the student adopted a plan template, its id. null/undefined = built own. */
   adoptedTemplateId?: string | null;
+  /** Version of that template at adoption. Lets an edit be traced to a chart. */
+  adoptedTemplateVersion?: number | null;
   /** True once the student has finished the Introduction Tour at least once. */
   hasSeenTour?: boolean;
   /** Adaptive: spaced-repetition state, one entry per topic the student has touched. */

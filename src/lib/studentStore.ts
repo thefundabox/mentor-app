@@ -21,7 +21,7 @@ import type { StudentData, Override } from "@/types";
 const NO_CLIENT = "Not connected to Supabase.";
 
 /** The half of StudentData that only the student writes. */
-type ProgressBlob = Omit<StudentData, "chart" | "overrides" | "adoptedTemplateId">;
+type ProgressBlob = Omit<StudentData, "chart" | "overrides" | "adoptedTemplateId" | "adoptedTemplateVersion">;
 
 export interface LoadResult {
   data?: StudentData;
@@ -63,6 +63,7 @@ export async function loadStudent(studentId: string): Promise<LoadResult> {
       ...(blob as ProgressBlob),
       chart: (charts.data?.chart ?? {}) as StudentData["chart"],
       adoptedTemplateId: (charts.data?.adopted_template_id ?? null) as string | null,
+      adoptedTemplateVersion: (charts.data?.adopted_template_version ?? null) as number | null,
       overrides: (overrides.data ?? []).map(toOverride),
     } as StudentData,
   };
@@ -93,6 +94,7 @@ export async function loadStudents(ids: string[]): Promise<Record<string, Studen
       ...((p?.data ?? {}) as ProgressBlob),
       chart: (c?.chart ?? {}) as StudentData["chart"],
       adoptedTemplateId: (c?.adopted_template_id ?? null) as string | null,
+      adoptedTemplateVersion: (c?.adopted_template_version ?? null) as number | null,
       overrides: ovBy.get(id) ?? [],
     } as StudentData;
   }
@@ -106,6 +108,7 @@ export async function saveChart(studentId: string, data: StudentData): Promise<{
     student_id: studentId,
     chart: data.chart,
     adopted_template_id: data.adoptedTemplateId ?? null,
+    adopted_template_version: data.adoptedTemplateVersion ?? null,
     updated_at: new Date().toISOString(),
   }, { onConflict: "student_id" });
   return error ? { error: error.message } : {};
@@ -128,6 +131,7 @@ export async function updateChart(studentId: string, data: StudentData): Promise
     .update({
       chart: data.chart,
       adopted_template_id: data.adoptedTemplateId ?? null,
+    adopted_template_version: data.adoptedTemplateVersion ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("student_id", studentId)
@@ -143,7 +147,7 @@ export async function updateChart(studentId: string, data: StudentData): Promise
 /** Upsert the student-only half. Overrides and chart are excluded on purpose. */
 export async function saveProgress(studentId: string, data: StudentData): Promise<{ error?: string }> {
   if (!supabase) return { error: NO_CLIENT };
-  const { chart: _chart, overrides: _ov, adoptedTemplateId: _t, ...blob } = data;
+  const { chart: _chart, overrides: _ov, adoptedTemplateId: _t, adoptedTemplateVersion: _v, ...blob } = data;
   const { error } = await supabase.from("student_progress").upsert({
     student_id: studentId,
     data: blob,

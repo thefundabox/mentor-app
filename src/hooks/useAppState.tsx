@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
+import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 import {
   loadStudent, loadStudents, loadStudentProfiles, saveChart, updateChart, saveProgress,
   insertOverride, decideOverride, markOverrideSeenRemote,
@@ -39,6 +40,10 @@ interface AppContextValue extends AppState {
   loginAs: (role: Role, email: string, name: string) => void;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
+  /** Published plans from Postgres. Empty in a local-only install. */
+  remotePlanTemplates: PlanTemplateRow[];
+  /** The institute-wide default plan, from Postgres. Null when none is set. */
+  defaultTemplate: PlanTemplateRow | null;
   /** Every real account from public.profiles. Admin/mentor only, per RLS. */
   listProfiles: () => Promise<ProfileRow[]>;
   /** Change a user's role via the admin-checked RPC. */
@@ -483,6 +488,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // not served, so a topic backed solely by them is still study-only.
     return (questionCoverage[topicId]?.reviewed ?? 0) > 0;
   }, [questionCoverage]);
+
+  // Plans come from Postgres now, not localStorage — a default plan that only
+  // exists in the admin's browser is not a default plan.
+  const [remoteTemplates, setRemoteTemplates] = useState<PlanTemplateRow[]>([]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authProfile) return;
+    let cancelled = false;
+    void loadPlanTemplates().then((t) => { if (!cancelled) setRemoteTemplates(t); });
+    return () => { cancelled = true; };
+  }, [authProfile]);
+  const defaultTemplate = useMemo(
+    () => remoteTemplates.find((t) => t.isDefault && !t.ownerId) ?? null,
+    [remoteTemplates],
+  );
 
   const [dataLoading, setDataLoading] = useState(false);
   const [dataSynced, setDataSynced] = useState(false);
@@ -1126,11 +1145,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [setPlanTemplates]);
 
   const adoptPlanTemplate = useCallback((id: string, templateId: string) => {
-    const tpl = planTemplates.find((t) => t.id === templateId);
+    // Postgres plans win over the local seeds: those are demo data, these are
+    // what the institute actually publishes.
+    const remote = remoteTemplates.find((t) => t.id === templateId);
+    const tpl = remote ?? planTemplates.find((t) => t.id === templateId);
     if (!tpl) return;
-    patchStudent(id, (s) => ({
+    // patchChart, not patchStudent: adopting writes the chart, and the blanket
+    // push only carries a student's own row.
+    patchChart(id, (s) => ({
       ...s,
       adoptedTemplateId: templateId,
+      adoptedTemplateVersion: remote?.version ?? null,
       chart: {
         ...s.chart,
         days: tpl.days.map((slots) => slots.map((slot) => ({ ...slot }))),
@@ -1138,15 +1163,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: "draft",
       },
     }));
-  }, [patchStudent, planTemplates]);
+  }, [patchChart, planTemplates, remoteTemplates]);
 
   const startBlankPlan = useCallback((id: string) => {
-    patchStudent(id, (s) => ({
+    patchChart(id, (s) => ({
       ...s,
       adoptedTemplateId: null,
+      adoptedTemplateVersion: null,
       chart: { ...s.chart, days: [], status: "draft" },
     }));
-  }, [patchStudent]);
+  }, [patchChart]);
 
   /* ---------- Introduction Tour ---------- */
 
@@ -1426,7 +1452,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
-    listProfiles, setUserRole, setUserMentor,
+    listProfiles, setUserRole, setUserMentor, defaultTemplate,
+    remotePlanTemplates: remoteTemplates,
     authLoading, authError, clearAuthError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
