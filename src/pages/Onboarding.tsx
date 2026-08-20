@@ -26,7 +26,7 @@ const OVERALL_MIN = 7;
 const OVERALL_MAX = 120;
 
 export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
-  const { getStudent, setChart, submitChartForApproval, approveChart, setRoute, setViewingStudentId, subjects, findTopicLive } = useAppState();
+  const { getStudent, setChart, submitChartForApproval, approveChart, setRoute, setViewingStudentId, subjects, findTopicLive, defaultTemplate, startBlankPlan } = useAppState();
   const student = getStudent(studentId);
   const currentChart = student.chart;
   const isResubmit = currentChart.status === "changes_requested";
@@ -137,6 +137,12 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
   };
 
   const isFirstCommitment = currentChart.approvedThrough === 0;
+  // Showing the institute's plan, unmodified and not yet committed.
+  const onDefaultPlan = !byMentor
+    && !!defaultTemplate
+    && student.adoptedTemplateId === defaultTemplate.id
+    && currentChart.approvedThrough === 0;
+  const currentTemplateName = defaultTemplate?.name ?? "Your plan";
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -149,14 +155,28 @@ export function Onboarding({ studentId, byMentor = false }: OnboardingProps) {
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
           {byMentor ? "Mentor edit"
+            : onDefaultPlan ? currentTemplateName
             : isResubmit ? "Address mentor feedback"
             : isFirstCommitment ? "Build your prep chart"
             : "Commit your next slice"}
         </h1>
         <p className="text-slate-600 mt-2 max-w-2xl">
-          Choose how big a slice to commit, then drag topics into the days.
-          {byMentor ? " You'll approve on save." : " Your mentor will approve before you start."}
+          {onDefaultPlan
+            ? "This is your institute's plan, already filled in. Adjust any day if you want to, then send it to your mentor."
+            : "Choose how big a slice to commit, then drag topics into the days."}
+          {byMentor ? " You'll approve on save." : onDefaultPlan ? "" : " Your mentor will approve before you start."}
         </p>
+
+        {/* The opt-out. The default plan is the path; building your own is a
+            deliberate choice, not the first thing a new student is asked to do. */}
+        {onDefaultPlan && (
+          <button
+            onClick={() => { if (confirm("Start from an empty chart instead? Your institute's plan will be cleared.")) startBlankPlan(studentId); }}
+            className="mt-3 text-sm font-medium text-slate-500 underline underline-offset-4 hover:text-slate-800"
+          >
+            I'd rather build my own plan
+          </button>
+        )}
 
         {isResubmit && currentChart.feedback && (
           <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex gap-2 items-start max-w-2xl">

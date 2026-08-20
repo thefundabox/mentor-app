@@ -3,14 +3,15 @@ import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText, LineChart } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText, LineChart, ClipboardList, Wrench } from "lucide-react";
 import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
-          approveChart, requestChartChanges, addOverride, tests, testAttempts } = useAppState();
+          approveChart, requestChartChanges, addOverride, tests, testAttempts,
+          defaultTemplate, adoptPlanTemplate, startBlankPlan } = useAppState();
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);
   const info = levelInfo(studentId);
@@ -95,6 +96,32 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           {totalDays > 0 && (
             <Button variant="secondary" onClick={() => { setViewingStudentId(studentId); setRoute("onboarding"); }}>
               <Pencil className="w-4 h-4" /> Edit plan
+            </Button>
+          )}
+          {/* Whose plan is this? The mentor decides per student: hand them the
+              institute's plan, or an empty chart to build themselves. */}
+          {defaultTemplate && s.adoptedTemplateId !== defaultTemplate.id && (
+            <Button
+              variant="secondary"
+              title={`Replace this student's chart with ${defaultTemplate.name}`}
+              onClick={() => {
+                if (!confirm(`Give ${user.name || "this student"} the "${defaultTemplate.name}" plan? Their current chart is replaced.`)) return;
+                adoptPlanTemplate(studentId, defaultTemplate.id);
+              }}
+            >
+              <ClipboardList className="w-4 h-4" /> Assign default plan
+            </Button>
+          )}
+          {totalDays > 0 && (
+            <Button
+              variant="ghost"
+              title="Clear the chart so the student builds their own"
+              onClick={() => {
+                if (!confirm(`Clear ${user.name || "this student"}'s chart so they build their own plan?`)) return;
+                startBlankPlan(studentId);
+              }}
+            >
+              <Wrench className="w-4 h-4" /> Let them build their own
             </Button>
           )}
           <Button variant="secondary" onClick={() => { setViewingStudentId(studentId); setRoute("dashboard"); }}>
