@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
+import { SetPassword } from "@/pages/SetPassword";
 import { Assessment } from "@/pages/Assessment";
 import { ChoosePlan } from "@/pages/ChoosePlan";
 import { Onboarding } from "@/pages/Onboarding";
@@ -27,7 +28,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode } = useAppState();
 
   useEffect(() => {
     if (route !== "auto") return;
@@ -56,7 +57,11 @@ function AppContent() {
 
   let content: React.ReactNode = null;
 
-  if (!currentUser) {
+  // Ahead of every other branch: arriving via a reset link signs the user in
+  // without a password, so nothing else should render until they set one.
+  if (recoveryMode) {
+    content = <SetPassword />;
+  } else if (!currentUser) {
     content = route === "login" ? <Login /> : <Landing />;
   } else if (currentUser.role === "admin") {
     content = <AdminDashboard />;
@@ -85,7 +90,8 @@ function AppContent() {
     else content = <StudentHome />;
   }
 
-  const showTopBar = !!currentUser && route !== "quiz" && route !== "take_test" && route !== "smart_session";
+  const showTopBar = !!currentUser && !recoveryMode
+    && route !== "quiz" && route !== "take_test" && route !== "smart_session";
 
   return (
     <div className="min-h-screen bg-slate-50">

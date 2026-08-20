@@ -39,6 +39,12 @@ interface AppContextValue extends AppState {
   loginAs: (role: Role, email: string, name: string) => void;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
+  /** Email a reset link. Admin-triggered; the user sets their own password. */
+  sendPasswordReset: (email: string) => Promise<AuthResult>;
+  /** Set a new password for the signed-in / recovery-linked user. */
+  updatePassword: (password: string) => Promise<AuthResult>;
+  /** True while following a reset link, before a new password has been set. */
+  recoveryMode: boolean;
   /** True while the session/profile is being resolved on first paint. */
   authLoading: boolean;
   authError: string | null;
@@ -299,6 +305,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authProfile, setAuthProfile] = useState<ProfileRow | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(isSupabaseConfigured);
   const [authError, setAuthError] = useState<string | null>(null);
+  // True while the user is following a password-reset link and has not yet set
+  // a new password. Deliberately NOT persisted: it must not survive a reload
+  // once the reset is done or abandoned.
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   // Read `users` inside the auth effect without making it a dependency —
   // depending on it would re-run reconciliation on every unrelated user edit.
@@ -332,7 +342,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     supabase.auth.getSession().then(({ data }) => loadProfile(data.session?.user?.id));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Arriving from a reset link. `detectSessionInUrl` has already exchanged
+      // the token for a session, so the user is technically signed in — but they
+      // got here without a password, so send them to set one before anything
+      // else renders.
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       setAuthLoading(true);
       loadProfile(session?.user?.id);
     });
@@ -555,6 +570,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoute("auto");
     return {};
   }, [setRoute, setLoginRoleIntent]);
+
+  /**
+   * Email a password-reset link.
+   *
+   * Deliberately uses the anon-key endpoint rather than `auth.admin`. Setting
+   * another user's password outright needs the service_role key, which cannot
+   * exist in this app: Vite inlines env vars into the bundle, so shipping it
+   * would hand every visitor unrestricted, RLS-bypassing access to the database.
+   * The user follows the link and sets their own password instead.
+   *
+   * Note Supabase does not reveal whether an address is registered — a success
+   * here means the request was accepted, not that an account exists.
+   */
+  const sendPasswordReset = useCallback(async (email: string): Promise<AuthResult> => {
+    if (!supabase) return { error: "Password reset is unavailable — Supabase is not configured." };
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: window.location.origin,
+    });
+    if (error) return { error: error.message };
+    return {};
+  }, []);
+
+  /** Set a new password for the signed-in (or recovery-linked) user. */
+  const updatePassword = useCallback(async (password: string): Promise<AuthResult> => {
+    if (!supabase) return { error: "Password update is unavailable — Supabase is not configured." };
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { error: error.message };
+    setRecoveryMode(false);
+    setRoute("auto");
+    return {};
+  }, [setRoute]);
 
   const logout = useCallback(() => {
     // Fire-and-forget: the auth listener clears currentUserId when the session
@@ -1226,7 +1272,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     quizPool, foundationPool, placementPool, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
-    loginAs, signIn, signUp, authLoading, authError, authEnabled: isSupabaseConfigured,
+    loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
+    authLoading, authError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
     setViewingStudentId, resetAll,

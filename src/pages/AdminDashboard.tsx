@@ -61,6 +61,47 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 
 /* ==================== People tab ==================== */
 
+/**
+ * Email a password-reset link to one person.
+ *
+ * This is the only password action an admin can take from the browser. Setting
+ * someone's password outright needs Supabase's service_role key, which cannot
+ * ship in a client bundle — see `sendPasswordReset` in useAppState.
+ */
+function SendResetLink({ email }: { email: string }) {
+  const { sendPasswordReset, authEnabled } = useAppState();
+  const [state, setState] = useState<"idle" | "busy" | "sent" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  if (!authEnabled) return null;
+
+  const send = async () => {
+    setState("busy");
+    const result = await sendPasswordReset(email);
+    if (result.error) { setState("error"); setMessage(result.error); return; }
+    setState("sent");
+  };
+
+  if (state === "sent") {
+    return <span className="text-[11px] font-medium text-emerald-700 whitespace-nowrap">reset link sent</span>;
+  }
+
+  return (
+    <button
+      onClick={send}
+      disabled={state === "busy"}
+      title={message || `Email a password-reset link to ${email}`}
+      className={`text-[11px] font-medium px-2 py-1 rounded-lg whitespace-nowrap disabled:opacity-50 ${
+        state === "error"
+          ? "text-rose-700 bg-rose-50 hover:bg-rose-100"
+          : "text-slate-600 bg-slate-100 hover:bg-slate-200"
+      }`}
+    >
+      {state === "busy" ? "sending…" : state === "error" ? "failed — retry" : "reset password"}
+    </button>
+  );
+}
+
 function PeopleTab() {
   const { mentors, students, addUser, assignStudentToMentor, levelInfo, getStudent, completedDays, batchForStudent } = useAppState();
   const [newMentorEmail, setNewMentorEmail] = useState("");
@@ -115,6 +156,7 @@ function PeopleTab() {
                   <div className="font-semibold text-slate-900">{m.name}</div>
                   <div className="text-xs text-slate-500">{m.email}</div>
                 </div>
+                <SendResetLink email={m.email} />
                 <div className="text-right">
                   <div className="text-xs uppercase font-bold text-slate-500">Students</div>
                   <div className="text-lg font-bold text-slate-900">{list.length}</div>
@@ -141,6 +183,7 @@ function PeopleTab() {
                           </div>
                           <div className="text-[11px] text-slate-500">Lv {info.level} · ⭐ {info.total.toLocaleString()}</div>
                         </div>
+                        <SendResetLink email={s.email} />
                         <ReassignMentor studentId={s.id} currentMentorId={m.id} mentors={mentors} onChange={assignStudentToMentor} />
                       </div>
                     );
