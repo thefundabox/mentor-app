@@ -187,10 +187,21 @@ export async function markOverrideSeenRemote(id: number): Promise<{ error?: stri
 }
 
 /** Every student profile, for the mentor/admin lists. RLS already limits this to staff. */
-export async function loadStudentProfiles(): Promise<{ id: string; email: string; name: string; mentor_id: string | null; batch_id: string | null }[]> {
+/**
+ * Every profile, whatever the role.
+ *
+ * This used to filter `.eq("role", "student")`, so real mentors and admins never
+ * reached the local `users` array that the mentor lists and assignment dropdowns
+ * are built from. A mentor promoted in the Accounts panel showed there and
+ * nowhere else -- the rest of the admin view only knew the bundled demo seeds.
+ */
+export async function loadAllProfiles(): Promise<
+  { id: string; email: string; name: string; role: "student" | "mentor" | "admin";
+    mentor_id: string | null; batch_id: string | null }[]
+> {
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from("profiles").select("id,email,name,mentor_id,batch_id").eq("role", "student");
+    .from("profiles").select("id,email,name,role,mentor_id,batch_id");
   if (error) return [];
-  return data ?? [];
+  return (data ?? []) as Awaited<ReturnType<typeof loadAllProfiles>>;
 }

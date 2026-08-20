@@ -48,7 +48,7 @@ create unique index plan_templates_one_default
 -- ---------------------------------------------------------------------------
 -- RLS
 --
--- Everyone signed in reads plans — a student has to be able to adopt one.
+-- Everyone signed in reads plans -- a student has to be able to adopt one.
 -- Admins write anything; a mentor writes only their own.
 -- ---------------------------------------------------------------------------
 

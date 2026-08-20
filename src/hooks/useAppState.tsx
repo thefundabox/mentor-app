@@ -3,7 +3,7 @@ import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 import {
-  loadStudent, loadStudents, loadStudentProfiles, saveChart, updateChart, saveProgress,
+  loadStudent, loadStudents, loadAllProfiles, saveChart, updateChart, saveProgress,
   insertOverride, decideOverride, markOverrideSeenRemote,
 } from "@/lib/studentStore";
 import { loadCoverage, type Coverage } from "@/lib/questionStore";
@@ -544,9 +544,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else {
         // Mentor / admin: pull every student's record so the dashboard has
         // real data instead of whatever happens to be in this browser.
-        const profiles = await loadStudentProfiles();
+        const profiles = await loadAllProfiles();
         if (cancelled) return;
-        const remote = await loadStudents(profiles.map((p) => p.id));
+        const remote = await loadStudents(profiles.filter((p) => p.role === "student").map((p) => p.id));
         if (cancelled) return;
         if (profiles.length) {
           setUsers((prev) => {
@@ -554,7 +554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             for (const pr of profiles) {
               const i = next.findIndex((u) => u.id === pr.id || u.email.toLowerCase() === pr.email.toLowerCase());
               const merged: User = {
-                id: pr.id, email: pr.email, name: pr.name, role: "student",
+                id: pr.id, email: pr.email, name: pr.name, role: pr.role,
                 mentorId: pr.mentor_id ?? undefined,
                 batchId: pr.batch_id ?? undefined,
                 createdAt: i === -1 ? Date.now() : next[i].createdAt,
