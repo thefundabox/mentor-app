@@ -45,7 +45,11 @@ export function Assessment({ studentId }: AssessmentProps) {
       submittedAt: Date.now(),
     };
     setAssessment(studentId, a);
-    setRoute("choose_plan");
+    // "auto", not "choose_plan": let routing decide. Where the institute
+    // publishes a default plan it is applied here and the student never meets
+    // the chart builder; without one they still land on the chooser. Hardcoding
+    // choose_plan sent every new student to the builder regardless.
+    setRoute("auto");
   };
 
   const hrs = Math.floor(timeMins / 60);
