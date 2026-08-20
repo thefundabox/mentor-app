@@ -119,9 +119,20 @@ function PeopleTab() {
     return out;
   }, [mentors, students]);
 
+  const [addNote, setAddNote] = useState<string | null>(null);
+
   const addMentor = () => {
     if (!newMentorEmail.includes("@")) return;
-    addUser({ role: "mentor", email: newMentorEmail.trim().toLowerCase(), name: newMentorName.trim() || newMentorEmail.split("@")[0] });
+    const email = newMentorEmail.trim().toLowerCase();
+    const before = mentors.length + students.length;
+    addUser({ role: "mentor", email, name: newMentorName.trim() || newMentorEmail.split("@")[0] });
+    // addUser returns the existing row instead of appending a duplicate. Say so,
+    // rather than appearing to do nothing.
+    setAddNote(
+      before === mentors.length + students.length
+        ? `${email} already has an entry — nothing added. Change their role in Accounts above.`
+        : null,
+    );
     setNewMentorEmail(""); setNewMentorName("");
   };
 
@@ -147,6 +158,7 @@ function PeopleTab() {
             className="px-3 py-2 rounded-xl border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none text-sm" />
           <Button onClick={addMentor} disabled={!newMentorEmail.includes("@")}><Plus className="w-4 h-4" /> Add mentor</Button>
         </div>
+        {addNote && <div className="mt-2 text-xs text-amber-800">{addNote}</div>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

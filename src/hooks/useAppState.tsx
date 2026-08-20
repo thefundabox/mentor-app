@@ -330,6 +330,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const usersRef = useRef(users);
   useEffect(() => { usersRef.current = users; }, [users]);
 
+  // One-time repair for installs that already accumulated duplicate rows before
+  // addUser started rejecting clashing emails. A real account is exactly one row
+  // in `profiles`, so any extra row for the same address is a local invention;
+  // keep the one carrying a Supabase uuid, since that is the id every server
+  // row is keyed by.
+  const dedupedUsers = useRef(false);
+  useEffect(() => {
+    if (dedupedUsers.current) return;
+    dedupedUsers.current = true;
+    const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id);
+    setUsers((prev) => {
+      const byEmail = new Map<string, User>();
+      for (const u of prev) {
+        const key = u.email.toLowerCase();
+        const held = byEmail.get(key);
+        if (!held) { byEmail.set(key, u); continue; }
+        if (!isUuid(held.id) && isUuid(u.id)) byEmail.set(key, u);
+      }
+      const next = [...byEmail.values()];
+      return next.length === prev.length ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Last identity reconciliation handed to `setCurrentUserId`, so we can tell a
   // genuine sign-in / user switch apart from a re-run of the effect.
   const lastReconciledId = useRef<string | null>(null);
@@ -380,7 +404,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const email = authProfile.email.toLowerCase();
-    const existing = usersRef.current.find((u) => u.email.toLowerCase() === email);
+    // Prefer a row that already carries this account's real id; only fall back
+    // to an email match. Matching on email alone let a locally-invented row --
+    // a demo mentor, a seed -- win over the genuine account and hand it a
+    // fabricated id, so nothing this session wrote lined up with Postgres.
+    const existing =
+      usersRef.current.find((u) => u.id === authProfile.id) ??
+      usersRef.current.find((u) => u.email.toLowerCase() === email);
     // Keep the seed id when one exists — studentData is keyed by it.
     const localId = existing?.id ?? authProfile.id;
 
@@ -395,9 +425,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     setUsers((prev) => {
-      const i = prev.findIndex((u) => u.id === localId);
-      if (i === -1) return [...prev, merged];
-      const next = [...prev];
+      // Drop any other row claiming this address. Duplicates could only ever be
+      // local inventions (a real account is one row in profiles), and leaving
+      // them produces two cards for one person in the admin view.
+      const deduped = prev.filter((u) => u.id === localId || u.email.toLowerCase() !== email);
+      const i = deduped.findIndex((u) => u.id === localId);
+      if (i === -1) return [...deduped, merged];
+      const next = [...deduped];
       next[i] = merged;
       return next;
     });
@@ -1051,6 +1085,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Append a small random suffix so rapid-fire calls (bulk import) don't collide on Date.now().
     const fallbackId = `u_${u.role}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     const created: User = { id: u.id || fallbackId, createdAt: Date.now(), ...u } as User;
+    // Never create a second row for an address that already has one. This used
+    // to append unconditionally, so adding a local demo mentor for someone who
+    // had already signed up produced two cards for one person -- and worse, the
+    // reconciliation below resolves identity by scanning for the FIRST email
+    // match, so a real sign-in could adopt the fabricated local id instead of
+    // its own Supabase uuid and drift away from Postgres entirely.
+    const email = created.email.toLowerCase();
+    const clash = usersRef.current.find((x) => x.email.toLowerCase() === email);
+    if (clash) return clash;
     setUsers((prev) => [...prev, created]);
     if (created.role === "student") {
       setStudentData((prev) => prev[created.id] ? prev : { ...prev, [created.id]: emptyStudentData() });
