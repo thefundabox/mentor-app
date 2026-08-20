@@ -1,129 +1,104 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { shuffle, topicQuestions } from "@/data";
-import { loadTopicQuestions } from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { Check, Flag, X, ChevronLeft, ChevronRight, Clock, LayoutGrid } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
-import {
-  QuizPathTracker,
-  type MainCellState,
-  type FoundationDrill,
-} from "@/components/QuizPathTracker";
+import { buildAttempt, loadPool } from "@/lib/topicPool";
 
 interface QuizScreenProps {
   dayNum: number;
 }
 
-interface Answer {
-  correct: boolean;
-  concept: string;
-  type: string;
+type Phase = "attempt" | "review";
+
+function fmtClock(ms: number) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-interface RemediationState {
-  qs: Question[];
-  i: number;
-  wrongAnswerExplain: string;
-}
-
-function buildAttempt(pool: Question[], seed: number): Question[] {
-  const conceptual = shuffle(pool.filter((q) => q.type === "conceptual"), seed).slice(0, 8);
-  const analytical = shuffle(pool.filter((q) => q.type === "analytical"), seed + 1).slice(0, 8);
-  return [...conceptual, ...analytical].map((q, i) => ({ ...q, _idx: i }));
-}
-
+/**
+ * Exam-style attempt.
+ *
+ * Nothing is revealed while answering: the student moves freely through the
+ * paper with a palette, may flag questions to revisit, submits once, and only
+ * then sees which were right and why. That mirrors the real RPSC sitting, where
+ * nothing tells you mid-paper that question 7 went wrong.
+ */
 export function QuizScreen({ dayNum }: QuizScreenProps) {
-  const { currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult, finishQuiz, topicCleared, foundationPool, recordStudentConfusion } = useAppState();
+  const {
+    currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult,
+    finishQuiz, topicCleared, recordStudentConfusion,
+  } = useAppState();
 
-  // Resolve the topic ahead of any early return, so the pool hooks below stay
-  // unconditional.
-  const preStudent = currentUser ? getStudent(currentUser.id) : null;
-  const preTopics = preStudent?.chart.days[dayNum - 1] ?? [];
-  const poolTopicId =
-    activeTopicId && preTopics.some((t) => t.topicId === activeTopicId)
+  // Resolved before any early return so every hook below stays unconditional.
+  const student = currentUser ? getStudent(currentUser.id) : null;
+  const topicsInDay = student?.chart.days[dayNum - 1] ?? [];
+  const topicId =
+    activeTopicId && topicsInDay.some((t) => t.topicId === activeTopicId)
       ? activeTopicId
-      : (preTopics.find((t) => currentUser && !topicCleared(currentUser.id, dayNum, t.topicId))?.topicId
-         || preTopics[0]?.topicId
+      : (topicsInDay.find((t) => currentUser && !topicCleared(currentUser.id, dayNum, t.topicId))?.topicId
+         || topicsInDay[0]?.topicId
          || null);
 
-  // Released questions for THIS microtheme, from Postgres.
-  const [remoteQs, setRemoteQs] = useState<Question[]>([]);
+  const [pool, setPool] = useState<Question[] | null>(null);
   useEffect(() => {
-    if (!poolTopicId) { setRemoteQs([]); return; }
+    if (!topicId) { setPool([]); return; }
     let cancelled = false;
-    void loadTopicQuestions(poolTopicId).then((qs) => { if (!cancelled) setRemoteQs(qs); });
+    void loadPool(topicId).then((qs) => { if (!cancelled) setPool(qs); });
     return () => { cancelled = true; };
-  }, [poolTopicId]);
+  }, [topicId]);
 
-  /**
-   * Questions for the topic being attempted.
-   *
-   * This used to read a single global `quizPool` (the Mewar demo set) and
-   * ignore the topic entirely, so every microtheme in the app served the same
-   * sixteen unrelated questions while the 80% gate judged students on them.
-   * Bundled past papers first, then released Postgres rows, deduped by stem.
-   * Nothing from another topic is ever mixed in.
-   */
-  const pool = useMemo(() => {
-    if (!poolTopicId) return [] as Question[];
-    const bundled = topicQuestions(poolTopicId);
-    const seen = new Set(bundled.map((x) => x.q));
-    return [...bundled, ...remoteQs.filter((x) => !seen.has(x.q))];
-  }, [poolTopicId, remoteQs]);
-
-  if (!currentUser) return null;
-  const user = currentUser;
-  const student = getStudent(user.id);
-  const topicsInDay = student.chart.days[dayNum - 1] || [];
-
-  const resolvedTopicId = activeTopicId && topicsInDay.some((t) => t.topicId === activeTopicId)
-    ? activeTopicId
-    : (topicsInDay.find((t) => !topicCleared(user.id, dayNum, t.topicId))?.topicId
-       || topicsInDay[0]?.topicId
-       || null);
-
-  const slot = topicsInDay.find((t) => t.topicId === resolvedTopicId);
-  if (!slot || !resolvedTopicId) return null;
-  const topicId: string = resolvedTopicId;
-
-  const questions = useMemo(() => buildAttempt(pool, attemptSeed), [pool, attemptSeed]);
-
-  const [i, setI] = useState(0);
-  const [chosen, setChosen] = useState<number | null>(null);
-  const [answers, setAnswers] = useState<Answer[]>([]);
-  const [remediation, setRemediation] = useState<RemediationState | null>(null);
-
-  // PR 7: per-question timing + perQuestion log. Real timings let the
-  // scheduler escape its legacy 12s default and start producing accurate
-  // confidence scores on day-quiz attempts too.
-  const [questionStart, setQuestionStart] = useState<number>(() => Date.now());
-  const [perQuestion, setPerQuestion] = useState<QuestionAttempt[]>([]);
-
-  // Path tracker state. `pathMain` mirrors the main-question row; it stays
-  // in lockstep with the main flow regardless of remediation. `activeDrill`
-  // is non-null only while the student is inside a foundation drill — once
-  // the drill ends we collapse it into a `foundationDots` count on the
-  // originating main cell and clear activeDrill back to null.
-  const [pathMain, setPathMain] = useState<MainCellState[]>(() =>
-    Array.from({ length: questions.length }, (_, idx) => ({
-      result: idx === 0 ? ("current" as const) : ("pending" as const),
-      foundationDots: 0,
-    })),
+  const questions = useMemo(
+    () => (pool ? buildAttempt(pool, attemptSeed) : []),
+    [pool, attemptSeed],
   );
-  const [activeDrill, setActiveDrill] = useState<FoundationDrill | null>(null);
+  const total = questions.length;
 
-  // Reset the question timer on every fresh question (main or remediation).
+  const [phase, setPhase] = useState<Phase>("attempt");
+  const [current, setCurrent] = useState(0);
+  const [selected, setSelected] = useState<(number | null)[]>([]);
+  const [flagged, setFlagged] = useState<boolean[]>([]);
+  const [showPalette, setShowPalette] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Per-question dwell time, accumulated as the student moves around. Held in a
+  // ref so re-renders never reset it.
+  const spent = useRef<number[]>([]);
+  const landedAt = useRef<number>(0);
+  const startedAt = useRef<number>(0);
+  const pendingResult = useRef<QuizResult | null>(null);
+
+  // Size the answer arrays once the paper is known.
   useEffect(() => {
-    setQuestionStart(Date.now());
-  }, [i, remediation?.i, remediation == null]);
+    if (total === 0) return;
+    setSelected(Array(total).fill(null));
+    setFlagged(Array(total).fill(false));
+    spent.current = Array(total).fill(0);
+    startedAt.current = Date.now();
+    landedAt.current = Date.now();
+  }, [total]);
 
-  // No questions for this microtheme. Serving another topic's bank would put
-  // students in front of material they were never asked to study, and the 80%
-  // gate would then judge them on it -- so say so and send them back to the
-  // notes, where "Mark as studied" advances the day.
-  if (questions.length === 0) {
+  useEffect(() => {
+    if (phase !== "attempt" || total === 0) return;
+    const t = setInterval(() => setElapsed(Date.now() - startedAt.current), 1000);
+    return () => clearInterval(t);
+  }, [phase, total]);
+
+  if (!currentUser || !student || !topicId) return null;
+  const user = currentUser;
+
+  if (pool === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
+        Loading questions…
+      </div>
+    );
+  }
+
+  if (total === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center">
@@ -139,266 +114,325 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     );
   }
 
-  const q = remediation ? remediation.qs[remediation.i] : questions[i];
-  const total = questions.length;
+  const q = questions[current];
+  const answeredCount = selected.filter((s) => s !== null).length;
 
-  // Shared finalize: same scoring/result logic the main-correct branch had
-  // inline. Pulled out so the foundation-completes-on-last-Q branch can
-  // call it too (PR 7-tracker change: drills no longer re-attempt the
-  // failed main Q, so the last-Q-drill case has to finalize directly).
-  function finalizeQuiz(allAnswers: Answer[], allPerQuestion: QuestionAttempt[]) {
-    const correctCount = allAnswers.filter((a) => a.correct).length;
-    const byConcept: Record<string, ConceptStat> = {};
-    allAnswers.forEach((a) => {
-      const c = byConcept[a.concept] || { right: 0, wrong: 0 };
-      if (a.correct) c.right += 1; else c.wrong += 1;
-      byConcept[a.concept] = c;
+  const goTo = (idx: number) => {
+    const now = Date.now();
+    spent.current[current] = (spent.current[current] ?? 0) + (now - landedAt.current);
+    landedAt.current = now;
+    setCurrent(idx);
+    setShowPalette(false);
+  };
+
+  const choose = (optionIdx: number) => {
+    setSelected((prev) => prev.map((v, i) => (i === current ? optionIdx : v)));
+  };
+
+  const toggleFlag = () => {
+    setFlagged((prev) => prev.map((v, i) => (i === current ? !v : v)));
+  };
+
+  const submit = () => {
+    // Bank the time spent on the question being left.
+    spent.current[current] = (spent.current[current] ?? 0) + (Date.now() - landedAt.current);
+
+    const perQuestion: QuestionAttempt[] = questions.map((question, i) => {
+      const pick = selected[i];
+      const wasCorrect = pick !== null && pick === question.correct;
+      if (pick !== null && !wasCorrect) {
+        const distractor = question.options[pick] ?? `option_${pick}`;
+        recordStudentConfusion(user.id, question.concept || "unknown", distractor, topicId);
+      }
+      return {
+        questionId: `${question.concept}_${i}`,
+        skipped: pick === null,
+        selectedOption: pick ?? -1,
+        wasCorrect,
+        responseTimeMs: spent.current[i] ?? 0,
+        concept: question.concept,
+      };
     });
+
+    const correctCount = perQuestion.filter((p) => p.wasCorrect).length;
+    const byConcept: Record<string, ConceptStat> = {};
+    questions.forEach((question, i) => {
+      const c = byConcept[question.concept] || { right: 0, wrong: 0 };
+      if (perQuestion[i].wasCorrect) c.right += 1; else c.wrong += 1;
+      byConcept[question.concept] = c;
+    });
+
     const attemptsForTopic = student.attempts.filter((a) => a.day === dayNum && a.topicId === topicId).length;
-    const isFirstTry = attemptsForTopic === 0;
     const score = Math.round((correctCount / total) * 100);
     const { pointsAwarded, dayClearedNow, topicsRemainingInDay } = finishQuiz(user.id, {
-      day: dayNum, topicId, score, when: Date.now(), byConcept,
-      perQuestion: allPerQuestion,
+      day: dayNum, topicId, score, when: Date.now(), byConcept, perQuestion,
     });
-    const result: QuizResult = {
+
+    pendingResult.current = {
       score, correct: correctCount, total,
-      missedConcepts: [...new Set(allAnswers.filter((a) => !a.correct).map((a) => a.concept))],
+      missedConcepts: [...new Set(questions.filter((_, i) => !perQuestion[i].wasCorrect).map((x) => x.concept))],
       byConcept,
       pointsAwarded,
-      firstTry: isFirstTry,
+      firstTry: attemptsForTopic === 0,
       topicId,
       dayClearedNow,
       topicsRemainingInDay,
     };
-    setLastResult(result);
+    setConfirmSubmit(false);
+    setPhase("review");
+  };
+
+  const finish = () => {
+    if (pendingResult.current) setLastResult(pendingResult.current);
     setRoute("results");
-  }
+  };
 
-  function handleSubmit() {
-    if (chosen === null) return;
-    const isCorrect = chosen === q.correct;
-    const responseTimeMs = Date.now() - questionStart;
+  /* ---------------------------------------------------------------- review */
 
-    // Remediation answers don't go into the perQuestion log: they're a
-    // teaching moment, not a graded item. Same reason confusion isn't
-    // recorded for foundation Qs. They DO advance the path tracker so the
-    // student can see how far into the drill they are.
-    if (remediation && activeDrill) {
-      const nextI = remediation.i + 1;
-      const drillResults = [...activeDrill.results];
-      drillResults[remediation.i] = isCorrect ? "correct" : "wrong";
-
-      if (nextI < remediation.qs.length) {
-        drillResults[nextI] = "current";
-        setActiveDrill({ ...activeDrill, results: drillResults });
-        setRemediation({ ...remediation, i: nextI });
-      } else {
-        // Drill done. Transition into "re-attempt" phase: the student goes
-        // back to the original main Q for a second try. We do NOT advance i
-        // here; we close out the remediation flow and flip the drill phase.
-        // The next handleSubmit will fall through to the main branch and
-        // detect activeDrill.phase === "reattempt" to handle the second
-        // attempt (replace previous wrong answer, collapse drill to pips,
-        // advance forward).
-        setActiveDrill({ ...activeDrill, results: drillResults, phase: "reattempt" });
-        setRemediation(null);
-      }
-      setChosen(null);
-      return;
-    }
-
-    // Re-attempt branch: drill is done, student is back on the original main
-    // Q for a second try. Replace the previous wrong entry in answers and
-    // perQuestion with the new result so the score reflects what the student
-    // ultimately demonstrated. Don't trigger another drill (avoids an
-    // infinite-loop) and don't re-record confusion (the first wrong pick was
-    // already recorded when the drill opened).
-    if (activeDrill && activeDrill.phase === "reattempt") {
-      const drillLength = activeDrill.results.length;
-
-      const replacedQa: QuestionAttempt = {
-        questionId: `${q.concept}_${i}`,
-        selectedOption: chosen,
-        wasCorrect: isCorrect,
-        skipped: false,
-        responseTimeMs,
-        concept: q.concept,
-      };
-      const nextPerQuestion = [...perQuestion.slice(0, -1), replacedQa];
-      setPerQuestion(nextPerQuestion);
-
-      const nextAnswers: Answer[] = [
-        ...answers.slice(0, -1),
-        { correct: isCorrect, concept: q.concept, type: q.type },
-      ];
-      setAnswers(nextAnswers);
-
-      // Tracker: flip the cell to its final result, collapse the drill into
-      // foundationDots pips, mark the next main cell current.
-      setPathMain((prev) => {
-        const next = [...prev];
-        next[i] = {
-          ...next[i],
-          result: isCorrect ? "correct" : "wrong",
-          foundationDots: drillLength,
-        };
-        if (i + 1 < next.length) {
-          next[i + 1] = { ...next[i + 1], result: "current" };
-        }
-        return next;
-      });
-      setActiveDrill(null);
-      setChosen(null);
-      if (i + 1 < total) {
-        setI(i + 1);
-      } else {
-        finalizeQuiz(nextAnswers, nextPerQuestion);
-      }
-      return;
-    }
-
-    // PR 7: record per-question detail for the scheduler and analytics. Stable
-    // question id uses (concept, index) — matches the selector's convention.
-    const qa: QuestionAttempt = {
-      questionId: `${q.concept}_${i}`,
-      selectedOption: chosen,
-      wasCorrect: isCorrect,
-      skipped: false,
-      responseTimeMs,
-      concept: q.concept,
-    };
-    const nextPerQuestion = [...perQuestion, qa];
-    setPerQuestion(nextPerQuestion);
-
-    // PR 7: record (concept, chosen-distractor) when the student picked a
-    // wrong main-pool answer. Foundation remediation is excluded above.
-    if (!isCorrect) {
-      const distractor = q.options[chosen] ?? `option_${chosen}`;
-      recordStudentConfusion(user.id, q.concept || "unknown", distractor, topicId);
-    }
-
-    const newAnswers = [...answers, { correct: isCorrect, concept: q.concept, type: q.type }];
-    setAnswers(newAnswers);
-
-    if (!isCorrect) {
-      const found = (foundationPool[q.concept] || []).slice(0, 2);
-      if (found.length) {
-        // Wrong main + foundations queued: mark this main cell wrong and
-        // open a drill. Foundation cells render vertically under this column.
-        setPathMain((prev) => {
-          const next = [...prev];
-          next[i] = { ...next[i], result: "wrong" };
-          return next;
-        });
-        setActiveDrill({
-          mainIdx: i,
-          results: found.map((_, k) => (k === 0 ? "current" : "pending")),
-          phase: "drilling",
-        });
-        setRemediation({
-          qs: found.map((f) => ({ ...f, _foundation: true })),
-          i: 0,
-          wrongAnswerExplain: q.why,
-        });
-        setChosen(null);
-        return;
-      }
-    }
-
-    // Either correct, OR wrong-with-no-foundations: mark this main cell
-    // and advance the cursor.
-    setPathMain((prev) => {
-      const next = [...prev];
-      next[i] = { ...next[i], result: isCorrect ? "correct" : "wrong" };
-      if (i + 1 < next.length) {
-        next[i + 1] = { ...next[i + 1], result: "current" };
-      }
-      return next;
-    });
-
-    setChosen(null);
-    if (i + 1 < total) {
-      setI(i + 1);
-    } else {
-      finalizeQuiz(newAnswers, nextPerQuestion);
-    }
-  }
-
-  if (!q) return null;
-
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
-        <QuizPathTracker
-          main={pathMain}
-          activeDrill={activeDrill}
-          currentIndex={activeDrill ? activeDrill.mainIdx + 1 : i + 1}
-          total={total}
-          onClose={() => setRoute("topic")}
-        />
-      </div>
-
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        {remediation && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200">
-            <div className="text-xs font-bold uppercase tracking-wide text-amber-700 mb-1">Almost — but not quite</div>
-            <div className="text-sm text-amber-900">{remediation.wrongAnswerExplain}</div>
-            <div className="text-xs text-amber-700 mt-2">
-              Quick foundation check ({remediation.i + 1} of {remediation.qs.length}) before we continue.
+  if (phase === "review") {
+    const result = pendingResult.current;
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
+          <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Your score</div>
+              <div className="text-2xl font-bold text-slate-900 leading-none">
+                {result?.score ?? 0}%
+                <span className="text-sm font-medium text-slate-500 ml-2">
+                  {result?.correct ?? 0} / {total}
+                </span>
+              </div>
             </div>
-          </motion.div>
-        )}
-
-        {/* Re-attempt banner: shown when the drill just ended and the
-          * student is about to take a second swing at the original main Q. */}
-        {!remediation && activeDrill && activeDrill.phase === "reattempt" && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
-            <div className="text-xs font-bold uppercase tracking-wide text-indigo-700 mb-1">Try this one again</div>
-            <div className="text-sm text-indigo-900">
-              You just worked through {activeDrill.results.length} foundation question{activeDrill.results.length === 1 ? "" : "s"}. Now retake the original question — this is what counts toward your score.
+            <div className="ml-auto text-xs text-slate-500 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" /> {fmtClock(elapsed)}
             </div>
-          </motion.div>
-        )}
-
-        <div className="text-xs uppercase font-semibold text-indigo-600 mb-2">
-          {remediation
-            ? "Foundation refresher"
-            : activeDrill && activeDrill.phase === "reattempt"
-              ? "Second attempt"
-              : q.type === "conceptual" ? "Conceptual" : "Analytical · Fact-based"}
+            <Button onClick={finish}>Continue</Button>
+          </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-slate-900 mb-6 leading-snug">{q.q}</h2>
-
-        <div className="space-y-3">
-          {q.options.map((opt, k) => {
-            const isPicked = chosen === k;
+        <div className="max-w-3xl mx-auto px-5 py-6 space-y-4">
+          {questions.map((question, i) => {
+            const pick = selected[i];
+            const right = pick !== null && pick === question.correct;
             return (
-              <button key={k} onClick={() => setChosen(k)}
-                className={`w-full text-left p-4 rounded-xl border-2 transition flex items-center gap-3 ${
-                  isPicked ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white hover:border-slate-300"
-                }`}>
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold transition ${
-                  isPicked ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
-                }`}>
-                  {String.fromCharCode(65 + k)}
-                </span>
-                <span className="text-slate-800">{opt}</span>
-              </button>
+              <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-6 h-6 rounded-full text-xs font-bold grid place-items-center ${
+                    right ? "bg-emerald-100 text-emerald-700"
+                      : pick === null ? "bg-slate-100 text-slate-500" : "bg-rose-100 text-rose-700"
+                  }`}>{i + 1}</span>
+                  <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                    {question.type}
+                  </span>
+                  {pick === null && (
+                    <span className="text-[11px] uppercase font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                      not attempted
+                    </span>
+                  )}
+                </div>
+                <p className="font-semibold text-slate-900 mb-3 whitespace-pre-line">{question.q}</p>
+                <div className="space-y-1.5 mb-3">
+                  {question.options.map((opt, oi) => {
+                    const isCorrect = oi === question.correct;
+                    const isPick = oi === pick;
+                    return (
+                      <div key={oi} className={`text-sm rounded-lg px-3 py-2 border flex items-start gap-2 ${
+                        isCorrect ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                          : isPick ? "border-rose-300 bg-rose-50 text-rose-900"
+                          : "border-slate-200 text-slate-600"
+                      }`}>
+                        <span className="font-semibold">{String.fromCharCode(65 + oi)}</span>
+                        <span className="flex-1">{opt}</span>
+                        {isCorrect && <Check className="w-4 h-4 shrink-0" />}
+                        {isPick && !isCorrect && <X className="w-4 h-4 shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                {question.why && (
+                  <div className="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+                    <span className="font-semibold text-slate-700">Why: </span>{question.why}
+                  </div>
+                )}
+              </div>
             );
           })}
-        </div>
-
-        <div className="mt-8 flex justify-end">
-          <Button disabled={chosen === null} onClick={handleSubmit}>
-            {remediation ? "Continue" : i + 1 === total ? "Finish quiz" : "Next question"}
-            <ArrowRight className="w-4 h-4" />
-          </Button>
+          <div className="pt-2 flex justify-center">
+            <Button onClick={finish}>Continue to results</Button>
+          </div>
         </div>
       </div>
+    );
+  }
+
+  /* --------------------------------------------------------------- attempt */
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
+        <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-3">
+          <button
+            onClick={() => setRoute("topic")}
+            className="text-slate-400 hover:text-slate-700"
+            title="Leave the attempt"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <Clock className="w-3.5 h-3.5" />
+            <span className="tabular-nums">{fmtClock(elapsed)}</span>
+          </div>
+
+          <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-indigo-500"
+              animate={{ width: `${(answeredCount / total) * 100}%` }}
+              transition={{ duration: 0.25 }}
+            />
+          </div>
+
+          <div className="text-xs font-semibold text-slate-600 tabular-nums whitespace-nowrap">
+            {answeredCount} / {total}
+          </div>
+
+          <button
+            onClick={() => setShowPalette((v) => !v)}
+            className="text-slate-500 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100"
+            title="Question palette"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+
+          <Button size="sm" onClick={() => setConfirmSubmit(true)}>Submit</Button>
+        </div>
+
+        {showPalette && (
+          <div className="max-w-3xl mx-auto px-5 pb-4">
+            <div className="grid grid-cols-8 sm:grid-cols-12 gap-1.5">
+              {questions.map((_, i) => {
+                const state = flagged[i] ? "flag" : selected[i] !== null ? "done" : "todo";
+                return (
+                  <button
+                    key={i}
+                    onClick={() => goTo(i)}
+                    className={`h-8 rounded-lg text-xs font-semibold transition ${
+                      i === current ? "ring-2 ring-indigo-400 " : ""
+                    }${
+                      state === "flag" ? "bg-amber-100 text-amber-800"
+                        : state === "done" ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 mt-2 text-[11px] text-slate-500">
+              <span><span className="inline-block w-2.5 h-2.5 rounded bg-emerald-100 mr-1" />answered</span>
+              <span><span className="inline-block w-2.5 h-2.5 rounded bg-amber-100 mr-1" />flagged</span>
+              <span><span className="inline-block w-2.5 h-2.5 rounded bg-slate-100 mr-1" />not attempted</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 max-w-3xl mx-auto w-full px-5 py-8">
+        <motion.div key={current} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[11px] uppercase tracking-wide font-semibold text-indigo-600">
+              {q.type}
+            </span>
+            <span className="text-xs text-slate-400 tabular-nums">Q{current + 1} of {total}</span>
+            <button
+              onClick={toggleFlag}
+              className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition ${
+                flagged[current]
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              }`}
+            >
+              <Flag className="w-3.5 h-3.5" />
+              {flagged[current] ? "Flagged" : "Flag for review"}
+            </button>
+          </div>
+
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug mb-6 whitespace-pre-line">
+            {q.q}
+          </h1>
+
+          <div className="space-y-2.5">
+            {q.options.map((opt, oi) => {
+              const picked = selected[current] === oi;
+              return (
+                <button
+                  key={oi}
+                  onClick={() => choose(oi)}
+                  className={`w-full text-left rounded-xl border-2 px-4 py-3.5 flex items-start gap-3 transition ${
+                    picked
+                      ? "border-indigo-500 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-full grid place-items-center text-xs font-bold shrink-0 ${
+                    picked ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    {String.fromCharCode(65 + oi)}
+                  </span>
+                  <span className={picked ? "text-indigo-950" : "text-slate-700"}>{opt}</span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="sticky bottom-0 bg-white border-t border-slate-200">
+        <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => goTo(Math.max(0, current - 1))}
+            disabled={current === 0}
+          >
+            <ChevronLeft className="w-4 h-4" /> Previous
+          </Button>
+          <button
+            onClick={() => setSelected((prev) => prev.map((v, i) => (i === current ? null : v)))}
+            className="text-xs text-slate-500 hover:text-slate-800 disabled:opacity-40"
+            disabled={selected[current] === null}
+          >
+            Clear
+          </button>
+          <div className="ml-auto">
+            {current === total - 1 ? (
+              <Button onClick={() => setConfirmSubmit(true)}>Submit paper</Button>
+            ) : (
+              <Button onClick={() => goTo(current + 1)}>
+                Next <ChevronRight className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {confirmSubmit && (
+        <div className="fixed inset-0 z-20 bg-slate-900/40 flex items-center justify-center px-6">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+            <h2 className="text-lg font-bold text-slate-900 mb-1">Submit this paper?</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              {answeredCount === total
+                ? "All questions answered. You will see the solutions next."
+                : `${total - answeredCount} question${total - answeredCount === 1 ? "" : "s"} still unanswered. Unanswered questions score zero.`}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setConfirmSubmit(false)}>Keep working</Button>
+              <Button onClick={submit}>Submit</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

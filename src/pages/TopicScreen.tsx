@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
 import { topicQuestions, topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
+import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
 import {
@@ -32,6 +33,20 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
 
   const slot = topicsInDay.find((t) => t.topicId === resolvedTopicId);
   const [tab, setTab] = useState("notes");
+
+  // Describe the actual paper rather than a hardcoded "16 questions". Loads the
+  // same pool the attempt will use, so the count on this screen is the count
+  // the student gets.
+  const [attemptSummary, setAttemptSummary] = useState("Loading the question bank\u2026");
+  useEffect(() => {
+    if (!resolvedTopicId) return;
+    let cancelled = false;
+    void loadPool(resolvedTopicId).then((qs) => {
+      if (cancelled) return;
+      setAttemptSummary(describeAttempt(buildAttempt(qs, 0)));
+    });
+    return () => { cancelled = true; };
+  }, [resolvedTopicId]);
 
   if (!slot || !resolvedTopicId) return null;
 
@@ -174,6 +189,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           )}
           {tab === "quiz" && (
             <QuizTab
+              attemptSummary={attemptSummary}
               onStartQuiz={handleStartQuiz}
               onMarkStudied={handleMarkStudied}
               hasBank={hasBank}
@@ -285,6 +301,7 @@ function NotesTab({
 
 // --- Quiz Tab ---
 function QuizTab({
+  attemptSummary,
   onStartQuiz,
   onMarkStudied,
   hasBank,
@@ -292,6 +309,7 @@ function QuizTab({
   dayOverride,
   onRequestOverride,
 }: {
+  attemptSummary: string;
   onStartQuiz: () => void;
   onMarkStudied: () => void;
   hasBank: boolean;
@@ -327,8 +345,8 @@ function QuizTab({
         Ready to attempt?
       </h3>
       <p className="text-slate-500 mb-6 max-w-md mx-auto">
-        16 questions: 8 conceptual + 8 analytical. Wrong answers will route you
-        to a quick foundation refresher before resuming.
+        {attemptSummary} Answer them in any order, flag anything you want to revisit,
+        then submit once — solutions come after, not during.
       </p>
       <Button onClick={onStartQuiz}>
         Start quiz
