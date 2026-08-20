@@ -5,6 +5,7 @@ import { QuestionReview } from "@/components/QuestionReview";
 import { releaseTopic, holdTopic } from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
+import { AccountsPanel } from "@/components/AccountsPanel";
 import {
   Users, BookOpen, BarChart3, Plus, Pencil, Trash2,
   ChevronDown, ChevronRight, Archive, RotateCw, Layout, Compass, ArrowUp, ArrowDown, HelpCircle, GraduationCap, FileText, Calendar, Newspaper,
@@ -126,11 +127,18 @@ function PeopleTab() {
 
   return (
     <div className="space-y-6">
+      <AccountsPanel />
+
       <BulkImportPanel />
 
       <div className="bg-white border border-slate-200 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-slate-900">Add a mentor</h2>
+          <h2 className="font-semibold text-slate-900">Add a local demo mentor</h2>
+        </div>
+        <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+          This does <strong>not</strong> create a real account — it only adds a row to this browser, for demo
+          and layout purposes. Someone added here cannot sign in. To grant real mentor access, have them sign
+          up first, then change their role in <strong>Accounts</strong> above.
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
           <input type="email" placeholder="email@example.com" value={newMentorEmail} onChange={(e) => setNewMentorEmail(e.target.value)}

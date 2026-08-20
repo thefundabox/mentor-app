@@ -39,6 +39,12 @@ interface AppContextValue extends AppState {
   loginAs: (role: Role, email: string, name: string) => void;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
+  /** Every real account from public.profiles. Admin/mentor only, per RLS. */
+  listProfiles: () => Promise<ProfileRow[]>;
+  /** Change a user's role via the admin-checked RPC. */
+  setUserRole: (userId: string, role: Role) => Promise<AuthResult>;
+  /** Assign or clear a student's mentor via the admin-checked RPC. */
+  setUserMentor: (studentId: string, mentorId: string | null) => Promise<AuthResult>;
   /** Email a reset link. Admin-triggered; the user sets their own password. */
   sendPasswordReset: (email: string) => Promise<AuthResult>;
   /** Set a new password for the signed-in / recovery-linked user. */
@@ -570,6 +576,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoute("auto");
     return {};
   }, [setRoute, setLoginRoleIntent]);
+
+  /* ---------- admin: real accounts in Postgres ----------
+   *
+   * The People tab used to list `users`, which is localStorage. Anyone added
+   * there was a ghost: visible in the panel, unknown to Supabase, unable to log
+   * in. These read and write public.profiles instead, so the panel shows
+   * accounts that actually exist.
+   */
+
+  /** Every profile. RLS restricts this to mentors and admins. */
+  const listProfiles = useCallback(async (): Promise<ProfileRow[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from("profiles").select("*").order("created_at", { ascending: false });
+    if (error) { setAuthError(`Could not load accounts: ${error.message}`); return []; }
+    return (data ?? []) as ProfileRow[];
+  }, []);
+
+  /**
+   * Change someone's role.
+   *
+   * Goes through a security-definer RPC, not a table write: `authenticated` has
+   * no column privilege on `role`, and granting one would let any student
+   * promote themselves. See supabase/migrations/0008.
+   */
+  const setUserRole = useCallback(async (userId: string, role: Role): Promise<AuthResult> => {
+    if (!supabase) return { error: "Not available — Supabase is not configured." };
+    const { error } = await supabase.rpc("set_user_role", { target_id: userId, new_role: role });
+    if (error) return { error: error.message };
+    // Mirror into the local list so the UI reflects it without a refetch.
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)));
+    return {};
+  }, [setUsers]);
+
+  /** Assign (or clear, with null) a student's mentor. Same RPC reasoning. */
+  const setUserMentor = useCallback(async (studentId: string, mentorId: string | null): Promise<AuthResult> => {
+    if (!supabase) return { error: "Not available — Supabase is not configured." };
+    const { error } = await supabase.rpc("set_user_mentor", { target_id: studentId, mentor: mentorId });
+    if (error) return { error: error.message };
+    setUsers((prev) => prev.map((u) => (u.id === studentId ? { ...u, mentorId: mentorId ?? undefined } : u)));
+    return {};
+  }, [setUsers]);
 
   /**
    * Email a password-reset link.
@@ -1273,6 +1321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
     currentUser, students, mentors,
     loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
+    listProfiles, setUserRole, setUserMentor,
     authLoading, authError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
