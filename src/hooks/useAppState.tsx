@@ -305,6 +305,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const usersRef = useRef(users);
   useEffect(() => { usersRef.current = users; }, [users]);
 
+  // Last identity reconciliation handed to `setCurrentUserId`, so we can tell a
+  // genuine sign-in / user switch apart from a re-run of the effect.
+  const lastReconciledId = useRef<string | null>(null);
+
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
     let cancelled = false;
@@ -373,6 +377,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setCurrentUserId(localId);
+
+    // Re-arm routing on a real sign-in / user switch. `route` is persisted in
+    // localStorage, and App's auto-routing effect bails unless it reads "auto".
+    // Without this, a stale route left by a previous session (or by whoever used
+    // this browser last) survives the sign-in, the assessment / choose-plan
+    // redirect never runs, and a student with no plan falls through to
+    // StudentHome — which renders nothing. That is the blank page.
+    if (lastReconciledId.current !== localId) {
+      lastReconciledId.current = localId;
+      setRoute("auto");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authProfile]);
 

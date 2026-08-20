@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppProvider, useAppState } from "@/hooks/useAppState";
 import { TopBar } from "@/components/TopBar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
 import { Assessment } from "@/pages/Assessment";
@@ -26,7 +27,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId } = useAppState();
 
   useEffect(() => {
     if (route !== "auto") return;
@@ -95,7 +96,13 @@ function AppContent() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
       >
-        {content}
+        {/* Keyed on the route so "Back to start" re-mounts the tree cleanly. */}
+        <ErrorBoundary
+          key={route + (currentUser?.id || "none")}
+          onReset={() => { setViewingStudentId(null); setRoute("auto"); }}
+        >
+          {content}
+        </ErrorBoundary>
       </motion.div>
       {showTopBar && (
         <div className="max-w-6xl mx-auto px-6 py-10 text-center text-xs text-slate-400">

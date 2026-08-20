@@ -28,6 +28,17 @@ export function StudentHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
 
+  // Safety net: this screen has nothing to draw without a plan, and rendering
+  // nothing leaves the student staring at a bare header and footer. Hand control
+  // back to App's auto-routing, which sends them to assessment / choose-plan.
+  const planless =
+    !!currentUser &&
+    currentUser.role === "student" &&
+    getStudent(currentUser.id).chart.days.filter((d) => d.length > 0).length === 0;
+  useEffect(() => {
+    if (planless) setRoute("auto");
+  }, [planless, setRoute]);
+
   if (!currentUser) return null;
 
   const user = currentUser;

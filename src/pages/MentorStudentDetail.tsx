@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
@@ -18,9 +18,25 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const [showFeedback, setShowFeedback] = useState(false);
 
   const { completedDays, topicCleared, findTopicLive: findTopic } = useAppState();
-  if (!user) return null;
 
-  const cleared = completedDays(studentId);
+  // `viewingStudentId` is persisted in localStorage, so it can point at a
+  // student who is no longer in `users` — a different mentor's cohort, a stale
+  // id from a previous session, or simply a list that has not finished loading
+  // from Supabase yet. Returning null here left the mentor on a bare header and
+  // footer with no way out, so hand control back to the mentor dashboard.
+  useEffect(() => {
+    if (!user) {
+      setViewingStudentId(null);
+      setRoute("mentor");
+    }
+  }, [user, setViewingStudentId, setRoute]);
+
+  // NOTE: every hook must sit above the `!user` guard below. `users` fills in
+  // asynchronously, so `user` flips from undefined to defined on an already
+  // mounted component; with hooks after the guard React sees the hook count
+  // grow between renders and throws "Rendered more hooks than during the
+  // previous render", which unmounts the whole app.
+  const cleared = user ? completedDays(studentId) : [];
   const analytics = useMemo(() => strengthsAndWeaknesses(s.attempts), [s.attempts]);
   const chartData = useMemo(() =>
     analytics.all.map((c) => ({
@@ -38,6 +54,10 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
     })),
     [s.attempts]
   );
+
+  // Safe here — every hook above runs unconditionally. The effect above is
+  // already routing back to the mentor dashboard.
+  if (!user) return null;
 
   const totalDays = s.chart.days.length;
   const completed = cleared.length;
