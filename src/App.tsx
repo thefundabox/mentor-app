@@ -68,6 +68,16 @@ function AppContent() {
   // without a password, so nothing else should render until they set one.
   if (recoveryMode) {
     content = <SetPassword />;
+  } else if (currentUser && route === "auto") {
+    // "auto" is a sentinel the effect above resolves, not a screen. Falling
+    // through to the role branches rendered StudentHome for a student who has
+    // no plan yet, which returns null -- so the first paint after signing in was
+    // a bare header and footer until the user reloaded.
+    content = (
+      <div className="max-w-6xl mx-auto px-6 py-24 text-center text-sm text-slate-400">
+        Setting up your workspace...
+      </div>
+    );
   } else if (!currentUser) {
     content = route === "login" ? <Login /> : <Landing />;
   } else if (currentUser.role === "admin") {

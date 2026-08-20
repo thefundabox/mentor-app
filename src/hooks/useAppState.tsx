@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
+
 import {
   loadStudent, loadStudents, loadAllProfiles, saveChart, updateChart, saveProgress,
   insertOverride, decideOverride, markOverrideSeenRemote,
@@ -1153,7 +1154,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // what the institute actually publishes.
     const remote = remoteTemplates.find((t) => t.id === templateId);
     const tpl = remote ?? planTemplates.find((t) => t.id === templateId);
-    if (!tpl) return;
+    if (!tpl) {
+      // Was a bare `return`. Adoption is the app's main onboarding path, so a
+      // missing template left the student on an empty chart with no explanation
+      // -- the same silent-failure shape as the mentor approval bug.
+      setAuthError(`Could not apply the plan: template "${templateId}" was not found.`);
+      return;
+    }
     // patchChart, not patchStudent: adopting writes the chart, and the blanket
     // push only carries a student's own row.
     patchChart(id, (s) => ({
