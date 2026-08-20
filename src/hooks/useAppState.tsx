@@ -685,12 +685,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [setStudentData]);
 
+  /**
+   * Mutate a student's chart AND persist it.
+   *
+   * The blanket push effect above returns early unless the signed-in user is a
+   * student writing their own row, so a mentor approving a chart only ever
+   * changed their own browser: `approvedThrough` never reached Postgres, the
+   * student's device never learned of it, and every day stayed locked behind
+   * "beyond commitment" forever. Overrides already had explicit remote writes
+   * (insertOverride / decideOverride); charts were the omission the comment on
+   * that effect promised but nobody wrote.
+   *
+   * Computed from the ref rather than inside the setState updater, so the
+   * updater stays pure — React double-invokes those in development.
+   */
+  const patchChart = useCallback((id: string, mutate: (s: StudentData) => StudentData) => {
+    const cur = studentDataRef.current[id] || emptyStudentData();
+    const next: StudentData = { ...mutate(cur), lastActivityAt: Date.now() };
+    setStudentData((prev) => ({ ...prev, [id]: next }));
+    // RLS permits this for the owning student and for any mentor/admin.
+    if (isSupabaseConfigured) void saveChart(id, next);
+  }, [setStudentData]);
+
   const setChart = useCallback((id: string, chart: ChartState) => {
-    patchStudent(id, { chart });
-  }, [patchStudent]);
+    patchChart(id, (s) => ({ ...s, chart }));
+  }, [patchChart]);
 
   const submitChartForApproval = useCallback((id: string, scope?: CommitmentScope) => {
-    patchStudent(id, (s) => {
+    patchChart(id, (s) => {
       const newScope: CommitmentScope = scope ?? s.chart.commitmentScope ?? "week";
       const sliceSize = SCOPE_DAYS[newScope];
       // Commit from where the mentor last approved up to scope days further (clamped to chart length).
@@ -707,7 +729,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       };
     });
-  }, [patchStudent]);
+  }, [patchChart]);
 
   const awardPoints = (s: StudentData, kind: PointKind, amount: number, meta?: PointEvent["meta"]): StudentData => {
     const evt: PointEvent = { id: Date.now() + Math.random(), when: Date.now(), kind, amount, meta };
@@ -715,7 +737,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const approveChart = useCallback((id: string) => {
-    patchStudent(id, (s) => {
+    patchChart(id, (s) => {
       const newApprovedThrough = Math.max(s.chart.approvedThrough, s.chart.committedThrough);
       const updated: StudentData = {
         ...s,
@@ -724,11 +746,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const already = s.points.history.some((e) => e.kind === "chart_approved");
       return already ? updated : awardPoints(updated, "chart_approved", POINTS.CHART_APPROVED);
     });
-  }, [patchStudent]);
+  }, [patchChart]);
 
   const requestChartChanges = useCallback((id: string, feedback?: string) => {
-    patchStudent(id, (s) => ({ ...s, chart: { ...s.chart, status: "changes_requested", decidedAt: Date.now(), feedback } }));
-  }, [patchStudent]);
+    patchChart(id, (s) => ({ ...s, chart: { ...s.chart, status: "changes_requested", decidedAt: Date.now(), feedback } }));
+  }, [patchChart]);
 
   /* ---------- multi-topic completion helpers ---------- */
 
