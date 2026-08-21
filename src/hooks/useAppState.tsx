@@ -651,7 +651,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      options: { data: { name: name.trim() } },
+      options: {
+        data: { name: name.trim() },
+        // Without this Supabase falls back to the project's Site URL, which is
+        // http://localhost:3000 by default -- so a real student clicking the
+        // confirmation link landed on "localhost refused to connect". Sending
+        // the current origin makes the link follow wherever the app is served
+        // from, in production and in local dev alike. The origin must also be
+        // listed under Authentication -> URL Configuration -> Redirect URLs.
+        emailRedirectTo: window.location.origin,
+      },
     });
     if (error) { setAuthError(error.message); return { error: error.message }; }
     // With "Confirm email" enabled (the Supabase default) signUp returns no
