@@ -88,18 +88,28 @@ function SendResetLink({ email }: { email: string }) {
   }
 
   return (
-    <button
-      onClick={send}
-      disabled={state === "busy"}
-      title={message || `Email a password-reset link to ${email}`}
-      className={`text-[11px] font-medium px-2 py-1 rounded-lg whitespace-nowrap disabled:opacity-50 ${
-        state === "error"
-          ? "text-rose-700 bg-rose-50 hover:bg-rose-100"
-          : "text-slate-600 bg-slate-100 hover:bg-slate-200"
-      }`}
-    >
-      {state === "busy" ? "sending…" : state === "error" ? "failed — retry" : "reset password"}
-    </button>
+    <span className="inline-flex items-center gap-2 min-w-0">
+      {/* The reason used to live only in the title attribute, so a failure read
+          as "failed — retry" with no way to tell a rate limit from a bad
+          address without hovering. */}
+      {state === "error" && message && (
+        <span className="text-[11px] text-rose-700 truncate max-w-[18rem]" title={message}>
+          {message}
+        </span>
+      )}
+      <button
+        onClick={send}
+        disabled={state === "busy"}
+        title={message || `Email a password-reset link to ${email}`}
+        className={`text-[11px] font-medium px-2 py-1 rounded-lg whitespace-nowrap disabled:opacity-50 ${
+          state === "error"
+            ? "text-rose-700 bg-rose-50 hover:bg-rose-100"
+            : "text-slate-600 bg-slate-100 hover:bg-slate-200"
+        }`}
+      >
+        {state === "busy" ? "sending…" : state === "error" ? "retry" : "reset password"}
+      </button>
+    </span>
   );
 }
 
