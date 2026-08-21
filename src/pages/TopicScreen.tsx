@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import { topicQuestions, topicNotes, PYQS_MEWAR, MAINS_PROMPT } from "@/data";
+import type { PYQ } from "@/types";
+import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
@@ -198,7 +199,13 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
               onRequestOverride={handleRequestOverride}
             />
           )}
-          {tab === "pyqs" && <PYQsTab />}
+          {tab === "pyqs" && (
+            <PYQsTab
+              topicId={resolvedTopicId}
+              subjectId={info.subject.id}
+              subjectName={info.subject.name}
+            />
+          )}
           {tab === "mains" && <MainsTab dayNum={dayNum} topicId={resolvedTopicId} />}
         </motion.div>
       </AnimatePresence>
@@ -393,17 +400,71 @@ function QuizTab({
 }
 
 // --- PYQs Tab ---
-function PYQsTab() {
+/**
+ * Past questions for the microtheme actually on screen.
+ *
+ * This used to render PYQS_MEWAR unconditionally, so every one of the 243
+ * microthemes showed the same handful of Maharana Pratap questions — the same
+ * shape of bug the quiz had, where the topic was ignored and one demo pool was
+ * served to everybody.
+ *
+ * Two tiers, because the bank is tagged unevenly: entries carrying this
+ * topic id are the real match, and the rest of the subject is offered
+ * separately rather than passed off as microtheme-specific. Note that no
+ * seeded PYQ currently carries a topic id that exists in the syllabus, so in
+ * practice today every match arrives through the subject tier.
+ */
+function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subjectId: string; subjectName: string }) {
+  const { pyqBank, setRoute } = useAppState();
+
+  const { onTopic, onSubject } = useMemo(() => {
+    const onTopic: PYQ[] = [];
+    const onSubject: PYQ[] = [];
+    for (const p of pyqBank) {
+      if ((p.topicIds || []).includes(topicId)) onTopic.push(p);
+      else if ((p.subjectIds || []).includes(subjectId)) onSubject.push(p);
+    }
+    return { onTopic, onSubject };
+  }, [pyqBank, topicId, subjectId]);
+
+  if (onTopic.length === 0 && onSubject.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
+        <div className="text-slate-800 font-medium mb-1">No past questions tagged to this microtheme yet</div>
+        <div className="text-sm text-slate-500 mb-4">
+          Nothing in the PYQ bank is tagged to {subjectName}. Showing questions from
+          another subject here would only mislead you.
+        </div>
+        <button
+          onClick={() => setRoute("pyq_archive")}
+          className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition"
+        >
+          Browse the full PYQ archive →
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      {PYQS_MEWAR.map((pyq, i) => (
-        <PYQCard key={i} pyq={pyq} />
+      {onTopic.map((pyq, i) => (
+        <PYQCard key={pyq.id ?? `topic-${i}`} pyq={pyq} />
       ))}
+      {onSubject.length > 0 && (
+        <>
+          <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {onTopic.length > 0 ? `Also from ${subjectName}` : `From ${subjectName}`}
+          </div>
+          {onSubject.map((pyq, i) => (
+            <PYQCard key={pyq.id ?? `subject-${i}`} pyq={pyq} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
 
-function PYQCard({ pyq }: { pyq: (typeof PYQS_MEWAR)[0] }) {
+function PYQCard({ pyq }: { pyq: PYQ }) {
   const [open, setOpen] = useState(false);
   const { currentUser, markPyqReviewed } = useAppState();
 
