@@ -364,13 +364,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // genuine sign-in / user switch apart from a re-run of the effect.
   const lastReconciledId = useRef<string | null>(null);
 
+  // Whose profile row we are currently holding. Lets us tell "this event is the
+  // same user we already loaded" from "a different user signed in", so a token
+  // refresh does not trigger a redundant fetch.
+  const loadedProfileId = useRef<string | null>(null);
+
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
     let cancelled = false;
 
     const loadProfile = async (userId: string | undefined) => {
       if (!userId) {
-        if (!cancelled) { setAuthProfile(null); setAuthLoading(false); }
+        if (!cancelled) {
+          loadedProfileId.current = null;
+          setAuthProfile(null);
+          setAuthLoading(false);
+        }
+        return;
+      }
+      // Already holding this user's profile. Supabase re-emits the same identity
+      // on a token refresh and when the tab regains focus; refetching then buys
+      // nothing and only creates another chance to fail.
+      if (loadedProfileId.current === userId) {
+        if (!cancelled) setAuthLoading(false);
         return;
       }
       const { data, error } = await supabase!
@@ -378,23 +394,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       if (error) {
         setAuthError(`Could not load your profile: ${error.message}`);
-        setAuthProfile(null);
+        // Deliberately leave `authProfile` as it was. Nulling it here treated a
+        // failed *read* as a signed-out *session*, and the reconcile effect
+        // below turned that into setCurrentUserId(null) — so one dropped
+        // request mid-quiz dumped the student back to the landing page with
+        // their answers gone. A session that is genuinely dead arrives as
+        // SIGNED_OUT instead, which is handled explicitly.
       } else {
+        loadedProfileId.current = userId;
         setAuthError(null);
         setAuthProfile(data as ProfileRow);
       }
       setAuthLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data }) => loadProfile(data.session?.user?.id));
+    void supabase.auth.getSession().then(({ data }) => loadProfile(data.session?.user?.id));
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Arriving from a reset link. `detectSessionInUrl` has already exchanged
       // the token for a session, so the user is technically signed in — but they
       // got here without a password, so send them to set one before anything
       // else renders.
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+
+      // A rotated access token is not an identity change. Supabase rotates
+      // roughly hourly and re-checks whenever the tab becomes visible again —
+      // both of which a student hits in the middle of a long paper.
+      if (event === "TOKEN_REFRESHED") return;
+
+      if (event === "SIGNED_OUT") {
+        loadedProfileId.current = null;
+        setAuthProfile(null);
+        setAuthLoading(false);
+        return;
+      }
+
       setAuthLoading(true);
-      loadProfile(session?.user?.id);
+      void loadProfile(session?.user?.id);
     });
 
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
@@ -403,6 +438,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Reconcile the authenticated profile with the local user list.
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+
+    // Auth has not resolved yet. Without this guard the first render of every
+    // page load fell straight into the branch below and cleared the persisted
+    // user before getSession() had a chance to restore it — so a reload during
+    // a quiz bounced the student to the landing page.
+    if (authLoading) return;
 
     if (!authProfile) {
       setCurrentUserId(null);
@@ -459,7 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRoute("auto");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authProfile]);
+  }, [authProfile, authLoading]);
 
   /* ---------- student data sync ------------------------------------------
    *
