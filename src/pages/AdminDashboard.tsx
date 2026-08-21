@@ -591,7 +591,8 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 /* ==================== Plans tab ==================== */
 
 function PlansTab() {
-  const { planTemplates, upsertPlanTemplate, removePlanTemplate } = useAppState();
+  const { planTemplates, upsertPlanTemplate, removePlanTemplate,
+          remotePlanTemplates, authEnabled } = useAppState();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const editing = planTemplates.find((t) => t.id === editingId);
@@ -613,8 +614,59 @@ function PlansTab() {
 
   return (
     <div className="space-y-4">
+      {/* Published plans live in Postgres. This tab used to list only the
+          localStorage seeds, so an admin looking for the institute's real plan
+          found stale demo data and no sign the published one existed. */}
+      {authEnabled && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <h2 className="font-semibold text-slate-900 mb-1">Published plans</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Shared with every student, from the database. The one marked default is applied
+            automatically after the signup assessment.
+          </p>
+          {remotePlanTemplates.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              None published yet — students fall back to the local starting points below.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {remotePlanTemplates.map((t) => {
+                const slots = t.days.reduce((n, d) => n + d.length, 0);
+                const filled = t.days.filter((d) => d.length > 0).length;
+                return (
+                  <div key={t.id} className={`rounded-2xl p-5 border ${t.isDefault ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200"}`}>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-xs uppercase font-bold text-indigo-700">{SCOPE_LABEL[t.scope]} plan</span>
+                      {t.isDefault && (
+                        <span className="text-[10px] uppercase font-bold text-white bg-indigo-600 px-1.5 py-0.5 rounded">default</span>
+                      )}
+                      {t.ownerId && (
+                        <span className="text-[10px] uppercase font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">mentor plan</span>
+                      )}
+                    </div>
+                    <div className="font-semibold text-slate-900">{t.name}</div>
+                    {t.blurb && <p className="text-xs text-slate-600 mt-1">{t.blurb}</p>}
+                    <div className="text-xs text-slate-500 mt-2 font-medium">
+                      {t.days.length} days · {slots} topics · {filled} days scheduled · v{t.version}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-4 text-xs text-slate-500">
+            Published plans are read-only here. To change one, edit its seed migration and re-run
+            it — that bumps the version so adopted charts stay traceable.
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
-        <p className="text-sm text-slate-500">Students see these as adoptable starting points after the signup assessment.</p>
+        <p className="text-sm text-slate-500">
+          {authEnabled
+            ? "Local starting points, stored in this browser only. Students see the published plans above."
+            : "Students see these as adoptable starting points after the signup assessment."}
+        </p>
         <Button onClick={addNew}><Plus className="w-4 h-4" /> Add plan</Button>
       </div>
       {planTemplates.length === 0 && (
@@ -624,14 +676,14 @@ function PlansTab() {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {planTemplates.map((t) => {
-          const filled = t.days.filter((d) => d.length > 0).length;
+          const slots = t.days.reduce((n, d) => n + d.length, 0);
           return (
             <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-5">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs uppercase font-bold text-indigo-700">{SCOPE_LABEL[t.scope]} plan</div>
                   <div className="font-semibold text-slate-900 truncate">{t.name}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t.days.length} days · {filled} topics</div>
+                  <div className="text-xs text-slate-500 mt-1">{t.days.length} days · {slots} topics</div>
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditingId(t.id)}><Pencil className="w-4 h-4" /></Button>
