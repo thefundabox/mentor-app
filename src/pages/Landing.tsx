@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import type { Role } from "@/types";
 
 export function Landing() {
-  const { setLoginRoleIntent, setRoute } = useAppState();
+  const { setLoginRoleIntent, setRoute, authEnabled } = useAppState();
 
   const pick = (role: Role) => {
     setLoginRoleIntent(role);
@@ -44,7 +44,13 @@ export function Landing() {
         />
       </div>
 
-      <p className="text-xs text-slate-400 mt-10">Mockup · No real auth yet · all data lives in your browser</p>
+      {/* Said "Mockup · No real auth yet" on a live product with Supabase auth,
+          RLS-enforced roles and student progress in Postgres. */}
+      <p className="text-xs text-slate-400 mt-10">
+        {authEnabled
+          ? "Sign in to pick up where you left off — your progress follows your account."
+          : "Local demo mode · no account needed · data stays in this browser"}
+      </p>
     </div>
   );
 }

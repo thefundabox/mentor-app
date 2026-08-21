@@ -28,7 +28,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError, defaultTemplate, adoptPlanTemplate } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError, defaultTemplate, adoptPlanTemplate, authEnabled } = useAppState();
 
   useEffect(() => {
     if (route !== "auto") return;
@@ -146,7 +146,12 @@ function AppContent() {
       </motion.div>
       {showTopBar && (
         <div className="max-w-6xl mx-auto px-6 py-10 text-center text-xs text-slate-400">
-          RAS Mentorship · all data lives in your browser · sign out from the top right
+          {/* Was "all data lives in your browser", which stopped being true once
+              progress moved to Postgres -- and told every student their work
+              was local when it is synced and visible to their mentor. */}
+          RAS Mentorship · {authEnabled
+            ? "your progress is saved to your account"
+            : "local demo mode — data stays in this browser"}
         </div>
       )}
     </div>
