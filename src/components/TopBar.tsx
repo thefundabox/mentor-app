@@ -82,13 +82,21 @@ export function TopBar() {
             </div>
           )}
 
-          <button
-            onClick={resetAll}
-            title="Reset all local data"
-            className="text-xs text-slate-300 hover:text-rose-500 px-2 py-1 transition"
-          >
-            reset
-          </button>
+          {/* Admins only. This clears localStorage wholesale, which takes the
+              Supabase session token with it — so pressing it signs you out and
+              destroys local progress in one go. It sat next to "Sign out" for
+              every student, labelled "reset", where the obvious reading during
+              a quiz is "restart this quiz". A confirm dialog is not much of a
+              guard against a control that should never have been offered. */}
+          {currentUser?.role === "admin" && (
+            <button
+              onClick={resetAll}
+              title="Reset all local data (admin)"
+              className="text-xs text-slate-300 hover:text-rose-500 px-2 py-1 transition"
+            >
+              reset
+            </button>
+          )}
         </div>
       </div>
     </div>
