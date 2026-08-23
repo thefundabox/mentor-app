@@ -364,6 +364,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // genuine sign-in / user switch apart from a re-run of the effect.
   const lastReconciledId = useRef<string | null>(null);
 
+  // Set by logout() so the SIGNED_OUT that follows is recognised as one the
+  // user asked for, and does not raise an error banner explaining itself.
+  const deliberateSignOut = useRef(false);
+
   // Whose profile row we are currently holding. Lets us tell "this event is the
   // same user we already loaded" from "a different user signed in", so a token
   // refresh does not trigger a redundant fetch.
@@ -422,6 +426,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (event === "TOKEN_REFRESHED") return;
 
       if (event === "SIGNED_OUT") {
+        // Say so when nobody asked to be signed out. Supabase emits this when
+        // it gives up on a session -- a refresh token it will not accept, a
+        // revoked session -- and until now that arrived as a silent bounce to
+        // the landing page with no cause recorded anywhere. If a student
+        // reports being thrown out mid-quiz, this is the line that says why.
+        if (!deliberateSignOut.current) {
+          setAuthError(
+            "You were signed out because the server ended your session " +
+            `(at ${new Date().toLocaleTimeString()}). Signing back in will restore your progress.`,
+          );
+        }
+        deliberateSignOut.current = false;
         loadedProfileId.current = null;
         setAuthProfile(null);
         setAuthLoading(false);
@@ -791,6 +807,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Fire-and-forget: the auth listener clears currentUserId when the session
     // goes away, but we also clear local view state immediately so the UI does
     // not sit on a stale screen while the network call is in flight.
+    deliberateSignOut.current = true;
+    setAuthError(null);
     if (supabase) void supabase.auth.signOut();
     setAuthProfile(null);
     setCurrentUserId(null);

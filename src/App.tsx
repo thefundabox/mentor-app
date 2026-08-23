@@ -57,10 +57,19 @@ function AppContent() {
     setRoute("dashboard");
   }, [route, currentUser, getStudent, setRoute, defaultTemplate, adoptPlanTemplate]);
 
-  useEffect(() => {
-    if (route === "landing" || route === "login") return;
-    if (!currentUser) setRoute("landing");
-  }, [currentUser, route, setRoute]);
+  // Deliberately no "if (!currentUser) setRoute('landing')" effect here.
+  //
+  // The render below already falls to <Landing /> whenever currentUser is
+  // falsy, so that effect changed nothing on screen -- all it did was overwrite
+  // the persisted route. And because `route` lives in localStorage, a single
+  // render with a momentarily-falsy currentUser permanently destroyed where the
+  // student was: they came back to the landing page, and reloading did not
+  // recover it, because "landing" had been written to disk. One dropped frame
+  // mid-quiz was indistinguishable from being signed out for good.
+  //
+  // Leaving route untouched means a transient blip shows Landing while it
+  // lasts and returns the student to exactly where they were afterwards. A
+  // genuine sign-out still lands correctly: logout() sets the route itself.
 
   let content: React.ReactNode = null;
 
@@ -117,7 +126,11 @@ function AppContent() {
           Login screen, so a failed save elsewhere -- a mentor's plan approval
           being refused by RLS, for instance -- was completely silent and the UI
           happily showed the change as if it had been written. */}
-      {!!currentUser && !!authError && (
+      {/* Not gated on currentUser. It used to be, which meant the one message
+          that explains why somebody was signed out was hidden by the very fact
+          of their being signed out -- so an unexpected logout arrived with no
+          stated cause, for the student or for us. */}
+      {!!authError && (
         <div className="bg-rose-50 border-b border-rose-200">
           <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-start gap-3">
             <div className="flex-1 text-sm text-rose-800">{authError}</div>
