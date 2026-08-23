@@ -4,6 +4,7 @@ import { useAppState } from "@/hooks/useAppState";
 import type { PYQ } from "@/types";
 import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
+import { resumableSeed } from "@/lib/attemptDraft";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
 import {
@@ -71,7 +72,13 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   };
 
   const handleStartQuiz = () => {
-    setAttemptSeed((s: number) => s + 7);
+    // Resume rather than re-deal when an unfinished attempt at this topic is
+    // sitting on disk. The seed decides the question order, so bumping it here
+    // would build a different paper and strand the student's saved answers
+    // under a key nothing would ever look up again.
+    const resume = resumableSeed(user.id, dayNum, resolvedTopicId);
+    if (resume !== null) setAttemptSeed(resume);
+    else setAttemptSeed((s: number) => s + 7);
     setActiveTopicId(resolvedTopicId);
     setRoute("quiz");
   };

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Flag, X, ChevronLeft, ChevronRight, Clock, LayoutGrid } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
 import { buildAttempt, loadPool } from "@/lib/topicPool";
+import { draftKeyFor, readDraft, writeDraft, clearDraft } from "@/lib/attemptDraft";
 
 interface QuizScreenProps {
   dayNum: number;
@@ -18,79 +19,6 @@ function fmtClock(ms: number) {
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/**
- * In-progress attempt, kept on disk.
- *
- * Answers used to live only in component state, so anything that unmounted this
- * screen mid-paper — a dropped session, a crash, a stray reload — took every
- * answer with it. The student was told to start again from question one. That
- * made an intermittent fault expensive rather than merely annoying, so the
- * draft is written as the student works and restored if they come back.
- *
- * `key` pins a draft to one exact paper. attemptSeed changes every time a quiz
- * is started fresh, so a restored draft can never be poured into a different
- * set of questions — a mismatch is discarded rather than repaired.
- */
-const DRAFT_KEY = "v6_attemptDraft";
-
-interface AttemptDraft {
-  key: string;
-  selected: (number | null)[];
-  flagged: boolean[];
-  current: number;
-  spent: number[];
-  elapsedMs: number;
-}
-
-function readDraft(key: string, total: number): AttemptDraft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const d = JSON.parse(raw) as AttemptDraft;
-    if (d.key !== key) return null;
-    if (!Array.isArray(d.selected) || d.selected.length !== total) return null;
-    if (!Array.isArray(d.flagged) || d.flagged.length !== total) return null;
-    // An untouched draft is not worth announcing a restore for.
-    if (!d.selected.some((v) => v !== null)) return null;
-    return {
-      key: d.key,
-      selected: d.selected,
-      flagged: d.flagged,
-      current: Number.isInteger(d.current) && d.current >= 0 ? d.current : 0,
-      spent: Array.isArray(d.spent) && d.spent.length === total ? d.spent : Array(total).fill(0),
-      elapsedMs: Number.isFinite(d.elapsedMs) && d.elapsedMs >= 0 ? d.elapsedMs : 0,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeDraft(d: AttemptDraft) {
-  try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
-  } catch {
-    // Quota or a disabled store. Losing the draft is bad but not worth taking
-    // the attempt down over — the student can still finish the paper in front
-    // of them.
-  }
-}
-
-function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {
-    // Nothing to do; a stale draft is rejected on key mismatch anyway.
-  }
-}
-
-/**
- * Exam-style attempt.
- *
- * Nothing is revealed while answering: the student moves freely through the
- * paper with a palette, may flag questions to revisit, submits once, and only
- * then sees which were right and why. That mirrors the real RPSC sitting, where
- * nothing tells you mid-paper that question 7 went wrong.
- */
 export function QuizScreen({ dayNum }: QuizScreenProps) {
   const {
     currentUser, getStudent, attemptSeed, activeTopicId, setRoute, setLastResult,
@@ -139,7 +67,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   // Identifies this exact paper for the on-disk draft. Null until the topic and
   // user are known, in which case nothing is saved or restored.
   const draftKey = currentUser && topicId
-    ? `${currentUser.id}|${dayNum}|${topicId}|${attemptSeed}`
+    ? draftKeyFor(currentUser.id, dayNum, topicId, attemptSeed)
     : null;
 
   const [restoredCount, setRestoredCount] = useState(0);

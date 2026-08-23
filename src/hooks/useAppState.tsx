@@ -251,6 +251,9 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+/** Which account the routing re-arm last ran for; survives a reload. */
+const LAST_RECONCILED_KEY = "v6_lastReconciledUser";
+
 export function AppProvider({ children }: { children: ReactNode }) {
   // v3 keys — schema changed from single-topic to multi-topic days; ignore old data.
   // v6: the seed student's email was a real address (aamir.parwez@gmail.com).
@@ -362,7 +365,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Last identity reconciliation handed to `setCurrentUserId`, so we can tell a
   // genuine sign-in / user switch apart from a re-run of the effect.
-  const lastReconciledId = useRef<string | null>(null);
+  //
+  // Persisted, because an in-memory ref starts null on every page load — which
+  // meant the re-arm below fired on every reload, not just on a real sign-in.
+  // The auto-router then sent an onboarded student to the dashboard, discarding
+  // wherever they actually were: reloading mid-quiz dropped them out of the
+  // paper. Keyed by user id, so a different account signing in still re-arms.
+  const lastReconciledId = useRef<string | null>(
+    (() => { try { return localStorage.getItem(LAST_RECONCILED_KEY); } catch { return null; } })(),
+  );
 
   // Set by logout() so the SIGNED_OUT that follows is recognised as one the
   // user asked for, and does not raise an error banner explaining itself.
@@ -513,6 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // StudentHome — which renders nothing. That is the blank page.
     if (lastReconciledId.current !== localId) {
       lastReconciledId.current = localId;
+      try { localStorage.setItem(LAST_RECONCILED_KEY, localId); } catch { /* non-fatal */ }
       setRoute("auto");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
