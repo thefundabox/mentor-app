@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Flag, X, ChevronLeft, ChevronRight, Clock, LayoutGrid } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
 import { buildAttempt, loadPool } from "@/lib/topicPool";
-import { draftKeyFor, readDraft, writeDraft, clearDraft } from "@/lib/attemptDraft";
+import { draftKeyFor, paperFingerprint, readDraft, writeDraft, clearDraft } from "@/lib/attemptDraft";
 
 interface QuizScreenProps {
   dayNum: number;
@@ -70,6 +70,14 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     ? draftKeyFor(currentUser.id, dayNum, topicId, attemptSeed)
     : null;
 
+  // Identity of the paper as dealt. Guards the restore against the pool coming
+  // back in a different order and silently re-pointing saved answers at
+  // different questions.
+  const fingerprint = useMemo(
+    () => paperFingerprint(questions.map((q) => q.q)),
+    [questions],
+  );
+
   const [restoredCount, setRestoredCount] = useState(0);
 
   // Size the answer arrays once the paper is known — or refill them from a
@@ -77,7 +85,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   useEffect(() => {
     if (total === 0) return;
 
-    const draft = draftKey ? readDraft(draftKey, total) : null;
+    const draft = draftKey ? readDraft(draftKey, total, fingerprint) : null;
     if (draft) {
       setSelected(draft.selected);
       setFlagged(draft.flagged);
@@ -98,7 +106,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     startedAt.current = Date.now();
     landedAt.current = Date.now();
     setRestoredCount(0);
-  }, [total, draftKey]);
+  }, [total, draftKey, fingerprint]);
 
   // Persist as the student works. Deliberately not keyed on the ticking clock:
   // this writes when an answer, a flag or the position changes, not once a
@@ -109,13 +117,14 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     if (selected.length !== total) return;
     writeDraft({
       key: draftKey,
+      fingerprint,
       selected,
       flagged,
       current,
       spent: spent.current,
       elapsedMs: Date.now() - startedAt.current,
     });
-  }, [draftKey, total, phase, selected, flagged, current]);
+  }, [draftKey, total, phase, fingerprint, selected, flagged, current]);
 
   useEffect(() => {
     if (phase !== "attempt" || total === 0) return;
@@ -175,7 +184,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
 
     // The paper is done; a draft from here on would only be restored over a
     // fresh attempt at the same topic.
-    clearDraft();
+    if (draftKey) clearDraft(draftKey);
 
     const perQuestion: QuestionAttempt[] = questions.map((question, i) => {
       const pick = selected[i];

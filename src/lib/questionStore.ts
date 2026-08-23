@@ -86,7 +86,13 @@ export async function loadTopicQuestions(
   if (!includeUnreviewed) query = query.eq("reviewed", true);
   if (tilt === "hard") query = query.gte("difficulty_tier", 2);
 
-  const { data, error } = await query.limit(limit);
+  // Ordered on purpose. Postgres makes no promise about row order without an
+  // ORDER BY, and buildAttempt shuffles this list deterministically from the
+  // attempt seed -- so an unordered pool means the same seed can deal a
+  // different paper after any change that moves rows around. That silently
+  // breaks anything holding an index into the paper, an in-progress attempt
+  // most of all.
+  const { data, error } = await query.order("id", { ascending: true }).limit(limit);
   if (error || !data) return [];
 
   const qs = (data as QuestionRow[]).map(toQuestion);
@@ -95,7 +101,7 @@ export async function loadTopicQuestions(
   if (tilt === "hard" && qs.length < Math.min(8, limit)) {
     let all = supabase.from("questions").select("*").eq("topic_id", topicId);
     if (!includeUnreviewed) all = all.eq("reviewed", true);
-    const { data: rest } = await all.limit(limit);
+    const { data: rest } = await all.order("id", { ascending: true }).limit(limit);
     return ((rest ?? []) as QuestionRow[]).map(toQuestion);
   }
   return qs;
