@@ -3,10 +3,14 @@ import { useAppState } from "@/hooks/useAppState";
 import { conceptLabel } from "@/data";
 import { strengthsAndWeaknesses, stuckDays } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText, LineChart, ClipboardList, Wrench } from "lucide-react";
+import { ArrowLeft, Check, X, Star, TrendingUp, TrendingDown, Pencil, CalendarRange, Clipboard, ShieldCheck, FileText, LineChart, ClipboardList, Wrench, Target } from "lucide-react";
 import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
+import type { StudentData } from "@/types";
+import {
+  passThresholdOf, DEFAULT_PASS_THRESHOLD, MIN_PASS_THRESHOLD, MAX_PASS_THRESHOLD,
+} from "@/lib/passThreshold";
 
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
@@ -146,6 +150,8 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           </div>
         </div>
       )}
+
+      <PassMarkCard studentId={studentId} student={s} />
 
       {/* Red flag / mercy pass card */}
       <StuckDaysCard studentId={studentId} student={s} onMercy={(day, attempts, bestScore) => {
@@ -493,7 +499,7 @@ function StuckDaysCard({ student, onMercy }: {
                 <div className="text-xs text-slate-600">{row.attempts} attempts · best score {row.bestScore}%</div>
               </div>
               <Button onClick={() => {
-                if (!confirm(`Grant mercy pass for Day ${row.day}?\nThis lets the student advance without scoring 80%.`)) return;
+                if (!confirm(`Grant mercy pass for Day ${row.day}?\nThis lets the student advance without reaching their pass mark.`)) return;
                 onMercy(row.day, row.attempts, row.bestScore);
               }}>
                 <ShieldCheck className="w-4 h-4" /> Grant mercy pass
@@ -503,8 +509,80 @@ function StuckDaysCard({ student, onMercy }: {
         })}
       </div>
       <div className="text-[11px] text-rose-700/80 mt-3">
-        We surface this when a student has ≥3 attempts on a day without clearing 80%. Use sparingly — the gate exists for a reason.
+        We surface this when a student has ≥3 attempts on a day without reaching their pass mark. Use sparingly — the gate exists for a reason.
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * The score this student must reach for a topic to count as cleared.
+ *
+ * Was a hardcoded 80 everywhere, which is a policy decision the person who
+ * knows the student had no way to make. Applies from the next attempt onward;
+ * attempts already recorded are re-read against the new mark, so lowering it
+ * can clear days the student had already passed on merit.
+ */
+function PassMarkCard({ studentId, student }: { studentId: string; student: StudentData }) {
+  const { setPassThreshold } = useAppState();
+  const current = passThresholdOf(student);
+  const [draft, setDraft] = useState(String(current));
+
+  useEffect(() => { setDraft(String(current)); }, [current]);
+
+  const parsed = Number(draft);
+  const valid = Number.isFinite(parsed)
+    && parsed >= MIN_PASS_THRESHOLD
+    && parsed <= MAX_PASS_THRESHOLD;
+  const dirty = valid && Math.round(parsed) !== current;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Target className="w-4 h-4 text-indigo-600" />
+        <h2 className="font-bold text-slate-900">Pass mark</h2>
+      </div>
+      <p className="text-sm text-slate-600 mb-3">
+        Score needed on a topic quiz to clear that topic and move the day forward.
+        {current !== DEFAULT_PASS_THRESHOLD && (
+          <span className="text-slate-500"> Institute default is {DEFAULT_PASS_THRESHOLD}%.</span>
+        )}
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={MIN_PASS_THRESHOLD}
+          max={MAX_PASS_THRESHOLD}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums
+                     focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          aria-label="Pass mark percentage"
+        />
+        <span className="text-sm text-slate-500">%</span>
+        <Button
+          size="sm"
+          disabled={!dirty}
+          onClick={() => setPassThreshold(studentId, parsed)}
+        >
+          Save
+        </Button>
+        {current !== DEFAULT_PASS_THRESHOLD && (
+          <button
+            onClick={() => setPassThreshold(studentId, DEFAULT_PASS_THRESHOLD)}
+            className="text-xs text-slate-500 hover:text-slate-900"
+          >
+            reset to {DEFAULT_PASS_THRESHOLD}%
+          </button>
+        )}
+      </div>
+      {!valid && draft.trim() !== "" && (
+        <p className="text-xs text-rose-600 mt-2">
+          Enter a number between {MIN_PASS_THRESHOLD} and {MAX_PASS_THRESHOLD}.
+        </p>
+      )}
     </div>
   );
 }

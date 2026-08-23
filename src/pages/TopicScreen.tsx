@@ -5,6 +5,7 @@ import type { PYQ } from "@/types";
 import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { resumableSeed } from "@/lib/attemptDraft";
+import { passThresholdOf } from "@/lib/passThreshold";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
 import {
@@ -58,6 +59,8 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
   // studying rather than by a quiz on unrelated content.
   const hasBank = topicQuestions(resolvedTopicId).length > 0 || topicHasQuestions(resolvedTopicId);
   const studied = topicCleared(user.id, dayNum, resolvedTopicId);
+  // The bar this student's mentor set, not a constant baked into the copy.
+  const passMark = passThresholdOf(student);
   if (!info) return null;
 
   // Most recent override on this day — drives the QuizTab status messages.
@@ -192,6 +195,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
                 hasBank={hasBank}
                 studied={studied}
                 dayNum={dayNum}
+                passMark={passMark}
               />
             </>
           )}
@@ -228,6 +232,7 @@ function NotesTab({
   hasBank,
   studied,
   dayNum,
+  passMark,
 }: {
   notes: string | null;
   onStartQuiz: () => void;
@@ -235,6 +240,7 @@ function NotesTab({
   hasBank: boolean;
   studied: boolean;
   dayNum: number;
+  passMark: number;
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
@@ -290,7 +296,7 @@ function NotesTab({
           {hasBank ? (
             <>
               <p className="text-sm text-slate-600 mb-3">
-                Score ≥ 80% on the quiz to unlock Day {dayNum + 1}.
+                Score ≥ {passMark}% on the quiz to unlock Day {dayNum + 1}.
               </p>
               <Button className="w-full" onClick={onStartQuiz}>
                 Start quiz <ArrowRight className="w-4 h-4" />
@@ -368,7 +374,7 @@ function QuizTab({
 
       {status === "approved" && (
         <div className="mt-4 inline-block text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-medium">
-          ✓ Mentor override granted — you can proceed without 80%.
+          ✓ Mentor override granted — you can proceed without reaching the pass mark.
         </div>
       )}
 

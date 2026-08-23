@@ -23,6 +23,8 @@ export interface Coverage {
 }
 
 interface QuestionRow {
+  /** Primary key. Carried through so an attempt can record which question it was. */
+  id: string;
   topic_id: string;
   type: "conceptual" | "analytical";
   question_type: string | null;
@@ -38,6 +40,7 @@ interface QuestionRow {
 
 function toQuestion(r: QuestionRow): Question {
   return {
+    id: r.id,
     type: r.type,
     concept: r.topic_id,
     q: r.q,

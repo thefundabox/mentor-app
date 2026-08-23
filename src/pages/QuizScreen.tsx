@@ -4,8 +4,8 @@ import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { Check, Flag, X, ChevronLeft, ChevronRight, Clock, LayoutGrid } from "lucide-react";
 import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types";
-import { buildAttempt, loadPool } from "@/lib/topicPool";
-import { draftKeyFor, paperFingerprint, readDraft, writeDraft, clearDraft } from "@/lib/attemptDraft";
+import { buildAttempt, loadPool, questionKey } from "@/lib/topicPool";
+import { draftKeyFor, paperFingerprint, readDraft, writeDraft } from "@/lib/attemptDraft";
 
 interface QuizScreenProps {
   dayNum: number;
@@ -86,6 +86,18 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     if (total === 0) return;
 
     const draft = draftKey ? readDraft(draftKey, total, fingerprint) : null;
+    if (draft?.submitted) {
+      // Finished paper: put the review screen back rather than dealing a blank
+      // one over the top of a result the student has already earned.
+      setSelected(draft.selected);
+      setFlagged(draft.flagged);
+      pendingResult.current = (draft.result as QuizResult) ?? null;
+      startedAt.current = Date.now() - draft.elapsedMs;
+      setElapsed(draft.elapsedMs);
+      setPhase("review");
+      setRestoredCount(0);
+      return;
+    }
     if (draft) {
       setSelected(draft.selected);
       setFlagged(draft.flagged);
@@ -182,9 +194,6 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
     // Bank the time spent on the question being left.
     spent.current[current] = (spent.current[current] ?? 0) + (Date.now() - landedAt.current);
 
-    // The paper is done; a draft from here on would only be restored over a
-    // fresh attempt at the same topic.
-    if (draftKey) clearDraft(draftKey);
 
     const perQuestion: QuestionAttempt[] = questions.map((question, i) => {
       const pick = selected[i];
@@ -194,7 +203,7 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
         recordStudentConfusion(user.id, question.concept || "unknown", distractor, topicId);
       }
       return {
-        questionId: `${question.concept}_${i}`,
+        questionId: questionKey(question),
         skipped: pick === null,
         selectedOption: pick ?? -1,
         wasCorrect,
@@ -227,6 +236,24 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
       dayClearedNow,
       topicsRemainingInDay,
     };
+    // Keep the paper on disk, flagged as submitted, so a reload before
+    // "Continue" returns to this review rather than a blank attempt. Not
+    // cleared here: resumableSeed skips submitted papers, so "start quiz"
+    // still deals a fresh one.
+    if (draftKey) {
+      writeDraft({
+        key: draftKey,
+        fingerprint,
+        submitted: true,
+        result: pendingResult.current,
+        selected,
+        flagged,
+        current,
+        spent: spent.current,
+        elapsedMs: Date.now() - startedAt.current,
+      });
+    }
+
     setConfirmSubmit(false);
     setPhase("review");
   };

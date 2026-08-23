@@ -30,6 +30,16 @@ const MAX_DRAFTS = 6;
 export interface AttemptDraft {
   key: string;
   fingerprint: string;
+  /**
+   * Set once the paper has been submitted. The attempt is finished and its
+   * result is already recorded against the student; this keeps the review
+   * screen -- the solutions, and which option they picked -- reachable if the
+   * page reloads before they press Continue. Without it a reload landed them
+   * in a fresh blank paper with their just-earned result nowhere on screen.
+   */
+  submitted?: boolean;
+  /** Score summary as shown on the review screen, for the same reason. */
+  result?: unknown;
   selected: (number | null)[];
   flagged: boolean[];
   current: number;
@@ -80,9 +90,11 @@ function writeStore(store: DraftStore) {
 }
 
 function isUsable(d: StoredDraft | undefined): d is StoredDraft {
-  return Boolean(
-    d && typeof d.key === "string" && Array.isArray(d.selected) && d.selected.some((v) => v !== null),
-  );
+  if (!d || typeof d.key !== "string" || !Array.isArray(d.selected)) return false;
+  // An untouched attempt is not worth announcing a restore for; a submitted one
+  // is worth keeping either way, since its review screen is the only place the
+  // student can see what they got wrong.
+  return Boolean(d.submitted) || d.selected.some((v) => v !== null);
 }
 
 /**
@@ -93,7 +105,9 @@ function isUsable(d: StoredDraft | undefined): d is StoredDraft {
 export function resumableSeed(userId: string, dayNum: number, topicId: string): number | null {
   const prefix = `${userId}|${dayNum}|${topicId}|`;
   const candidates = Object.values(readStore())
-    .filter((d) => isUsable(d) && d.key.startsWith(prefix))
+    // A submitted paper is finished, not resumable: "start quiz" must deal a
+    // new one rather than drop the student back into their own marked script.
+    .filter((d) => isUsable(d) && !d.submitted && d.key.startsWith(prefix))
     .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0));
   if (candidates.length === 0) return null;
   const seed = Number(candidates[0].key.slice(prefix.length));
@@ -110,6 +124,8 @@ export function readDraft(key: string, total: number, fingerprint: string): Atte
   return {
     key: d.key,
     fingerprint: d.fingerprint,
+    submitted: d.submitted,
+    result: d.result,
     selected: d.selected,
     flagged: d.flagged,
     current: Number.isInteger(d.current) && d.current >= 0 ? d.current : 0,
@@ -123,12 +139,4 @@ export function writeDraft(d: AttemptDraft) {
   store[d.key] = { ...d, savedAt: Date.now() };
   const entries = Object.entries(store).sort((a, b) => (b[1].savedAt ?? 0) - (a[1].savedAt ?? 0));
   writeStore(Object.fromEntries(entries.slice(0, MAX_DRAFTS)));
-}
-
-/** Drop one paper's draft, leaving other topics' attempts alone. */
-export function clearDraft(key: string) {
-  const store = readStore();
-  if (!(key in store)) return;
-  delete store[key];
-  writeStore(store);
 }

@@ -1,4 +1,5 @@
 import { Flame, Calendar, Target } from "lucide-react";
+import { passThresholdOf } from "@/lib/passThreshold";
 import type { StudentData } from "@/types";
 import { dailyActivityStreak, quizAttemptStreak, clearedStreak, activityHistory } from "@/lib/streaks";
 
@@ -32,7 +33,7 @@ export function HabitsCard({ student, completedDays, rightSlot, flush }: HabitsC
   const quizzedToday = (today?.attempts ?? 0) > 0;
   // "Studied today" = at least one attempt today that crossed the day-pass
   // threshold (matches the topic-clearing rule used everywhere else).
-  const studiedToday = student.attempts.some((a) => a.when >= t0 && a.score >= 80);
+  const studiedToday = student.attempts.some((a) => a.when >= t0 && a.score >= passThresholdOf(student));
 
   return (
     <div className={`bg-white border border-slate-200 rounded-2xl p-5 ${flush ? "" : "mb-8"}`} data-tour="habits">

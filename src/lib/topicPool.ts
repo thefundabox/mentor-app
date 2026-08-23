@@ -58,3 +58,23 @@ export function describeAttempt(questions: Question[]): string {
   const parts = [c > 0 ? `${c} conceptual` : null, a > 0 ? `${a} analytical` : null].filter(Boolean);
   return `${questions.length} question${questions.length === 1 ? "" : "s"}: ${parts.join(" + ")}.`;
 }
+
+/**
+ * Stable identity for one question, for recording what a student answered.
+ *
+ * Attempts used to store `${concept}_${index}` -- the concept plus the
+ * question's position in that paper. Position is not identity: the same
+ * question carries a different id in the next attempt, and two different
+ * questions on the same concept share one. Nothing downstream could tell which
+ * question a student actually got wrong, which is precisely what the confusion
+ * tracking exists to know.
+ *
+ * Postgres-backed questions carry a real id. Bundled ones do not, so they fall
+ * back to a hash of the stem, which is stable for as long as the wording is.
+ */
+export function questionKey(q: Question): string {
+  if (q.id) return q.id;
+  let h = 5381;
+  for (let i = 0; i < q.q.length; i++) h = ((h * 33) ^ q.q.charCodeAt(i)) >>> 0;
+  return `stem_${h.toString(36)}`;
+}

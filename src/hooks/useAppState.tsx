@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
+import { passThresholdOf, clampPassThreshold } from "@/lib/passThreshold";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 
 import {
@@ -185,6 +186,8 @@ interface AppContextValue extends AppState {
   batchForStudent: (studentId: string) => Batch | null;
 
   // Announcements
+  /** Mentor/admin: set the score a student must reach to clear a topic. */
+  setPassThreshold: (studentId: string, pct: number) => void;
   postAnnouncement: (batchId: string | null, body: string, expiresAt?: number) => Announcement;
   deleteAnnouncement: (id: string) => void;
   dismissAnnouncement: (id: string, userId: string) => void;
@@ -930,12 +933,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchChart(id, (s) => ({ ...s, chart: { ...s.chart, status: "changes_requested", decidedAt: Date.now(), feedback } }));
   }, [patchChart]);
 
+  /**
+   * Mentor sets the bar for one student. Stored on the chart, which the mentor
+   * already owns and which syncs to Postgres as jsonb.
+   */
+  const setPassThreshold = useCallback((studentId: string, pct: number) => {
+    patchChart(studentId, (s) => ({
+      ...s,
+      chart: { ...s.chart, passThreshold: clampPassThreshold(pct) },
+    }));
+  }, [patchChart]);
+
   /* ---------- multi-topic completion helpers ---------- */
 
   const isTopicClearedFor = (s: StudentData, day: number, topicId: string): boolean => {
     const hasOverride = s.overrides.some((o) => o.day === day && o.status === "approved");
     if (hasOverride) return true;
-    if (s.attempts.some((a) => a.day === day && a.topicId === topicId && a.score >= 80)) return true;
+    const pass = passThresholdOf(s);
+    if (s.attempts.some((a) => a.day === day && a.topicId === topicId && a.score >= pass)) return true;
     // Topics with no question bank are cleared by studying instead.
     return (s.studiedTopics ?? []).some((t) => t.day === day && t.topicId === topicId);
   };
@@ -1054,7 +1069,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const isFirstTry = attemptsForTopic.length === 0;
       const wasTopicCleared = isTopicClearedFor(s, attempt.day, attempt.topicId);
       const wasDayCleared = isDayClearedFor(s, attempt.day);
-      const passed = attempt.score >= 80
+      const pass = passThresholdOf(s);
+      const passed = attempt.score >= pass
         || s.overrides.some((o) => o.day === attempt.day && o.status === "approved");
 
       let next: StudentData = { ...s, attempts: [...s.attempts, attempt] };
@@ -1062,7 +1078,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (passed && !wasTopicCleared) {
         next = awardPoints(next, "quiz_pass", POINTS.QUIZ_PASS, { day: attempt.day });
         pointsAwarded += POINTS.QUIZ_PASS;
-        if (isFirstTry && attempt.score >= 80) {
+        if (isFirstTry && attempt.score >= pass) {
           next = awardPoints(next, "first_try_bonus", POINTS.FIRST_TRY_BONUS, { day: attempt.day });
           pointsAwarded += POINTS.FIRST_TRY_BONUS;
         }
@@ -1091,7 +1107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? Math.round(perQ.reduce((acc, q) => acc + q.responseTimeMs, 0) / perQ.length)
       : 12000;
     applyTopicScheduling(id, attempt.topicId, {
-      wasCorrect: attempt.score >= 80,
+      wasCorrect: attempt.score >= passThresholdOf(studentDataRef.current[id]),
       wasSkipped: false,
       responseTimeMs: avgRespMs,
       isCurrentAffairs: false,
@@ -1548,7 +1564,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     authLoading, authError, clearAuthError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,
     logout, setLoginRoleIntent, setRoute, setActiveDay, setActiveTopicId, setAttemptSeed, setLastResult,
-    setViewingStudentId, resetAll,
+    setViewingStudentId, resetAll, setPassThreshold,
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
     finishQuiz, addOverride, updateOverride, markOverrideSeen, addMainsScore, markPyqReviewed,

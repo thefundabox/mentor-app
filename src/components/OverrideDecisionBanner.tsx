@@ -41,7 +41,7 @@ export function OverrideDecisionBanner({ studentId }: { studentId: string }) {
         const sub = isMercy
           ? "Your mentor unlocked the next day for you — you can advance without re-attempting."
           : approved
-            ? "You can now proceed without scoring 80% on this day's quiz."
+            ? "You can now proceed without reaching the pass mark on this day's quiz."
             : "Your mentor wants you to keep trying. Try the quiz again with a fresh question set.";
 
         const ago = o.decidedAt ? timeAgo(o.decidedAt) : "";

@@ -39,6 +39,12 @@ export interface DaySlot {
 }
 
 export interface Question {
+  /**
+   * Stable identity of the question, when it came from Postgres. Absent for
+   * questions bundled into the app. Callers that need an id for every question
+   * should use questionKey() rather than reading this directly.
+   */
+  id?: string;
   type: "conceptual" | "analytical";
   concept: string;
   q: string;
@@ -325,6 +331,15 @@ export const SCOPE_LABEL: Record<CommitmentScope, string> = {
 export interface ChartState {
   /** Each day holds 0..N topics. An empty array means an unscheduled day. */
   days: DaySlot[][];
+  /**
+   * Score a quiz must reach for its topic to count as cleared, as a
+   * percentage. Set by the student's mentor; absent means the institute
+   * default. Lives on the chart because the chart is already the per-student
+   * document the mentor owns and it syncs to Postgres as jsonb, so changing it
+   * needs no migration. Read it through passThresholdOf(), never directly, so
+   * the default and the clamp apply everywhere.
+   */
+  passThreshold?: number;
   status: ChartStatus;
   /** Default scope used when the student commits the next slice. */
   commitmentScope: CommitmentScope;

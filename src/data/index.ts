@@ -690,7 +690,11 @@ export function topicNotes(topicId: string): string | null {
 
 export function shuffle<T>(arr: T[], seed?: number): T[] {
   const a = [...arr];
-  let s = seed || Math.floor(Math.random() * 1e9);
+  // `seed || random` treated a seed of 0 as "no seed" and silently shuffled at
+  // random. Anything reproducible built on that -- an attempt paper rebuilt
+  // after a reload, most of all -- would have come back in a different order
+  // with no indication why. Only an omitted seed means random.
+  let s = seed === undefined ? Math.floor(Math.random() * 1e9) : seed;
   for (let i = a.length - 1; i > 0; i--) {
     s = (s * 9301 + 49297) % 233280;
     const j = Math.floor((s / 233280) * (i + 1));
