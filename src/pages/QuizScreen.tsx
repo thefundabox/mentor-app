@@ -19,6 +19,71 @@ function fmtClock(ms: number) {
 }
 
 /**
+ * In-progress attempt, kept on disk.
+ *
+ * Answers used to live only in component state, so anything that unmounted this
+ * screen mid-paper — a dropped session, a crash, a stray reload — took every
+ * answer with it. The student was told to start again from question one. That
+ * made an intermittent fault expensive rather than merely annoying, so the
+ * draft is written as the student works and restored if they come back.
+ *
+ * `key` pins a draft to one exact paper. attemptSeed changes every time a quiz
+ * is started fresh, so a restored draft can never be poured into a different
+ * set of questions — a mismatch is discarded rather than repaired.
+ */
+const DRAFT_KEY = "v6_attemptDraft";
+
+interface AttemptDraft {
+  key: string;
+  selected: (number | null)[];
+  flagged: boolean[];
+  current: number;
+  spent: number[];
+  elapsedMs: number;
+}
+
+function readDraft(key: string, total: number): AttemptDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as AttemptDraft;
+    if (d.key !== key) return null;
+    if (!Array.isArray(d.selected) || d.selected.length !== total) return null;
+    if (!Array.isArray(d.flagged) || d.flagged.length !== total) return null;
+    // An untouched draft is not worth announcing a restore for.
+    if (!d.selected.some((v) => v !== null)) return null;
+    return {
+      key: d.key,
+      selected: d.selected,
+      flagged: d.flagged,
+      current: Number.isInteger(d.current) && d.current >= 0 ? d.current : 0,
+      spent: Array.isArray(d.spent) && d.spent.length === total ? d.spent : Array(total).fill(0),
+      elapsedMs: Number.isFinite(d.elapsedMs) && d.elapsedMs >= 0 ? d.elapsedMs : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(d: AttemptDraft) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    // Quota or a disabled store. Losing the draft is bad but not worth taking
+    // the attempt down over — the student can still finish the paper in front
+    // of them.
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Nothing to do; a stale draft is rejected on key mismatch anyway.
+  }
+}
+
+/**
  * Exam-style attempt.
  *
  * Nothing is revealed while answering: the student moves freely through the
@@ -71,15 +136,58 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   const startedAt = useRef<number>(0);
   const pendingResult = useRef<QuizResult | null>(null);
 
-  // Size the answer arrays once the paper is known.
+  // Identifies this exact paper for the on-disk draft. Null until the topic and
+  // user are known, in which case nothing is saved or restored.
+  const draftKey = currentUser && topicId
+    ? `${currentUser.id}|${dayNum}|${topicId}|${attemptSeed}`
+    : null;
+
+  const [restoredCount, setRestoredCount] = useState(0);
+
+  // Size the answer arrays once the paper is known — or refill them from a
+  // draft left behind by an interrupted attempt on this same paper.
   useEffect(() => {
     if (total === 0) return;
+
+    const draft = draftKey ? readDraft(draftKey, total) : null;
+    if (draft) {
+      setSelected(draft.selected);
+      setFlagged(draft.flagged);
+      setCurrent(Math.min(draft.current, total - 1));
+      spent.current = draft.spent;
+      // Carry the clock across the interruption instead of restarting it, so
+      // the recorded time still reflects how long the paper actually took.
+      startedAt.current = Date.now() - draft.elapsedMs;
+      landedAt.current = Date.now();
+      setRestoredCount(draft.selected.filter((v) => v !== null).length);
+      return;
+    }
+
     setSelected(Array(total).fill(null));
     setFlagged(Array(total).fill(false));
+    setCurrent(0);
     spent.current = Array(total).fill(0);
     startedAt.current = Date.now();
     landedAt.current = Date.now();
-  }, [total]);
+    setRestoredCount(0);
+  }, [total, draftKey]);
+
+  // Persist as the student works. Deliberately not keyed on the ticking clock:
+  // this writes when an answer, a flag or the position changes, not once a
+  // second. The stored elapsed time is therefore a little behind on restore,
+  // which errs in the student's favour.
+  useEffect(() => {
+    if (!draftKey || total === 0 || phase !== "attempt") return;
+    if (selected.length !== total) return;
+    writeDraft({
+      key: draftKey,
+      selected,
+      flagged,
+      current,
+      spent: spent.current,
+      elapsedMs: Date.now() - startedAt.current,
+    });
+  }, [draftKey, total, phase, selected, flagged, current]);
 
   useEffect(() => {
     if (phase !== "attempt" || total === 0) return;
@@ -136,6 +244,10 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
   const submit = () => {
     // Bank the time spent on the question being left.
     spent.current[current] = (spent.current[current] ?? 0) + (Date.now() - landedAt.current);
+
+    // The paper is done; a draft from here on would only be restored over a
+    // fresh attempt at the same topic.
+    clearDraft();
 
     const perQuestion: QuestionAttempt[] = questions.map((question, i) => {
       const pick = selected[i];
@@ -270,6 +382,22 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {restoredCount > 0 && phase === "attempt" && (
+        <div className="bg-emerald-50 border-b border-emerald-200">
+          <div className="max-w-3xl mx-auto px-5 py-2.5 flex items-start gap-3">
+            <div className="flex-1 text-sm text-emerald-900">
+              Picking up where you left off — {restoredCount} answer
+              {restoredCount === 1 ? "" : "s"} restored.
+            </div>
+            <button
+              onClick={() => setRestoredCount(0)}
+              className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 shrink-0"
+            >
+              dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
         <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-3">
           <button
