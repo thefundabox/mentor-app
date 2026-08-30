@@ -6,7 +6,7 @@ import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles, CalendarClock } from "lucide-react";
 import { SCOPE_DAYS, type CommitmentScope } from "@/types";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
@@ -94,6 +94,9 @@ export function StudentHome() {
               <Sparkles className="w-4 h-4" /> Smart practice
             </Button>
           )}
+          <Button variant="secondary" onClick={() => setRoute("book_session")}>
+            <CalendarClock className="w-4 h-4" /> Book a session
+          </Button>
           <Button variant="secondary" onClick={() => setRoute("tests")}>
             <FileText className="w-4 h-4" /> Mock tests
           </Button>

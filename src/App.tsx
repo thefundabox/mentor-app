@@ -14,6 +14,8 @@ import { TakeTest } from "@/pages/TakeTest";
 import { TestResult } from "@/pages/TestResult";
 import { PYQArchive } from "@/pages/PYQArchive";
 import { PYQAttempt } from "@/pages/PYQAttempt";
+import { BookSession } from "@/pages/BookSession";
+import { MentorAvailability } from "@/pages/MentorAvailability";
 import { Discussion } from "@/pages/Discussion";
 import { SmartPractice } from "@/pages/SmartPractice";
 import { SmartSessionScreen } from "@/pages/SmartSessionScreen";
@@ -97,6 +99,7 @@ function AppContent() {
     else if (route === "mentor_student" && viewingStudentId) content = <MentorStudentDetail studentId={viewingStudentId} />;
     else if (route === "dashboard" && viewingStudentId) content = <Dashboard studentId={viewingStudentId} />;
     else if (route === "onboarding" && viewingStudentId) content = <Onboarding studentId={viewingStudentId} byMentor />;
+    else if (route === "mentor_availability") content = <MentorAvailability />;
     else content = <MentorDashboard />;
   } else {
     if (route === "assessment") content = <Assessment studentId={currentUser.id} />;
@@ -111,6 +114,7 @@ function AppContent() {
     else if (route === "test_result") content = <TestResult />;
     else if (route === "pyq_archive") content = <PYQArchive />;
     else if (route === "pyq_attempt") content = <PYQAttempt />;
+    else if (route === "book_session") content = <BookSession />;
     else if (route === "discussion") content = <Discussion />;
     else if (route === "smart_practice" && SMART_PRACTICE_ENABLED) content = <SmartPractice />;
     else if (route === "smart_session" && SMART_PRACTICE_ENABLED) content = <SmartSessionScreen />;

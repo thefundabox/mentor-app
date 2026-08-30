@@ -626,6 +626,8 @@ export type Route =
   | "test_result"
   | "pyq_archive"
   | "pyq_attempt"
+  | "book_session"
+  | "mentor_availability"
   | "discussion"
   | "smart_practice"
   | "smart_session"

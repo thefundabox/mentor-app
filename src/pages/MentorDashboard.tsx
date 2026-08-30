@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle, Filter } from "lucide-react";
+import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle, Filter, CalendarClock } from "lucide-react";
 import { hasRedFlag, cohortConceptStats } from "@/lib/analytics";
 import { conceptLabel } from "@/data";
 import { AnnouncementComposer } from "@/components/AnnouncementComposer";
@@ -65,11 +65,16 @@ export function MentorDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <div className="text-sm font-semibold text-emerald-700">Mentor dashboard</div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Hi {currentUser.name.split(" ")[0]} — {students.length} student{students.length === 1 ? "" : "s"} under your watch
-        </h1>
+      <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold text-emerald-700">Mentor dashboard</div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Hi {currentUser.name.split(" ")[0]} — {students.length} student{students.length === 1 ? "" : "s"} under your watch
+          </h1>
+        </div>
+        <Button variant="secondary" onClick={() => setRoute("mentor_availability")}>
+          <CalendarClock className="w-4 h-4" /> Availability &amp; bookings
+        </Button>
       </div>
 
       {myBatches.length > 0 && (
