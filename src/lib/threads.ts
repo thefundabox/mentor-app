@@ -77,24 +77,26 @@ export async function listThreads(
 /**
  * Start a discussion.
  *
- * A thread must be anchored: `topicId` for a syllabus discussion, `batchId` for
- * a cohort room. The database enforces that too (threads_anchored_check), and
- * rejects a student who tries to file one into a cohort they are not in.
+ * Pass `topicId` for a syllabus discussion; omit it for a cohort room. The
+ * batch is never sent -- migration 0019 stamps it from the caller's own
+ * profile, so a client cannot file a thread into a cohort it does not belong
+ * to, and cannot get its own cohort wrong either.
  */
 export async function createThread(args: {
   title: string;
   authorId: string;
   authorName: string;
   topicId?: string | null;
-  batchId?: string | null;
 }): Promise<Result<Thread>> {
   if (!supabase) return { error: NO_CLIENT };
   const title = args.title.trim();
   if (!title) return { error: "Give the discussion a title." };
   if (title.length > 160) return { error: "Titles are limited to 160 characters." };
-  if (!args.topicId && !args.batchId) {
-    return { error: "A discussion needs a microtheme or a batch to belong to." };
-  }
+  // No client-side anchor check. It used to require topicId or batchId, and
+  // once 0019 moved batch stamping into the trigger the caller stopped sending
+  // a batch at all -- so this guard rejected every cohort room before the
+  // request was made. Whether the caller has a batch is a fact only the server
+  // holds; threads_anchored_check decides, and 23514 is translated below.
 
   const { data, error } = await supabase
     .from("threads")
