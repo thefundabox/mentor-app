@@ -52,8 +52,9 @@ export function StudentHome() {
   const currentDay = progress.currentDay || 1;
   const approvedThrough = s.chart.approvedThrough;
   const batch = batchForStudent(user.id);
-  const pacing = batch ? pacingStatus(batch, currentDay) : null;
-  const daysToStart = batch ? daysUntilBatchStart(batch) : 0;
+  // Measured from this student's own start, not the batch's -- see planStartFor.
+  const pacing = batch ? pacingStatus(batch, currentDay, Date.now(), s.planStartedAt) : null;
+  const daysToStart = batch ? daysUntilBatchStart(batch, Date.now(), s.planStartedAt) : 0;
   // Whether the student has cleared everything in the currently-approved slice
   // and there are still days beyond it that need a new commitment.
   const sliceCleared = approvedThrough > 0 && completed.length >= approvedThrough;
@@ -162,6 +163,7 @@ export function StudentHome() {
       <DayPathByWeek
         chart={chart}
         currentDay={currentDay}
+        planStartedAt={s.planStartedAt}
         approvedThrough={approvedThrough}
         completed={completed}
         batch={batch}
@@ -189,7 +191,7 @@ export function StudentHome() {
  * purpose; persists nothing across reloads so the change is low-stakes.
  */
 function DayPathByWeek({
-  chart, currentDay, approvedThrough, completed, batch,
+  chart, currentDay, approvedThrough, completed, batch, planStartedAt,
   topicCleared, dayCleared, findTopic, onPickTopic,
 }: {
   chart: { topicId: string; subjectId: string }[][];
@@ -197,6 +199,8 @@ function DayPathByWeek({
   approvedThrough: number;
   completed: number[];
   batch: import("@/types").Batch | null;
+  /** Stamped when this student adopted a plan; day labels are dated from it. */
+  planStartedAt?: number;
   topicCleared: (day: number, topicId: string) => boolean;
   dayCleared: (day: number) => boolean;
   findTopic: (id: string) => { subject: { name: string; icon: string }; topic: { id: string; name: string } } | null;
@@ -279,7 +283,7 @@ function DayPathByWeek({
                           <span>Day {dayNum}{topics.length > 1 ? ` · ${topics.length} topics` : ""}</span>
                           {batch && (
                             <span className="text-[10px] normal-case font-medium text-slate-500">
-                              {formatDate(dateForBatchDay(batch, dayNum))}
+                              {formatDate(dateForBatchDay(batch, dayNum, planStartedAt))}
                             </span>
                           )}
                           {beyondCommitment && (

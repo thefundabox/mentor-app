@@ -1300,6 +1300,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // push only carries a student's own row.
     patchChart(id, (s) => ({
       ...s,
+      // First adoption only. Switching plans later must not reset the clock,
+      // or pacing could be made to read "on schedule" by re-adopting.
+      planStartedAt: s.planStartedAt ?? Date.now(),
       adoptedTemplateId: templateId,
       adoptedTemplateVersion: remote?.version ?? null,
       chart: {
@@ -1314,6 +1317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const startBlankPlan = useCallback((id: string) => {
     patchChart(id, (s) => ({
       ...s,
+      planStartedAt: s.planStartedAt ?? Date.now(),
       adoptedTemplateId: null,
       adoptedTemplateVersion: null,
       chart: { ...s.chart, days: [], status: "draft" },

@@ -560,6 +560,16 @@ export interface StudentData {
   lastActivityAt?: number;
   /** Set once the student finishes the signup assessment. Missing on legacy/seed users. */
   assessment?: Assessment;
+  /**
+   * When this student's plan clock starts, stamped on first adoption.
+   *
+   * Pacing used to be measured from `batch.startDate` for everyone, so anyone
+   * joining a batch mid-programme was flagged "behind" from their first login
+   * and stayed that way until they had caught up to the calendar. Absent on
+   * students who adopted before this existed; they fall back to the batch date,
+   * which is what they were being measured against anyway.
+   */
+  planStartedAt?: number;
   /** If the student adopted a plan template, its id. null/undefined = built own. */
   adoptedTemplateId?: string | null;
   /** Version of that template at adoption. Lets an edit be traced to a chart. */
