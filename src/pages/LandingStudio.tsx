@@ -63,11 +63,13 @@ export function LandingStudio() {
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
+              {/* One door to the method page, not three. It used to sit here as
+                  well as in the nav and on the dark panel below -- all three
+                  going to the same screen, with this one competing directly
+                  with the primary CTA. The nav carries wayfinding; the panel
+                  below carries the invitation in context. */}
               <button onClick={() => go("student")} className={`${primaryBtn} h-[54px] px-6`}>
                 Start preparing <ArrowRight className="h-4 w-4" />
-              </button>
-              <button onClick={() => setRoute("methodology")} className={`${ghostBtn} h-[54px] px-6`}>
-                See how it was built
               </button>
             </div>
 
@@ -235,4 +237,3 @@ export function LandingStudio() {
 const card = "rounded-[24px] border border-[#e7e4dc] bg-white shadow-[0_10px_30px_rgba(23,37,43,.05)]";
 const navBtn = "inline-flex h-11 items-center rounded-[12px] px-3 text-sm font-bold text-[#667378] transition hover:bg-[#2768ff]/[.07] hover:text-[#2768ff]";
 const primaryBtn = "inline-flex items-center justify-center gap-2 rounded-[16px] bg-[#2768ff] font-extrabold text-white shadow-[0_5px_0_#164ed3] transition hover:bg-[#164ed3] hover:shadow-[0_3px_0_#123fae]";
-const ghostBtn = "inline-flex items-center justify-center gap-2 rounded-[16px] border-2 border-[#e0ddd4] bg-white font-extrabold text-[#17252b] transition hover:border-[#2768ff] hover:text-[#2768ff]";
