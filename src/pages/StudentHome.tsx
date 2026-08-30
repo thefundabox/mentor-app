@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
+import { QuotaMeter } from "@/components/QuotaMeter";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
@@ -127,6 +128,11 @@ export function StudentHome() {
         <aside className="lg:order-2 space-y-5">
           <OverrideDecisionBanner studentId={user.id} />
           <AnnouncementsBanner studentId={user.id} />
+
+          {/* Renders nothing on the paid plan, and nothing while signed out.
+              Placed here rather than in the header so it sits beside the work
+              rather than shouting at someone who has not started yet. */}
+          <QuotaMeter />
 
           {/* Above the digest on purpose: something your mentor asked you to do
               outranks general reading. */}
