@@ -6,6 +6,7 @@ import { ArrowRight, Check, CalendarDays, Target, MessagesSquare, ClipboardCheck
 import type { Role } from "@/types";
 import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED } from "@/data/pyqStats";
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
+import { TasterQuiz } from "@/components/TasterQuiz";
 
 /**
  * The homepage.
@@ -132,6 +133,29 @@ export function Landing() {
               …and 73 more days, ending with a full paper under time.
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------- taster */}
+      <section className="border-t border-slate-200 bg-slate-50/70">
+        <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 grid lg:grid-cols-[0.85fr_1fr] gap-10 lg:gap-14 items-center">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600 mb-4">
+              Try it before you sign up
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-tight text-balance">
+              Answer one. Then see the one small thing it was testing.
+            </h2>
+            <p className="text-slate-600 mt-4 leading-relaxed">
+              This is a real question from a real RPSC paper, marked against the
+              official answer key. Get it wrong and you will see exactly which
+              microtheme you were missing — which is the whole idea.
+            </p>
+            <p className="text-sm text-slate-500 mt-4">
+              No account, no email. Just the paper.
+            </p>
+          </div>
+          <TasterQuiz onStart={() => go("student")} />
         </div>
       </section>
 
