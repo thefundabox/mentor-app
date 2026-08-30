@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
+import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles, CalendarClock } from "lucide-react";
 import { SCOPE_DAYS, type CommitmentScope } from "@/types";
@@ -122,6 +123,17 @@ export function StudentHome() {
         <aside className="lg:order-2 space-y-5">
           <OverrideDecisionBanner studentId={user.id} />
           <AnnouncementsBanner studentId={user.id} />
+
+          {/* Above the digest on purpose: something your mentor asked you to do
+              outranks general reading. */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <h2 className="font-semibold text-slate-900 mb-1">From your mentor</h2>
+            <p className="text-sm text-slate-500 mb-3">
+              Directions and follow-ups. Tick one off when it is done.
+            </p>
+            <ActionItemsPanel studentId={user.id} compact />
+          </div>
+
           <CurrentAffairsDigest limit={6} />
         </aside>
 

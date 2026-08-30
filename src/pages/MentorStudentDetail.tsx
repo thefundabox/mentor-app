@@ -8,6 +8,7 @@ import { ROADBLOCK_OPTIONS, SELF_RATED_LEVELS } from "@/data";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SCOPE_LABEL } from "@/types";
 import type { StudentData } from "@/types";
+import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import {
   passThresholdOf, DEFAULT_PASS_THRESHOLD, MIN_PASS_THRESHOLD, MAX_PASS_THRESHOLD,
 } from "@/lib/passThreshold";
@@ -150,6 +151,17 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
           </div>
         </div>
       )}
+
+      {/* Directly under the pass mark: both are "what I am asking of this
+          student", and a mentor setting one usually wants the other in view. */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-1">Action items</h2>
+        <p className="text-sm text-slate-500 mb-3">
+          Directions this student sees on their home screen. Give one a due date
+          and it shows as overdue once it passes.
+        </p>
+        <ActionItemsPanel studentId={studentId} />
+      </div>
 
       <PassMarkCard studentId={studentId} student={s} />
 
