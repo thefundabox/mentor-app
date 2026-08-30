@@ -32,7 +32,7 @@ export interface PriorityAxis {
 export const PRIORITY_AXES: PriorityAxis[] = [
   { letter: "F", name: "Frequency", blurb: "How often the microtheme has surfaced across the decoded papers.", p1: 4.30, p3: 2.06 },
   { letter: "D", name: "Depth", blurb: "How far past a definition a question tends to go.", p1: 3.76, p3: 2.05 },
-  { letter: "L", name: "Lag", blurb: "How long since it was last asked -- the overdue signal.", p1: 4.15, p3: 1.99 },
+  { letter: "L", name: "Lag", blurb: "How long since it was last asked \u2014 the overdue signal.", p1: 4.15, p3: 1.99 },
   { letter: "V", name: "Volatility", blurb: "How fast the correct answer goes stale (lists, ranks, schemes).", p1: 1.76, p3: 1.97 },
   { letter: "T", name: "Traps", blurb: "Density of near-miss options: pairings, match-the-column.", p1: 4.45, p3: 2.06 },
   { letter: "E", name: "Examiner bias", blurb: "The setter’s standing preference for this ground.", p1: 4.91, p3: 2.04 },
