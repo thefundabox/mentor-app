@@ -22,7 +22,30 @@ import { PYQ_TOTAL } from "@/data/pyqStats";
  * microtheme, each narrowing -- the animation is the argument, not decoration,
  * so it runs even for people who will not read the copy.
  */
-export function TasterQuiz({ onStart }: { onStart: () => void }) {
+export function TasterQuiz({ onStart, tone = "classic" }: {
+  onStart: () => void;
+  /** `studio` matches the warm-paper homepage; `classic` the white one. */
+  tone?: "classic" | "studio";
+}) {
+  const S = tone === "studio";
+  const sk = {
+    card:   S ? "border-[#dcd9cf] bg-[#fffdf7] rounded-[24px]" : "border-slate-200 bg-white rounded-2xl",
+    head:   S ? "border-[#dcd9cf] bg-[#f6f2e8]"                : "border-slate-200 bg-slate-50",
+    chip:   S ? "text-[#164ed3] bg-[#eaf0ff] border-[#c9d8ff]" : "text-indigo-700 bg-indigo-50 border-indigo-200",
+    meta:   S ? "text-[#667378]"                               : "text-slate-500",
+    stem:   S ? "text-[#17252b]"                               : "text-slate-900",
+    idle:   S ? "border-[#dcd9cf] hover:border-[#2768ff] hover:bg-[#eaf0ff]" : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40",
+    right:  S ? "border-[#b6ec51] bg-[#b6ec51]/25 text-[#17252b]" : "border-emerald-300 bg-emerald-50 text-emerald-900",
+    wrong:  S ? "border-[#ff5d44] bg-[#ff5d44]/12 text-[#17252b]" : "border-rose-300 bg-rose-50 text-rose-900",
+    dim:    S ? "border-[#dcd9cf] text-[#a4aeb1]"              : "border-slate-200 text-slate-400",
+    bRight: S ? "bg-[#7fbe12] text-white"                      : "bg-emerald-500 text-white",
+    bWrong: S ? "bg-[#ff5d44] text-white"                      : "bg-rose-500 text-white",
+    bIdle:  S ? "bg-[#eaf0ff] text-[#667378]"                  : "bg-slate-100 text-slate-500",
+    reveal: S ? "border-[#dcd9cf] bg-[#f6f2e8]"                : "border-slate-200 bg-slate-50",
+    node:   S ? "bg-white border-[#dcd9cf] text-[#17252b]"     : "bg-white border-slate-200 text-slate-700",
+    leaf:   S ? "bg-[#2768ff] text-white"                      : "bg-indigo-600 text-white",
+    hint:   S ? "text-[#8a9599]"                               : "text-slate-400",
+  };
   const reduce = useReducedMotion();
   const [order] = useState(() => {
     const a = [...TASTER_QUESTIONS.keys()];
@@ -59,17 +82,17 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
   const step = reduce ? 0 : 1;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+    <div className={`border overflow-hidden shadow-sm ${sk.card}`}>
       {/* ------------------------------------------------------------ head */}
-      <div className="px-5 sm:px-6 py-3.5 border-b border-slate-200 flex items-center gap-3 bg-slate-50">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">
+      <div className={`px-5 sm:px-6 py-3.5 border-b flex items-center gap-3 ${sk.head}`}>
+        <span className={`text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${sk.chip}`}>
           Real question
         </span>
-        <span className="text-xs text-slate-500 tabular-nums">
+        <span className={`text-xs tabular-nums ${sk.meta}`}>
           RAS {q.year} · Q{q.qno}
         </span>
         {answered > 0 && (
-          <span className="ml-auto text-xs text-slate-500 tabular-nums">
+          <span className={`ml-auto text-xs tabular-nums ${sk.meta}`}>
             {right}/{answered} right
           </span>
         )}
@@ -84,7 +107,7 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 * step }}
             transition={{ duration: 0.2 }}
-            className="text-[1.0625rem] font-semibold text-slate-900 leading-snug text-balance"
+            className={`text-[1.0625rem] font-semibold leading-snug text-balance ${sk.stem}`}
           >
             {q.q}
           </motion.p>
@@ -109,21 +132,21 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
                 transition={{ duration: 0.28 }}
                 className={`text-left rounded-xl border px-3.5 py-2.5 flex items-center gap-3 text-[0.9375rem] transition ${
                   state === "idle"
-                    ? "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-pointer"
+                    ? `${sk.idle} cursor-pointer`
                     : state === "right"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                    ? sk.right
                     : state === "wrong"
-                    ? "border-rose-300 bg-rose-50 text-rose-900"
-                    : "border-slate-200 text-slate-400"
+                    ? sk.wrong
+                    : sk.dim
                 }`}
               >
                 <span
                   className={`w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold shrink-0 ${
                     state === "right"
-                      ? "bg-emerald-500 text-white"
+                      ? sk.bRight
                       : state === "wrong"
-                      ? "bg-rose-500 text-white"
-                      : "bg-slate-100 text-slate-500"
+                      ? sk.bWrong
+                      : sk.bIdle
                   }`}
                 >
                   {state === "right" ? <Check className="w-3.5 h-3.5" />
@@ -145,13 +168,13 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: reduce ? 0 : 0.3 }}
-            className="overflow-hidden border-t border-slate-200 bg-slate-50"
+            className={`overflow-hidden border-t ${sk.reveal}`}
           >
             <div className="px-5 sm:px-6 py-5">
               <motion.p
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 transition={{ delay: 0.05 }}
-                className="text-sm font-semibold text-slate-900"
+                className={`text-sm font-semibold ${sk.stem}`}
               >
                 {correct
                   ? "Right — and here is what it was testing."
@@ -180,8 +203,8 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
                     <span
                       className={`text-sm rounded-lg px-2 py-1 ${
                         row.tone === "indigo"
-                          ? "bg-indigo-600 text-white font-semibold"
-                          : "bg-white border border-slate-200 text-slate-700"
+                          ? `${sk.leaf} font-semibold`
+                          : `border ${sk.node}`
                       }`}
                     >
                       {row.value}
@@ -214,7 +237,7 @@ export function TasterQuiz({ onStart }: { onStart: () => void }) {
       </AnimatePresence>
 
       {!done && (
-        <div className="px-5 sm:px-6 pb-4 -mt-1 text-xs text-slate-400">
+        <div className={`px-5 sm:px-6 pb-4 -mt-1 text-xs ${sk.hint}`}>
           Pick an answer — the official RPSC key decides, not us.
         </div>
       )}
