@@ -20,7 +20,7 @@ import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
-  Test, TestAttempt, TestSchedule, PYQ, CurrentAffairsTopic, StudentTopicRecord,
+  Test, TestAttempt, TestSchedule, PYQ, PyqTarget, CurrentAffairsTopic, StudentTopicRecord,
   SmartSessionRecord,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
@@ -74,6 +74,9 @@ interface AppContextValue extends AppState {
   setRoute: (route: Route) => void;
   setActiveDay: (day: number | null) => void;
   setActiveTopicId: (topicId: string | null) => void;
+  /** What the PYQ attempt screen should deal: a whole paper, or one microtheme. */
+  pyqTarget: PyqTarget | null;
+  setPyqTarget: (t: PyqTarget | null) => void;
   setAttemptSeed: (seed: number | ((prev: number) => number)) => void;
   setLastResult: (result: QuizResult | null) => void;
   setViewingStudentId: (id: string | null) => void;
@@ -273,6 +276,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loginRoleIntent, setLoginRoleIntent] = useLocalStorage<Role | null>("v5_loginRoleIntent", null);
   const [activeDay, setActiveDay] = useLocalStorage<number | null>("v5_activeDay", null);
   const [activeTopicId, setActiveTopicId] = useLocalStorage<string | null>("v5_activeTopicId", null);
+  // Deliberately not persisted. A stale PYQ target outliving its route is the
+  // exact shape of the blank-screen bug that persisted `route` caused: the
+  // screen renders before the target is meaningful and returns null.
+  const [pyqTarget, setPyqTarget] = useState<PyqTarget | null>(null);
   const [attemptSeed, setAttemptSeed] = useLocalStorage<number>("v5_attemptSeed", 1);
   const [lastResult, setLastResult] = useLocalStorage<QuizResult | null>("v5_lastResult", null);
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
@@ -1557,6 +1564,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     users, currentUserId, studentData, subjects, planTemplates, tourSteps,
     quizPool, foundationPool, placementPool, adminTab,
     loginRoleIntent, route, activeDay, activeTopicId, attemptSeed, lastResult, viewingStudentId,
+    pyqTarget, setPyqTarget,
     currentUser, students, mentors,
     loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
     listProfiles, setUserRole, setUserMentor, defaultTemplate,

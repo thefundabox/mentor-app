@@ -1,18 +1,29 @@
 /**
- * Registry of real past-paper question banks.
+ * Registry of bundled question banks.
  *
- * Every subject bank is registered here, so anything that wants "real
- * questions" — the day quiz, the placement check, future mock-test builders —
- * picks up new subjects automatically as they are extracted. Geography, Indian History and
- * Economics are wired today; adding a subject is one import and one spread.
+ * This used to carry three files of extracted RAS past papers -- geography (88),
+ * history (61) and economics (85). They are gone. Their answer keys were
+ * authored by hand, and when the official RPSC final answer keys were decoded
+ * and compared position-by-position, roughly a fifth of them disagreed: the
+ * bundle had Kota as Rajasthan's largest thermal plant (it is Suratgarh),
+ * Saraswati as the answer to "not a Rajasthan oil field" (Saraswati is one;
+ * Ganga is not), and Vijaya Raghavachari presiding at Calcutta in 1920 (it was
+ * Lala Lajpat Rai).
+ *
+ * Genuine past papers now live in Postgres -- 546 questions across 2018, 2021,
+ * 2023 and 2024, each graded against the official key RPSC published, loaded by
+ * migrations 0014 and 0015. Keeping the bundled copies would have served both:
+ * `loadPool` dedupes on the exact stem, and the bundled stems use en dashes and
+ * curly quotes where the Postgres ones are ASCII, so the same question would
+ * have appeared twice with two different correct answers.
+ *
+ * What remains here is ADHYAYAN_QUESTIONS -- authored practice questions that
+ * never claimed to be past papers (they carry no `sourceYear` on purpose).
  */
 import type { Question } from "@/types";
-import { GEOGRAPHY_QUESTIONS } from "./questions.geography";
-import { HISTORY_QUESTIONS } from "./questions.history";
-import { ECONOMICS_QUESTIONS } from "./questions.economics";
 import { ADHYAYAN_QUESTIONS } from "./questions.adhyayan";
 
-/** topicId (microtheme) -> real RAS past questions for that microtheme. */
+/** topicId (microtheme) -> bundled questions for that microtheme. */
 function merge(...banks: Record<string, Question[]>[]): Record<string, Question[]> {
   const out: Record<string, Question[]> = {};
   for (const bank of banks) {
@@ -24,18 +35,15 @@ function merge(...banks: Record<string, Question[]>[]): Record<string, Question[
 }
 
 export const QUESTION_BANKS: Record<string, Question[]> = merge(
-  GEOGRAPHY_QUESTIONS,
-  HISTORY_QUESTIONS,
-  ECONOMICS_QUESTIONS,
   ADHYAYAN_QUESTIONS,
 );
 
-/** Every real question, flattened. */
+/** Every bundled question, flattened. */
 export function allRealQuestions(): Question[] {
   return Object.values(QUESTION_BANKS).flat();
 }
 
-/** Microthemes that have genuine past-paper coverage. */
+/** Microthemes with bundled question coverage. */
 export function coveredTopicIds(): string[] {
   return Object.keys(QUESTION_BANKS).filter((id) => QUESTION_BANKS[id].length > 0);
 }
@@ -43,24 +51,24 @@ export function coveredTopicIds(): string[] {
 /**
  * Placement check for the signup assessment.
  *
- * Picks a spread of real RAS questions rather than the three invented MCQs the
- * assessment used before. Selection is deterministic — no Math.random at module
- * scope, which would give every student a different test and make placement
- * scores incomparable.
+ * Draws from the bundled authored questions. It used to draw from the extracted
+ * past papers, biased newest-first -- but those carried the hand-authored keys
+ * described above, and a placement score computed from wrong answers is worse
+ * than one computed from authored questions that are at least internally
+ * correct. The official past papers cannot be substituted here yet: this is a
+ * module-level constant evaluated before any network call, and the real bank is
+ * in Postgres.
  *
- * Bias: newest papers first, one question per microtheme, and an alternating
- * conceptual / analytical rhythm so the check samples both the statement-and-code
- * reasoning RPSC leans on and plain factual recall.
+ * Selection stays deterministic -- no Math.random at module scope, which would
+ * give every student a different test and make placement scores incomparable.
+ * One question per microtheme, alternating conceptual / analytical so the check
+ * samples both statement-and-code reasoning and plain recall.
  */
 export function buildPlacementSet(n = 5): Question[] {
   const pool = allRealQuestions();
   if (pool.length === 0) return [];
 
-  const byRecency = [...pool].sort((a, b) => {
-    const ya = Number(a.sourceYear ?? 0), yb = Number(b.sourceYear ?? 0);
-    if (yb !== ya) return yb - ya;
-    return (a.concept ?? "").localeCompare(b.concept ?? "");
-  });
+  const ordered = [...pool].sort((a, b) => (a.concept ?? "").localeCompare(b.concept ?? ""));
 
   const picked: Question[] = [];
   const usedConcepts = new Set<string>();
@@ -69,7 +77,7 @@ export function buildPlacementSet(n = 5): Question[] {
   // Two passes: first respecting the type rhythm and one-per-microtheme, then
   // relaxing the type constraint to fill any shortfall.
   for (const pass of [0, 1]) {
-    for (const q of byRecency) {
+    for (const q of ordered) {
       if (picked.length >= n) break;
       if (usedConcepts.has(q.concept)) continue;
       if (pass === 0 && (q.type === "conceptual") !== wantConceptual) continue;

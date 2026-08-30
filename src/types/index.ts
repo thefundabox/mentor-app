@@ -571,6 +571,14 @@ export interface StudentData {
   studiedTopics?: { day: number; topicId: string; at: number }[];
 }
 
+/**
+ * What a PYQ attempt is over: one whole past paper, or every past question
+ * tagged to a single microtheme.
+ */
+export type PyqTarget =
+  | { kind: "year"; year: string }
+  | { kind: "topic"; topicId: string };
+
 export type Route =
   | "auto"
   | "landing"
@@ -587,6 +595,7 @@ export type Route =
   | "take_test"
   | "test_result"
   | "pyq_archive"
+  | "pyq_attempt"
   | "discussion"
   | "smart_practice"
   | "smart_session"

@@ -5,6 +5,7 @@ import type { PYQ } from "@/types";
 import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { resumableSeed } from "@/lib/attemptDraft";
+import { loadPyqForTopic } from "@/lib/pyqStore";
 import { passThresholdOf } from "@/lib/passThreshold";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
@@ -428,7 +429,16 @@ function QuizTab({
  * practice today every match arrives through the subject tier.
  */
 function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subjectId: string; subjectName: string }) {
-  const { pyqBank, setRoute } = useAppState();
+  const { pyqBank, setRoute, setPyqTarget } = useAppState();
+
+  // Real past questions for this microtheme, from Postgres. Counted here so the
+  // card can say how many there are before the student commits to sitting them.
+  const [pyqCount, setPyqCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadPyqForTopic(topicId).then((qs) => { if (!cancelled) setPyqCount(qs.length); });
+    return () => { cancelled = true; };
+  }, [topicId]);
 
   const { onTopic, onSubject } = useMemo(() => {
     const onTopic: PYQ[] = [];
@@ -440,19 +450,27 @@ function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subject
     return { onTopic, onSubject };
   }, [pyqBank, topicId, subjectId]);
 
-  if (onTopic.length === 0 && onSubject.length === 0) {
+  const attemptable = (pyqCount ?? 0) > 0;
+  const hasLegacy = onTopic.length > 0 || onSubject.length > 0;
+
+  const startAttempt = () => {
+    setPyqTarget({ kind: "topic", topicId });
+    setRoute("pyq_attempt");
+  };
+
+  if (!attemptable && !hasLegacy && pyqCount !== null) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
         <div className="text-slate-800 font-medium mb-1">No past questions tagged to this microtheme yet</div>
         <div className="text-sm text-slate-500 mb-4">
-          Nothing in the PYQ bank is tagged to {subjectName}. Showing questions from
+          Nothing in the past-paper bank is tagged to {subjectName}. Showing questions from
           another subject here would only mislead you.
         </div>
         <button
           onClick={() => setRoute("pyq_archive")}
           className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition"
         >
-          Browse the full PYQ archive →
+          Browse the full PYQ archive &rarr;
         </button>
       </div>
     );
@@ -460,17 +478,47 @@ function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subject
 
   return (
     <div className="space-y-3">
-      {onTopic.map((pyq, i) => (
-        <PYQCard key={pyq.id ?? `topic-${i}`} pyq={pyq} />
-      ))}
-      {onSubject.length > 0 && (
-        <>
-          <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {onTopic.length > 0 ? `Also from ${subjectName}` : `From ${subjectName}`}
+      {attemptable && (
+        <div className="bg-white rounded-2xl border border-indigo-200 p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Trophy className="w-4 h-4 text-amber-600" />
+            <span className="font-semibold text-slate-900">
+              {pyqCount} past question{pyqCount === 1 ? "" : "s"} on this microtheme
+            </span>
           </div>
-          {onSubject.map((pyq, i) => (
-            <PYQCard key={pyq.id ?? `subject-${i}`} pyq={pyq} />
+          <p className="text-sm text-slate-600 mb-4">
+            Everything RPSC has asked here, from the papers held in the bank. Sit
+            them like a paper -- answers stay hidden until you submit, then every
+            question is shown with the official key.
+          </p>
+          <Button onClick={startAttempt}>Attempt these questions</Button>
+        </div>
+      )}
+
+      {pyqCount === null && (
+        <div className="text-sm text-slate-500 px-1">Checking the past-paper bank...</div>
+      )}
+
+      {hasLegacy && (
+        <>
+          {attemptable && (
+            <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Curated notes
+            </div>
+          )}
+          {onTopic.map((pyq, i) => (
+            <PYQCard key={pyq.id ?? `topic-${i}`} pyq={pyq} />
           ))}
+          {onSubject.length > 0 && (
+            <>
+              <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {onTopic.length > 0 ? `Also from ${subjectName}` : `From ${subjectName}`}
+              </div>
+              {onSubject.map((pyq, i) => (
+                <PYQCard key={pyq.id ?? `subject-${i}`} pyq={pyq} />
+              ))}
+            </>
+          )}
         </>
       )}
     </div>

@@ -13,6 +13,7 @@ import { TestsList } from "@/pages/TestsList";
 import { TakeTest } from "@/pages/TakeTest";
 import { TestResult } from "@/pages/TestResult";
 import { PYQArchive } from "@/pages/PYQArchive";
+import { PYQAttempt } from "@/pages/PYQAttempt";
 import { Discussion } from "@/pages/Discussion";
 import { SmartPractice } from "@/pages/SmartPractice";
 import { SmartSessionScreen } from "@/pages/SmartSessionScreen";
@@ -109,6 +110,7 @@ function AppContent() {
     else if (route === "take_test") content = <TakeTest />;
     else if (route === "test_result") content = <TestResult />;
     else if (route === "pyq_archive") content = <PYQArchive />;
+    else if (route === "pyq_attempt") content = <PYQAttempt />;
     else if (route === "discussion") content = <Discussion />;
     else if (route === "smart_practice" && SMART_PRACTICE_ENABLED) content = <SmartPractice />;
     else if (route === "smart_session" && SMART_PRACTICE_ENABLED) content = <SmartSessionScreen />;
@@ -117,7 +119,8 @@ function AppContent() {
   }
 
   const showTopBar = !!currentUser && !recoveryMode
-    && route !== "quiz" && route !== "take_test" && route !== "smart_session";
+    && route !== "quiz" && route !== "take_test" && route !== "smart_session"
+    && route !== "pyq_attempt";
 
   return (
     <div className="min-h-screen bg-slate-50">
