@@ -112,8 +112,15 @@ export async function createThread(args: {
     .single();
 
   if (error) {
+    // Do not translate 42501 to a bare "no permission". It said exactly that
+    // when the real cause was an identity mismatch the user could do nothing
+    // about (see migration 0018), which sent the reader looking for a
+    // permissions problem that did not exist. Say what the database said.
     if (error.code === "42501") {
-      return { error: "You don't have permission to start a discussion here." };
+      return {
+        error: `The database refused this: ${error.message}. If you are not in a batch yet, `
+             + `you can still start a discussion from any topic's Discuss tab.`,
+      };
     }
     return { error: error.message };
   }
@@ -195,7 +202,7 @@ export async function postComment(args: {
   if (error) {
     // RLS rejections surface as a policy violation; translate the common case.
     if (error.code === "42501") {
-      return { error: "You don't have permission to post in this thread." };
+      return { error: `The database refused this comment: ${error.message}` };
     }
     return { error: error.message };
   }
