@@ -5,6 +5,7 @@ import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { resumableSeed } from "@/lib/attemptDraft";
 import { loadPyqs } from "@/lib/pyqStore";
+import { DiscussionPanel } from "@/components/DiscussionPanel";
 import { passThresholdOf } from "@/lib/passThreshold";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
@@ -12,6 +13,7 @@ import {
   BookOpen,
   Sparkles,
   Trophy,
+  MessagesSquare,
   ArrowRight,
 } from "lucide-react";
 
@@ -110,6 +112,7 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
     { key: "quiz", label: "Quiz", Icon: Sparkles },
     { key: "pyqs", label: "PYQs", Icon: Trophy },
     { key: "mains", label: "Mains", Icon: BookOpen },
+    { key: "discuss", label: "Discuss", Icon: MessagesSquare },
   ];
 
   return (
@@ -218,6 +221,10 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
             />
           )}
           {tab === "mains" && <MainsTab dayNum={dayNum} topicId={resolvedTopicId} />}
+          {/* Keyed on the microtheme, not the batch: a doubt about this topic is
+              worth the same to every student, and per-cohort copies would split a
+              small group into rooms of one. */}
+          {tab === "discuss" && <DiscussionPanel scope={{ topicId: resolvedTopicId }} />}
         </motion.div>
       </AnimatePresence>
     </div>

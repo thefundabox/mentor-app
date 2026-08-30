@@ -1,9 +1,14 @@
 /**
- * Batch discussion threads.
+ * Discussion threads.
  *
- * Two standing threads per batch — announcements (staff post only) and doubts
- * (anyone in the batch posts). There is no thread creation: the rows are seeded
- * by supabase/migrations/0002.
+ * Two shapes, since migration 0017:
+ *   batch room  -- batch_id set. The two standing rooms (announcements, doubts)
+ *                  plus any number of user-created 'topic' rooms.
+ *   microtheme  -- topic_id set. Hangs off a syllabus microtheme and is visible
+ *                  to everyone, not scoped to a cohort.
+ *
+ * Anyone signed in may start a topic; mentors and admins moderate. All of that
+ * is enforced by RLS -- the checks here are for ergonomics, not security.
  *
  * Unlike the rest of the app, this data lives in Postgres rather than
  * localStorage, so comments are genuinely shared between users. Every query
@@ -12,14 +17,19 @@
  */
 import { supabase } from "./supabase";
 
-export type ThreadKind = "announcements" | "doubts";
+export type ThreadKind = "announcements" | "doubts" | "topic";
 
 export interface Thread {
   id: string;
-  batch_id: string;
+  batch_id: string | null;
+  topic_id: string | null;
   kind: ThreadKind;
   title: string;
   staff_only_post: boolean;
+  locked: boolean;
+  pinned: boolean;
+  created_by: string | null;
+  created_by_name: string;
   created_at: string;
 }
 
@@ -40,14 +50,103 @@ export interface Result<T> {
 
 const NO_CLIENT = "Discussion is unavailable — Supabase is not configured.";
 
-/** Threads visible to the signed-in user, ordered announcements first. */
-export async function listThreads(batchId?: string): Promise<Result<Thread[]>> {
+/**
+ * Threads visible to the signed-in user.
+ *
+ * `topicId` narrows to one microtheme's discussions; `batchRooms` narrows to
+ * cohort rooms. With neither, everything RLS allows comes back.
+ *
+ * Pinned first, then newest. Ordering is explicit because Postgres promises
+ * nothing without it, and a room list that reshuffles between loads is
+ * disorienting in a way a query result is not.
+ */
+export async function listThreads(
+  opts: { topicId?: string; batchRooms?: boolean } = {},
+): Promise<Result<Thread[]>> {
   if (!supabase) return { error: NO_CLIENT };
   let q = supabase.from("threads").select("*");
-  if (batchId) q = q.eq("batch_id", batchId);
-  const { data, error } = await q.order("kind", { ascending: true });
+  if (opts.topicId) q = q.eq("topic_id", opts.topicId);
+  else if (opts.batchRooms) q = q.is("topic_id", null);
+  const { data, error } = await q
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: true });
   if (error) return { error: error.message };
   return { data: (data ?? []) as Thread[] };
+}
+
+/**
+ * Start a discussion.
+ *
+ * A thread must be anchored: `topicId` for a syllabus discussion, `batchId` for
+ * a cohort room. The database enforces that too (threads_anchored_check), and
+ * rejects a student who tries to file one into a cohort they are not in.
+ */
+export async function createThread(args: {
+  title: string;
+  authorId: string;
+  authorName: string;
+  topicId?: string | null;
+  batchId?: string | null;
+}): Promise<Result<Thread>> {
+  if (!supabase) return { error: NO_CLIENT };
+  const title = args.title.trim();
+  if (!title) return { error: "Give the discussion a title." };
+  if (title.length > 160) return { error: "Titles are limited to 160 characters." };
+  if (!args.topicId && !args.batchId) {
+    return { error: "A discussion needs a microtheme or a batch to belong to." };
+  }
+
+  const { data, error } = await supabase
+    .from("threads")
+    .insert({
+      title,
+      kind: "topic",
+      topic_id: args.topicId ?? null,
+      batch_id: args.batchId ?? null,
+      created_by: args.authorId,
+      created_by_name: args.authorName,
+      staff_only_post: false,
+      pinned: false,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "42501") {
+      return { error: "You don't have permission to start a discussion here." };
+    }
+    return { error: error.message };
+  }
+  return { data: data as Thread };
+}
+
+/** Lock, unlock, pin or rename a thread. Mentors and admins only, per RLS. */
+export async function moderateThread(
+  id: string,
+  patch: { locked?: boolean; pinned?: boolean; title?: string },
+): Promise<Result<true>> {
+  if (!supabase) return { error: NO_CLIENT };
+  const { error } = await supabase.from("threads").update(patch).eq("id", id);
+  if (error) {
+    if (error.code === "42501") return { error: "Only a mentor can moderate discussions." };
+    return { error: error.message };
+  }
+  return { data: true };
+}
+
+/**
+ * Delete a thread. Staff can remove any; an author can remove their own only
+ * while nobody else has replied, since comments cascade with it.
+ */
+export async function deleteThread(id: string): Promise<Result<true>> {
+  if (!supabase) return { error: NO_CLIENT };
+  const { error, count } = await supabase
+    .from("threads").delete({ count: "exact" }).eq("id", id);
+  if (error) return { error: error.message };
+  if (count === 0) {
+    return { error: "Could not delete - once somebody else has replied, only a mentor can remove a discussion." };
+  }
+  return { data: true };
 }
 
 /** Comments in a thread, oldest first. */

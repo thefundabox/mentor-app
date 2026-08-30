@@ -1421,12 +1421,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBatches((prev) => prev.map((b) => b.id === id ? { ...b, archived: false } : b));
   }, [setBatches]);
 
+  /**
+   * Put a student in a batch.
+   *
+   * This used to write only to localStorage, so the admin panel showed the
+   * assignment and Postgres never heard about it. Thread visibility is
+   * `batch_id = batch_of(auth.uid())` in the database, so every student kept a
+   * null batch_id and saw zero discussion threads while the UI insisted they
+   * were in a cohort. Same shape as the mentor-approval bug: a write that
+   * looked like it worked because nothing checked.
+   *
+   * Goes through set_user_batch (migration 0017) rather than a table write,
+   * for the reason 0008 gives -- `authenticated` has no column privilege on
+   * batch_id, and granting one would let a student move themselves between
+   * cohorts.
+   */
   const assignStudentToBatch = useCallback((studentId: string, batchId: string | null) => {
     setUsers((prev) => prev.map((u) =>
       u.id === studentId && u.role === "student"
         ? { ...u, batchId: batchId || undefined }
         : u
     ));
+    if (!supabase) return;
+    void (async () => {
+      const { error } = await supabase!.rpc("set_user_batch", {
+        target_id: studentId, new_batch: batchId,
+      });
+      if (error) setAuthError(`Could not save the batch assignment: ${error.message}`);
+    })();
   }, [setUsers]);
 
   const batchStudents = useCallback((batchId: string): User[] => {
