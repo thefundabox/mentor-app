@@ -108,7 +108,7 @@ export function StudentHome() {
           <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
             <Library className="w-4 h-4" /> PYQ bank
           </Button>
-          <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Edit chart</Button>
+          <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Plan ahead</Button>
         </div>
       </div>
 

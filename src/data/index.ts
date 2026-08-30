@@ -1059,7 +1059,7 @@ export const DEFAULT_TOUR_STEPS: TourStep[] = [
     id: "edit-chart",
     order: 40,
     title: "Adjust your plan",
-    body: "Need to change your plan? Use Edit chart — your mentor will be asked to re-approve any changes.",
+    body: "Use Plan ahead to lay out your next stretch of days. Days your mentor has already approved stay put; the new ones go back for approval.",
     target: '[data-tour="edit-chart"]',
     side: "left",
     screen: "home",

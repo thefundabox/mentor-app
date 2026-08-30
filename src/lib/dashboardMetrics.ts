@@ -59,11 +59,26 @@ export interface MockTestTrendPoint {
   percent: number;
 }
 
+/** How much of a scope has been practised at all. */
+export interface CoverageCount {
+  /** Microthemes with at least one attempt. */
+  practised: number;
+  /** Microthemes in scope, practised or not. */
+  total: number;
+}
+
 export interface DashboardMetrics {
-  /** 0–100 — weighted average of subject accuracies. */
+  /**
+   * 0–100 across every non-archived microtheme. Coverage counts: a microtheme
+   * never attempted contributes 0, it is not excluded. See `readinessOver`.
+   */
   prelimsReadiness: number;
-  /** 0–100 — same calc, Rajasthan-flagged subjects/topics only. */
+  /** 0–100, same calc over Rajasthan-flagged microthemes only. */
   rajasthanReadiness: number;
+  /** Denominator behind `prelimsReadiness`, for display. */
+  prelimsCoverage: CoverageCount;
+  /** Denominator behind `rajasthanReadiness`, for display. */
+  rajasthanCoverage: CoverageCount;
   subjects: SubjectBreakdownRow[];
   /** Three weakest subjects by accuracy. Filtered to attempted-only. */
   weakSubjects: SubjectBreakdownRow[];
@@ -117,19 +132,32 @@ export function computeDashboard(
   const subjectRows = buildSubjectRows(records, subjects, sessions, now);
   const attemptedSubjects = subjectRows.filter((s) => s.accuracy !== null);
 
-  const prelimsReadiness = weightedReadiness(attemptedSubjects);
-  const rajRows = attemptedSubjects.filter((s) => s.rajasthanSpecific);
-  const rajasthanReadiness = rajRows.length > 0 ? weightedReadiness(rajRows) : 0;
-
   const weakSubjects = [...attemptedSubjects].sort((a, b) => (a.accuracy! - b.accuracy!)).slice(0, 3);
   const strongSubjects = [...attemptedSubjects].sort((a, b) => (b.accuracy! - a.accuracy!)).slice(0, 3);
 
   const syllabusCoverage = buildSyllabusCoverage(records, subjects);
   const syllabusSummary = summarizeCoverage(syllabusCoverage);
 
+  // Readiness is computed per *microtheme*, not per subject, and over the whole
+  // scope rather than the attempted part of it. Both choices are corrections.
+  //
+  // Scoring only what had been attempted meant the number started at its
+  // maximum and fell as the student worked: three correct answers in one
+  // microtheme read 100/100, and so did mastering all 37 of Rajasthan History.
+  // The two were indistinguishable, which is no use next to a countdown.
+  //
+  // Aggregating per subject then averaging those averages weighted an
+  // 11-microtheme subject the same as a 37-microtheme one. Going straight to
+  // the microtheme rows makes the syllabus itself the weight.
+  const rajRows = syllabusCoverage.filter((r) => r.isRajasthanSpecific);
+  const prelimsReadiness = readinessOver(syllabusCoverage);
+  const rajasthanReadiness = readinessOver(rajRows);
+
   return {
     prelimsReadiness,
     rajasthanReadiness,
+    prelimsCoverage: coverageOf(syllabusCoverage),
+    rajasthanCoverage: coverageOf(rajRows),
     subjects: subjectRows,
     weakSubjects,
     strongSubjects,
@@ -173,7 +201,11 @@ function buildSubjectRows(
         subjectId: s.id,
         subjectName: s.name,
         icon: s.icon,
-        rajasthanSpecific: !!s.rajasthanSpecific,
+        // `t || s`, matching scheduler.ts, selector.ts and questionImport.ts.
+        // Subject-level alone is right for today's catalog (Rajasthan sits in
+        // four dedicated subjects) but breaks the moment a Rajasthan
+        // microtheme is filed under a general one.
+        rajasthanSpecific: !!(s.rajasthanSpecific || s.topics.some((t) => t.rajasthanSpecific)),
         attempts,
         correct,
         accuracy,
@@ -183,17 +215,31 @@ function buildSubjectRows(
     });
 }
 
-function weightedReadiness(rows: SubjectBreakdownRow[]): number {
-  // If any row has a weight, use weights. Otherwise equal-weight across
-  // attempted subjects so a student with no weightages tagged still gets a
-  // sensible number on first launch.
-  const totalWeight = rows.reduce((acc, r) => acc + r.weight, 0);
-  if (totalWeight > 0) {
-    const weightedSum = rows.reduce((acc, r) => acc + (r.accuracy ?? 0) * r.weight, 0);
-    return Math.round((weightedSum / totalWeight) * 100);
+/**
+ * 0-100 over a set of microthemes. An unattempted microtheme scores 0 rather
+ * than being dropped, so the number answers "how much of this could you
+ * answer today", which is what a readiness bar in front of an exam claims.
+ *
+ * Weights are all-or-nothing on purpose. `weightagePercent` is optional and is
+ * currently set on none of the 243 microthemes; honouring it on a partial set
+ * would let a handful of tagged microthemes silently become the entire score,
+ * since the untagged ones would fall back to a different unit. Either the whole
+ * scope carries weights or every microtheme counts once.
+ */
+function readinessOver(rows: SyllabusCoverageRow[]): number {
+  if (rows.length === 0) return 0;
+  const fullyWeighted = rows.every((r) => r.weightagePercent !== undefined);
+  let num = 0, den = 0;
+  for (const r of rows) {
+    const w = fullyWeighted ? r.weightagePercent! : 1;
+    den += w;
+    num += (r.accuracy ?? 0) * w;
   }
-  const equal = rows.reduce((acc, r) => acc + (r.accuracy ?? 0), 0) / Math.max(1, rows.length);
-  return Math.round(equal * 100);
+  return den > 0 ? Math.round((num / den) * 100) : 0;
+}
+
+function coverageOf(rows: SyllabusCoverageRow[]): CoverageCount {
+  return { practised: rows.filter((r) => r.attempts > 0).length, total: rows.length };
 }
 
 /* ---------- syllabus coverage -------------------------------------------- */

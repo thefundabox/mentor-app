@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
-  type NegativeMarkingRisk, type TopicStatus, type TrendDirection,
+  type NegativeMarkingRisk, type TopicStatus, type TrendDirection, type CoverageCount,
 } from "@/lib/dashboardMetrics";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 import { HabitsCard } from "@/components/HabitsCard";
@@ -129,7 +129,7 @@ export function Dashboard({ studentId }: { studentId: string }) {
               <FileText className="w-4 h-4" /> Mock tests
             </Button>
             <Button variant="secondary" onClick={() => setRoute("onboarding")}>
-              <Pencil className="w-4 h-4" /> Edit chart
+              <Pencil className="w-4 h-4" /> Plan ahead
             </Button>
           </div>
         )}
@@ -191,14 +191,14 @@ export function Dashboard({ studentId }: { studentId: string }) {
           score={metrics.prelimsReadiness}
           icon={<Sparkles className="w-5 h-5" />}
           accent="indigo"
-          sub="Weighted across attempted subjects"
+          coverage={metrics.prelimsCoverage}
         />
         <ReadinessTile
           label="Rajasthan readiness"
           score={metrics.rajasthanReadiness}
           icon={<MapPin className="w-5 h-5" />}
           accent="amber"
-          sub="Rajasthan-flagged content only"
+          coverage={metrics.rajasthanCoverage}
         />
       </section>
       )}
@@ -319,10 +319,16 @@ function DashTabButton({ active, onClick, icon, label }: {
 
 /* ---------- pieces ------------------------------------------------------- */
 
-function ReadinessTile({ label, score, icon, accent, sub }: {
+/**
+ * The score counts the whole syllabus, so an untouched microtheme scores zero.
+ * That makes a low number early on correct rather than alarming -- but only if
+ * the student can see the denominator, hence the coverage line under the bar.
+ */
+function ReadinessTile({ label, score, icon, accent, coverage }: {
   label: string; score: number; icon: React.ReactNode;
-  accent: "indigo" | "amber"; sub: string;
+  accent: "indigo" | "amber"; coverage: CoverageCount;
 }) {
+  const pct = coverage.total > 0 ? Math.round((coverage.practised / coverage.total) * 100) : 0;
   const map = {
     indigo: { gradient: "from-indigo-50 to-indigo-100/40", text: "text-indigo-700", bar: "bg-indigo-500" },
     amber:  { gradient: "from-amber-50 to-amber-100/40",   text: "text-amber-700",  bar: "bg-amber-500"  },
@@ -336,7 +342,12 @@ function ReadinessTile({ label, score, icon, accent, sub }: {
       <div className="mt-3 h-2 bg-white/70 rounded-full overflow-hidden">
         <div className={`h-full ${map.bar}`} style={{ width: `${Math.max(2, score)}%` }} />
       </div>
-      <div className="text-xs text-slate-600 mt-2">{sub}</div>
+      <div className="text-xs text-slate-600 mt-2">
+        {coverage.practised} of {coverage.total} microthemes practised
+        {coverage.practised > 0 && coverage.practised < coverage.total && (
+          <span className="text-slate-400"> · {pct}% covered</span>
+        )}
+      </div>
     </div>
   );
 }
