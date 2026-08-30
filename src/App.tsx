@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppProvider, useAppState } from "@/hooks/useAppState";
 import { TopBar } from "@/components/TopBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -32,7 +32,27 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authError, clearAuthError, defaultTemplate, adoptPlanTemplate, authEnabled } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authLoading, authError, clearAuthError, defaultTemplate, adoptPlanTemplate, authEnabled } = useAppState();
+
+  // A signed-out visitor must never be *restored* onto a public inner screen.
+  //
+  // `route` is persisted, and that is worth keeping (see the long note below).
+  // But "login" is not a place anyone should resume: once a visitor tapped
+  // Start preparing, every later visit to the bare domain reopened the sign-in
+  // screen and the homepage became unreachable by URL. That -- not the form
+  // itself -- is what "it gets stuck on the Sign In page" was.
+  //
+  // Gated on authLoading so it cannot fire during the window where the session
+  // has not been restored yet and currentUser is only momentarily falsy; that
+  // window is exactly what made the earlier "reset to landing" effect destroy a
+  // signed-in student's place. Runs once, and resets to "auto" rather than
+  // "landing" so the signed-in case still resolves to their own dashboard.
+  const publicRouteSettled = useRef(false);
+  useEffect(() => {
+    if (authLoading || publicRouteSettled.current) return;
+    publicRouteSettled.current = true;
+    if (!currentUser && (route === "login" || route === "methodology")) setRoute("auto");
+  }, [authLoading, currentUser, route, setRoute]);
 
   useEffect(() => {
     if (route !== "auto") return;
