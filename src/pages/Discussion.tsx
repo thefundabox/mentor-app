@@ -10,10 +10,7 @@ import { DiscussionPanel } from "@/components/DiscussionPanel";
  * scope plus a heading.
  */
 export function Discussion() {
-  const { currentUser, setRoute, authEnabled } = useAppState();
-
-  const inBatch = !!currentUser?.batchId;
-  const isStaff = currentUser?.role === "mentor" || currentUser?.role === "admin";
+  const { setRoute, authEnabled } = useAppState();
 
   if (!authEnabled) {
     return (
@@ -42,17 +39,9 @@ export function Discussion() {
         </p>
       </div>
 
-      {/* Said plainly rather than shown as an empty list. Thread visibility is
-          keyed on batch in the database, so someone with no batch genuinely has
-          no rooms -- and the old screen made that look like a loading failure. */}
-      {!inBatch && !isStaff && (
-        <div className="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-900">
-          You are not in a batch yet, so no cohort rooms are visible to you. Ask your
-          mentor or an admin to add you to one. Microtheme discussions work regardless —
-          open any topic and use its Discuss tab.
-        </div>
-      )}
-
+      {/* The "not in a batch" message lives in DiscussionPanel now, where the
+          loaded thread list makes it answerable from server state rather than
+          from a localStorage value that could be months out of date. */}
       <DiscussionPanel scope={{ batchRooms: true }} />
     </Shell>
   );

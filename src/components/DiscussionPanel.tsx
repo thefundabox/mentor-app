@@ -102,9 +102,9 @@ export function DiscussionPanel({ scope }: {
       authorId: currentUser.id,
       authorName: currentUser.name,
       topicId: topicId ?? null,
-      // A cohort room needs a cohort. Students with no batch can still start
-      // microtheme discussions, which is why this is allowed to be null.
-      batchId: topicId ? null : (currentUser.batchId ?? null),
+      // No batch is sent. The trigger in migration 0019 fills it from the
+      // caller's own profile, so the client cannot supply one the policy will
+      // then reject -- which is precisely how this broke.
     });
     setCreating(false);
     if (res.error) { setError(res.error); return; }
@@ -130,7 +130,17 @@ export function DiscussionPanel({ scope }: {
     if (activeId) void refresh(activeId);
   }
 
-  const canStartHere = !!currentUser && (!!topicId || !!currentUser.batchId || isStaff);
+  /**
+   * Server truth, not `currentUser.batchId`.
+   *
+   * The local value can be stale -- batch assignment used to write only to
+   * localStorage -- and keying this on it hid the "you are not in a batch"
+   * message from exactly the people who needed it, while letting them press a
+   * button the database would refuse. Every real batch has two standing rooms,
+   * so for a non-staff user "no threads came back" means "no batch".
+   */
+  const hasBatchRooms = isStaff || threads.length > 0;
+  const canStartHere = !!currentUser && (!!topicId || hasBatchRooms);
 
   if (loading) {
     return (

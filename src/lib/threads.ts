@@ -102,7 +102,11 @@ export async function createThread(args: {
       title,
       kind: "topic",
       topic_id: args.topicId ?? null,
-      batch_id: args.batchId ?? null,
+      // Deliberately not sent. The trigger in migration 0019 stamps the
+      // caller's real batch; a client-supplied one could disagree with
+      // profiles.batch_id and be refused by the policy, which is exactly what
+      // happened while assignStudentToBatch was writing to localStorage only.
+      batch_id: null,
       created_by: args.authorId,
       created_by_name: args.authorName,
       staff_only_post: false,
@@ -116,11 +120,17 @@ export async function createThread(args: {
     // when the real cause was an identity mismatch the user could do nothing
     // about (see migration 0018), which sent the reader looking for a
     // permissions problem that did not exist. Say what the database said.
-    if (error.code === "42501") {
+    // 23514 is threads_anchored_check: no topic and no batch to file it under,
+    // which in practice means the caller is not in a cohort yet.
+    if (error.code === "23514") {
       return {
-        error: `The database refused this: ${error.message}. If you are not in a batch yet, `
-             + `you can still start a discussion from any topic's Discuss tab.`,
+        error: "You are not in a batch yet, so there is no room to put this in. "
+             + "Ask a mentor or admin to add you to one - or start the discussion "
+             + "from any topic's Discuss tab, which works without a batch.",
       };
+    }
+    if (error.code === "42501") {
+      return { error: `The database refused this: ${error.message}` };
     }
     return { error: error.message };
   }
