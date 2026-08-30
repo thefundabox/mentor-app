@@ -34,11 +34,13 @@ export function LandingStudio() {
           </button>
 
           {/* One row, one baseline, one height. Every item is h-11 and centred,
-              so the text sits on the same line whatever its weight. */}
+              so the text sits on the same line whatever its weight.
+
+              No "The method" item here: the method page now has exactly one
+              door, on the panel further down where the priority data sits and
+              the reader has a reason to want it. The nav is only for getting
+              into the product. */}
           <nav className="ml-auto flex items-center gap-2">
-            <button onClick={() => setRoute("methodology")} className={`${navBtn} hidden sm:inline-flex`}>
-              The method
-            </button>
             <button onClick={() => go("student")} className={navBtn}>Sign in</button>
             <button onClick={() => go("student")} className={`${primaryBtn} h-11 px-4 text-sm`}>
               Start free
