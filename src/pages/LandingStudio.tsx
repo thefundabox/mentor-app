@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Check, Target, MessagesSquare, ClipboardCheck, CalendarDays } from "lucide-react";
 import type { Role } from "@/types";
 import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED } from "@/data/pyqStats";
+import { PRIORITY_AXES, SUBJECT_SHARE, MODEL_PAPERS, MODEL_QUESTIONS, MODEL_MICROTHEMES } from "@/data/priorityModel";
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
 import { TasterQuiz } from "@/components/TasterQuiz";
 import { ExamCountdown } from "@/components/ExamCountdown";
@@ -36,14 +37,17 @@ export function LandingStudio() {
           {/* One row, one baseline, one height. Every item is h-11 and centred,
               so the text sits on the same line whatever its weight.
 
-              No "The method" item here: the method page now has exactly one
-              door, on the panel further down where the priority data sits and
-              the reader has a reason to want it. The nav is only for getting
-              into the product. */}
+              "Sign in" and "Start free" used to sit here together, calling the
+              same function and opening the same screen -- two controls, one
+              destination. The hero CTA already invites new readers in, so the
+              nav keeps only the returning one, styled as the primary since it
+              is now the sole control here. */}
           <nav className="ml-auto flex items-center gap-2">
-            <button onClick={() => go("student")} className={navBtn}>Sign in</button>
+            <button onClick={() => setRoute("methodology")} className={`${navBtn} hidden sm:inline-flex`}>
+              The method
+            </button>
             <button onClick={() => go("student")} className={`${primaryBtn} h-11 px-4 text-sm`}>
-              Start free
+              Sign in
             </button>
           </nav>
         </div>
@@ -195,25 +199,87 @@ export function LandingStudio() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------- method cta */}
+      {/* --------------------------------------------------- priority model
+
+          This panel used to restate the taxonomy and carry a third button to
+          the method page. It now carries what that button was promising: the
+          seven axes every microtheme is scored on, and the measured subject
+          split of six full papers.
+
+          Deliberately absent: any claim that P1 microthemes dominate the paper.
+          P1 is 17% of the scored taxonomy and 21% of the questions -- a ratio
+          of 1.11, which is no concentration worth advertising. The honest
+          argument is the one made here: priority is not a frequency ranking,
+          and the subject split is measured rather than asserted. */}
       <section className="mx-auto w-[min(1180px,calc(100%-40px))] pb-16">
-        <div className="flex flex-col gap-8 rounded-[24px] bg-[#17252b] p-8 text-white sm:p-10 lg:flex-row lg:items-center">
-          <div className="max-w-xl">
-            <p className="mb-3 text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#b6ec51]">The method</p>
-            <h2 className="text-2xl font-extrabold tracking-[-.02em] text-balance">
-              Where the 243 came from, and which of them RPSC has ever asked
-            </h2>
-            <p className="mt-3 text-[#c3ccd0]">
-              Eleven official subjects, opened into 77 themes, then into 243 microthemes —
-              and every one of {PYQ_TOTAL} past questions tagged to exactly one of them.
-            </p>
+        <div className="rounded-[24px] bg-[#17252b] p-8 text-white sm:p-10">
+          <p className="mb-3 text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#b6ec51]">
+            How priority is decided
+          </p>
+          <h2 className="max-w-2xl text-2xl font-extrabold tracking-[-.02em] text-balance">
+            Seven scores per microtheme, not a frequency count
+          </h2>
+          <p className="mt-3 max-w-2xl text-[#c3ccd0]">
+            Each of the {MODEL_MICROTHEMES} scored microthemes is rated 1&ndash;5 on seven axes.
+            They combine into a single composite that sets study order &mdash; which is why
+            what you study first is not simply what is asked most often.
+          </p>
+
+          <div className="mt-8 grid gap-x-10 gap-y-9 lg:grid-cols-[1.05fr_1fr]">
+            <ul className="grid gap-2.5">
+              {PRIORITY_AXES.map((a) => (
+                <li key={a.letter} className="flex items-start gap-3">
+                  <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-[9px] bg-[#b6ec51] text-[.82rem] font-extrabold text-[#17252b]">
+                    {a.letter}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-[.94rem] font-bold">{a.name}</span>
+                      {/* The gap between a top-tier and a typical microtheme on
+                          this axis. Volatility is the one that inverts. */}
+                      <span className="text-[.72rem] font-semibold tabular-nums text-[#8c9aa0]">
+                        P1 {a.p1.toFixed(1)} &middot; typical {a.p3.toFixed(1)}
+                      </span>
+                    </div>
+                    <p className="text-[.82rem] leading-snug text-[#a9b4b9]">{a.blurb}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div>
+              <p className="text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#8c9aa0]">
+                Where the marks fall
+              </p>
+              <p className="mt-1.5 text-[.82rem] text-[#a9b4b9]">
+                Counted across {MODEL_PAPERS} full papers &mdash; {MODEL_QUESTIONS} questions,
+                each mapped to one microtheme.
+              </p>
+              <ul className="mt-4 grid gap-2">
+                {SUBJECT_SHARE.map((r) => (
+                  <li key={r.code} className="grid grid-cols-[1fr_auto] items-center gap-x-3">
+                    <span className="truncate text-[.84rem] text-[#c3ccd0]">{r.name}</span>
+                    <span className="text-[.78rem] font-bold tabular-nums text-white">
+                      {r.share.toFixed(1)}%
+                    </span>
+                    <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      {/* Scaled against the largest share rather than 100, so the
+                          smallest subjects stay visible instead of vanishing. */}
+                      <span
+                        className="block h-full rounded-full bg-[#b6ec51]"
+                        style={{ width: `${(r.share / SUBJECT_SHARE[0].share) * 100}%` }}
+                      />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-[.78rem] leading-relaxed text-[#8c9aa0]">
+                Reasoning and Science &amp; Technology alone are a third of the paper &mdash;
+                about {Math.round(SUBJECT_SHARE[0].perPaper)} and {Math.round(SUBJECT_SHARE[1].perPaper)} questions
+                in a {MODEL_QUESTIONS / MODEL_PAPERS}-mark sitting.
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => setRoute("methodology")}
-            className="inline-flex h-[54px] shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#b6ec51] px-6 font-extrabold text-[#17252b] shadow-[0_5px_0_#8fc42f] transition hover:bg-[#a8e03d] lg:ml-auto"
-          >
-            Explore the taxonomy <ArrowRight className="h-4 w-4" />
-          </button>
         </div>
       </section>
 
