@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Target, MessagesSquare, ClipboardCheck, CalendarDays } from "lucide-react";
 import type { Role } from "@/types";
-import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED } from "@/data/pyqStats";
+import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED, PYQ_PER_MICROTHEME } from "@/data/pyqStats";
+import { RPSC_SUBJECTS } from "@/data/syllabus";
 import { PRIORITY_AXES, SUBJECT_SHARE, MODEL_PAPERS, MODEL_QUESTIONS, MODEL_MICROTHEMES } from "@/data/priorityModel";
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
 import { TasterQuiz } from "@/components/TasterQuiz";
@@ -20,7 +22,40 @@ import { ExamCountdown } from "@/components/ExamCountdown";
  * Every route out of here is the student sign-in. Mentor and admin live in the
  * footer, because two people need them and several hundred students do not.
  */
+/**
+ * The taxonomy, derived live from the catalog the app actually ships.
+ *
+ * Counted rather than written down: if a microtheme is added to syllabus.ts the
+ * numbers on the homepage follow it, and the worked example below cannot end up
+ * describing a chain that no longer exists.
+ */
+function useTaxonomyShape() {
+  return useMemo(() => {
+    const themes = new Set<string>();
+    let microthemes = 0;
+    for (const s of RPSC_SUBJECTS) {
+      for (const t of s.topics) { themes.add(`${s.id}|${t.theme}`); microthemes++; }
+    }
+    // One real chain to show the drill-down with. Medieval Dynasties is a good
+    // witness: seven microthemes out of a single syllabus phrase, and a spread
+    // of past-question counts including one RPSC has never touched.
+    const subject = RPSC_SUBJECTS[0];
+    const theme = "Medieval Dynasties of Rajasthan";
+    const leaves: { name: string; asked: number }[] = subject.topics
+      .filter((t) => t.theme === theme)
+      .map((t) => ({ name: t.name, asked: PYQ_PER_MICROTHEME[t.id] ?? 0 }));
+    const subjectThemes = new Set(subject.topics.map((t) => t.theme)).size;
+    return {
+      subjects: RPSC_SUBJECTS.length,
+      themes: themes.size,
+      microthemes,
+      example: { subject: subject.name, subjectThemes, theme, leaves },
+    };
+  }, []);
+}
+
 export function LandingStudio() {
+  const tax = useTaxonomyShape();
   const { setLoginRoleIntent, setRoute, authEnabled } = useAppState();
   const go = (role: Role) => { setLoginRoleIntent(role); setRoute("login"); };
 
@@ -214,15 +249,76 @@ export function LandingStudio() {
       <section className="mx-auto w-[min(1180px,calc(100%-40px))] pb-16">
         <div className="rounded-[24px] bg-[#17252b] p-8 text-white sm:p-10">
           <p className="mb-3 text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#b6ec51]">
-            How priority is decided
+            How the taxonomy was built
           </p>
           <h2 className="max-w-2xl text-2xl font-extrabold tracking-[-.02em] text-balance">
-            Seven scores per microtheme, not a frequency count
+            One RPSC heading, opened until it is small enough to finish
           </h2>
           <p className="mt-3 max-w-2xl text-[#c3ccd0]">
-            Each of the {MODEL_MICROTHEMES} scored microthemes is rated 1&ndash;5 on seven axes.
-            They combine into a single composite that sets study order &mdash; which is why
-            what you study first is not simply what is asked most often.
+            RPSC publishes {tax.subjects} headings. A heading is not a study session, so each
+            one is opened into themes, and each theme into microthemes &mdash; a microtheme
+            being one sitting's reading, narrow enough that you can tell whether you know it.
+          </p>
+
+          {/* ---------------------------------------------- the derivation */}
+          <div className="mt-7 flex flex-wrap items-center gap-x-3 gap-y-2 text-[.86rem]">
+            {[
+              [tax.subjects, "official headings"],
+              [tax.themes, "themes"],
+              [tax.microthemes, "microthemes"],
+            ].map(([n, label], i) => (
+              <span key={label as string} className="flex items-center gap-3">
+                {i > 0 && <span aria-hidden className="text-[#5d6b71]">&rarr;</span>}
+                <span className="rounded-[12px] bg-white/[.06] px-3 py-1.5">
+                  <b className="tabular-nums">{n}</b>{" "}
+                  <span className="text-[#a9b4b9]">{label}</span>
+                </span>
+              </span>
+            ))}
+          </div>
+
+          {/* ------------------------------------------------ worked example */}
+          <div className="mt-6 rounded-[18px] border border-white/10 bg-white/[.04] p-5 sm:p-6">
+            <p className="text-[.72rem] font-extrabold uppercase tracking-[.13em] text-[#8c9aa0]">
+              Worked example
+            </p>
+            <p className="mt-2.5 text-[.86rem] text-[#c3ccd0]">
+              The heading{" "}
+              <span className="font-semibold text-white">&ldquo;{tax.example.subject}&rdquo;</span>{" "}
+              opens into {tax.example.subjectThemes} themes. One of them:
+            </p>
+            <p className="mt-3 text-[.95rem] font-extrabold text-[#b6ec51]">
+              {tax.example.theme}
+            </p>
+            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+              {tax.example.leaves.map((l) => (
+                <li key={l.name} className="flex items-baseline justify-between gap-3 rounded-[10px] bg-white/[.05] px-3 py-1.5">
+                  <span className="text-[.83rem] text-[#c3ccd0]">{l.name}</span>
+                  {/* Counts are the check on the split: a microtheme nobody has
+                      been asked about is kept, and shown as such, rather than
+                      quietly dropped to make the taxonomy look efficient. */}
+                  <span className={`shrink-0 text-[.72rem] font-bold tabular-nums ${l.asked ? "text-white" : "text-[#6f7c82]"}`}>
+                    {l.asked ? `${l.asked}q` : "not yet"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3.5 text-[.78rem] leading-relaxed text-[#8c9aa0]">
+              Seven studiable ideas out of one syllabus phrase, each with its own record of
+              what RPSC has actually asked. Every past question is tagged to exactly one of
+              them, which is what makes the counts &mdash; and the gaps &mdash; checkable.
+            </p>
+          </div>
+
+          <hr className="mt-9 border-white/10" />
+
+          <p className="mt-8 text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#b6ec51]">
+            Then each one is scored
+          </p>
+          <p className="mt-2 max-w-2xl text-[#c3ccd0]">
+            Each of the {MODEL_MICROTHEMES} scored microthemes is rated 1&ndash;5 on seven axes
+            that combine into one composite, and that composite sets study order &mdash; which
+            is why what you study first is not simply what is asked most often.
           </p>
 
           <div className="mt-8 grid gap-x-10 gap-y-9 lg:grid-cols-[1.05fr_1fr]">
