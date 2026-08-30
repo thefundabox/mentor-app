@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
+import { Methodology } from "@/pages/Methodology";
 import { SetPassword } from "@/pages/SetPassword";
 import { Assessment } from "@/pages/Assessment";
 import { ChoosePlan } from "@/pages/ChoosePlan";
@@ -91,18 +92,22 @@ function AppContent() {
       </div>
     );
   } else if (!currentUser) {
-    content = route === "login" ? <Login /> : <Landing />;
+    content = route === "login" ? <Login />
+            : route === "methodology" ? <Methodology />
+            : <Landing />;
   } else if (currentUser.role === "admin") {
     content = <AdminDashboard />;
   } else if (currentUser.role === "mentor") {
-    if (route === "discussion") content = <Discussion />;
+    if (route === "methodology") content = <Methodology />;
+    else if (route === "discussion") content = <Discussion />;
     else if (route === "mentor_student" && viewingStudentId) content = <MentorStudentDetail studentId={viewingStudentId} />;
     else if (route === "dashboard" && viewingStudentId) content = <Dashboard studentId={viewingStudentId} />;
     else if (route === "onboarding" && viewingStudentId) content = <Onboarding studentId={viewingStudentId} byMentor />;
     else if (route === "mentor_availability") content = <MentorAvailability />;
     else content = <MentorDashboard />;
   } else {
-    if (route === "assessment") content = <Assessment studentId={currentUser.id} />;
+    if (route === "methodology") content = <Methodology />;
+    else if (route === "assessment") content = <Assessment studentId={currentUser.id} />;
     else if (route === "choose_plan") content = <ChoosePlan studentId={currentUser.id} />;
     else if (route === "onboarding") content = <Onboarding studentId={currentUser.id} />;
     else if (route === "approval_gate") content = <ApprovalGate />;

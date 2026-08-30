@@ -612,6 +612,7 @@ export interface PyqTarget {
 export type Route =
   | "auto"
   | "landing"
+  | "methodology"
   | "login"
   | "assessment"
   | "choose_plan"
