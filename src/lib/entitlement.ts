@@ -54,7 +54,11 @@ export async function loadTestMeter(): Promise<TestMeter | null> {
 }
 
 /**
- * Open a mock test.
+ * Claim a slot for a mock test, server-side.
+ *
+ * Named "claim" rather than "start" because that is what it does: the sitting
+ * itself is still driven locally. This call is what the allowance is spent on,
+ * and it must succeed before the student is taken into the paper.
  *
  * The allowance is enforced by a trigger, so the failure arrives as a Postgres
  * exception. Its message is written for a student to read ("Your free plan
@@ -63,7 +67,7 @@ export async function loadTestMeter(): Promise<TestMeter | null> {
  * most annoying kind, and this project has already been bitten once by
  * substituting "You don't have permission" for the database's own words.
  */
-export async function startTestAttempt(
+export async function claimTestAttempt(
   testId: string,
 ): Promise<{ id: string } | { error: string }> {
   if (!supabase) return { error: "Not connected." };

@@ -142,7 +142,7 @@ interface AppContextValue extends AppState {
   setActiveTestId: (id: string | null) => void;
   setActiveAttemptId: (id: string | null) => void;
   /** Start a new attempt for the given test and student. Returns the attempt id. */
-  startTestAttempt: (testId: string, studentId: string) => string;
+  startTestAttempt: (testId: string, studentId: string, serverId?: string) => string;
   /** Persist an in-progress attempt's answer map. */
   saveTestAnswers: (attemptId: string, answers: Record<string, number>) => void;
   /** Finish the attempt — accepts the final answer map and section scores. */
@@ -1529,8 +1529,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /* ---------- Test attempts ---------- */
 
-  const startTestAttempt = useCallback((testId: string, studentId: string): string => {
-    const id = `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const startTestAttempt = useCallback((testId: string, studentId: string, serverId?: string): string => {
+    // Prefer the id Postgres minted. The server row is the one the allowance is
+    // counted against, so keeping the local mirror on the same id means the two
+    // can be reconciled later without guessing which sitting is which.
+    const id = serverId ?? `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const attempt: TestAttempt = {
       id, testId, studentId,
       startedAt: Date.now(),

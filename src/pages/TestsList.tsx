@@ -1,10 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Play, ClipboardCheck, Lock, Clock } from "lucide-react";
+import { claimTestAttempt } from "@/lib/entitlement";
 
 export function TestsList() {
-  const { currentUser, tests, testAttempts, testSchedules, setRoute, setActiveTestId, setActiveAttemptId, startTestAttempt, schedulesForTest, batchForStudent } = useAppState();
+  const { currentUser, tests, testAttempts, testSchedules, setRoute, setActiveTestId, setActiveAttemptId, startTestAttempt, schedulesForTest, batchForStudent, authEnabled } = useAppState();
+  // Above the early return on purpose: hooks must run in the same order every
+  // render, and `currentUser` can flip to null for a frame while the session
+  // rehydrates. Declaring these after the guard would change the hook order
+  // between those two renders.
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const [denied, setDenied] = useState<string | null>(null);
   if (!currentUser) return null;
 
   const myBatch = batchForStudent(currentUser.id);
@@ -35,10 +42,32 @@ export function TestsList() {
 
   const myAttempts = testAttempts.filter((a) => a.studentId === currentUser.id);
 
-  const start = (testId: string) => {
+  /**
+   * Claim the slot before opening the paper.
+   *
+   * The allowance is counted in Postgres, so the claim has to succeed first --
+   * starting the sitting and asking permission afterwards would let a student
+   * sit a test the server was never going to record.
+   *
+   * The database's own message is shown rather than a generic refusal. It names
+   * the actual allowance ("Your free plan includes 3 mock test(s)"), which is
+   * what a person needs in order to know what to do next.
+   */
+  const start = async (testId: string) => {
+    setDenied(null);
+    let serverId: string | undefined;
+
+    // Local demo mode has no server to claim against, and no plan either.
+    if (authEnabled) {
+      setClaiming(testId);
+      const res = await claimTestAttempt(testId);
+      setClaiming(null);
+      if ("error" in res) { setDenied(res.error); return; }
+      serverId = res.id;
+    }
+
     setActiveTestId(testId);
-    const attemptId = startTestAttempt(testId, currentUser.id);
-    setActiveAttemptId(attemptId);
+    setActiveAttemptId(startTestAttempt(testId, currentUser.id, serverId));
     setRoute("take_test");
   };
 
@@ -55,6 +84,16 @@ export function TestsList() {
           Mock tests and sectionals to sharpen for exam day. Timer enforced; negative marking applied per the test's config.
         </p>
       </div>
+
+      {/* The database's own words. It names the actual allowance, which is what
+          someone needs in order to know what to do about it -- a generic "not
+          allowed" would send them to support instead of to the upgrade. */}
+      {denied && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Lock className="mr-1.5 inline h-4 w-4 -translate-y-px" />
+          {denied}
+        </div>
+      )}
 
       <div className="space-y-3">
         {visibleTests.length === 0 && (
@@ -102,8 +141,9 @@ export function TestsList() {
                 </div>
                 {isLocked
                   ? <Button disabled><Lock className="w-4 h-4" /> Locked</Button>
-                  : <Button onClick={() => start(t.id)}>
-                      <Play className="w-4 h-4" /> {attempts.length === 0 ? "Start test" : "Retake"}
+                  : <Button onClick={() => void start(t.id)} disabled={claiming !== null}>
+                      <Play className="w-4 h-4" />
+                      {claiming === t.id ? "Opening..." : attempts.length === 0 ? "Start test" : "Retake"}
                     </Button>
                 }
               </div>
