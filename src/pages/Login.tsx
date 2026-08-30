@@ -52,7 +52,7 @@ const ROLE_COPY: Record<Role, { label: string; title: string; intro: string; but
 
 export function Login() {
   const {
-    loginRoleIntent, setLoginRoleIntent, loginAs, setRoute, users,
+    loginRoleIntent, loginAs, setRoute, users,
     signIn, signUp, sendPasswordReset, authError, authEnabled,
   } = useAppState();
 
@@ -130,7 +130,7 @@ export function Login() {
   if (confirmSent) {
     return (
       <Shell>
-        <div className="mx-auto max-w-md rounded-[28px] border border-[#dcd9cf] bg-[#fffdf7] p-8 text-center shadow-[0_18px_50px_rgba(23,37,43,.10)]">
+        <div className="mx-auto max-w-md rounded-[28px] border border-[#e7e4dc] bg-white p-8 text-center shadow-[0_18px_50px_rgba(23,37,43,.10)]">
           <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#b6ec51]/30 text-[#17252b]">
             <MailCheck className="h-8 w-8" />
           </div>
@@ -152,22 +152,19 @@ export function Login() {
   return (
     <Shell>
       {/* ---------------------------------------------------------- topbar */}
-      <header className="mb-6 flex min-h-[52px] items-center justify-between gap-5">
+      <header className="mb-7 flex min-h-[52px] items-center justify-between gap-5">
         <button onClick={() => setRoute("landing")} className="inline-flex items-center gap-3 font-extrabold tracking-tight text-[#17252b]">
-          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#17252b] text-white shadow-[0_5px_0_rgba(23,37,43,.12)]">R</span>
+          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#17252b] text-white shadow-[0_4px_0_rgba(23,37,43,.15)]">R</span>
           RAS Mentorship
         </button>
-        <nav className="flex items-center gap-2" aria-label="Sign-in roles">
-          {(["student", "mentor", "admin"] as Role[]).filter((r) => r !== role).map((r) => (
-            <button
-              key={r}
-              onClick={() => { setLoginRoleIntent(r); setMode("signin"); setLocalError(null); }}
-              className="min-h-[44px] rounded-[11px] px-3 py-2 font-bold capitalize text-[#667378] transition hover:bg-[#2768ff]/[.07] hover:text-[#2768ff]"
-            >
-              {r}
-            </button>
-          ))}
-        </nav>
+        {/* An explicit way out. The brand mark navigates too, but nobody reads a
+            logo as "back", and a sign-in page with no exit feels like a trap. */}
+        <button
+          onClick={() => setRoute("landing")}
+          className="inline-flex h-11 items-center rounded-[12px] px-3 text-sm font-bold text-[#667378] transition hover:bg-[#2768ff]/[.07] hover:text-[#2768ff]"
+        >
+          ← Back to home
+        </button>
       </header>
 
       <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(390px,.78fr)] lg:gap-[clamp(28px,5vw,72px)]">
@@ -186,7 +183,7 @@ export function Login() {
           </p>
 
           {/* countdown */}
-          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4 rounded-[20px] border border-[#dcd9cf] bg-[#fffdf7] p-5">
+          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4 rounded-[20px] border border-[#e7e4dc] bg-white p-5">
             <div className="flex items-baseline gap-2">
               <span className="text-[2.75rem] font-extrabold leading-none tracking-[-.04em] tabular-nums text-[#17252b]">{left.days}</span>
               <span className="text-sm font-bold text-[#667378]">days to Prelims</span>
@@ -206,7 +203,7 @@ export function Login() {
             {[["Today's work", "Finishable microthemes"],
               ["Revision queue", "What memory needs next"],
               ["Mentor follow-up", "Your agreed next action"]].map(([b, s]) => (
-              <li key={b} className="rounded-[14px] border border-[#dcd9cf] bg-[#fffdf7] px-3.5 py-3">
+              <li key={b} className="rounded-[14px] border border-[#e7e4dc] bg-white px-3.5 py-3">
                 <b className="block text-sm text-[#17252b]">{b}</b>
                 <span className="text-xs text-[#667378]">{s}</span>
               </li>
@@ -214,7 +211,7 @@ export function Login() {
           </ul>
 
           {/* warm-up: real question, real key */}
-          <details className="group mt-5 rounded-[20px] border border-[#dcd9cf] bg-[#fffdf7] px-5 py-4">
+          <details className="group mt-5 rounded-[20px] border border-[#e7e4dc] bg-white px-5 py-4">
             <summary className="cursor-pointer list-none font-bold text-[#17252b] marker:hidden">
               While you're here: one quick recall question
             </summary>
@@ -232,10 +229,10 @@ export function Login() {
                       onClick={() => picked === null && setPicked(i)}
                       aria-pressed={picked === i}
                       className={`rounded-[14px] border px-3 py-2 text-left text-sm font-semibold transition ${
-                        tone === "idle" ? "border-[#dcd9cf] hover:border-[#2768ff] hover:bg-[#eaf0ff]"
+                        tone === "idle" ? "border-[#e7e4dc] hover:border-[#2768ff] hover:bg-[#eaf0ff]"
                         : tone === "right" ? "border-[#b6ec51] bg-[#b6ec51]/25 text-[#17252b]"
                         : tone === "wrong" ? "border-[#ff5d44] bg-[#ff5d44]/12 text-[#17252b]"
-                        : "border-[#dcd9cf] text-[#667378]"
+                        : "border-[#e7e4dc] text-[#667378]"
                       }`}
                     >
                       {String.fromCharCode(65 + i)} · {opt}
@@ -257,7 +254,7 @@ export function Login() {
         {/* -------------------------------------------------------- form ---- */}
         <motion.section
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-          className="rounded-[28px] border border-[#dcd9cf] bg-[#fffdf7] p-6 shadow-[0_18px_50px_rgba(23,37,43,.10)] sm:p-8"
+          className="rounded-[28px] border border-[#e7e4dc] bg-white p-6 shadow-[0_18px_50px_rgba(23,37,43,.10)] sm:p-8"
         >
           <p className="text-[.78rem] font-extrabold uppercase tracking-[.13em] text-[#164ed3]">
             {mode === "signup" ? "Student account" : copy.label}
@@ -360,7 +357,7 @@ export function Login() {
             </p>
           )}
 
-          <aside className="mt-6 flex items-center gap-3.5 rounded-[20px] border border-[#dcd9cf] bg-[#eaf0ff]/60 p-3.5">
+          <aside className="mt-6 flex items-center gap-3.5 rounded-[20px] border border-[#e7e4dc] bg-[#eaf0ff]/60 p-3.5">
             {/* Tall transparent portrait: object-top frames the turban and face
                 rather than cropping to his waistcoat. */}
             <img src="/rajsa-guide.png" alt="" aria-hidden="true"
@@ -376,12 +373,12 @@ export function Login() {
           </aside>
 
           {demoAccounts.length > 0 && (
-            <div className="mt-6 border-t border-[#dcd9cf] pt-5">
+            <div className="mt-6 border-t border-[#e7e4dc] pt-5">
               <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[#667378]">Demo accounts</div>
               <div className="space-y-1.5">
                 {demoAccounts.map((u) => (
                   <button key={u.id} type="button" onClick={() => loginAs(role, u.email, u.name)}
-                          className="flex w-full items-center justify-between rounded-[14px] border border-[#dcd9cf] px-3 py-2 text-left hover:bg-[#eaf0ff]">
+                          className="flex w-full items-center justify-between rounded-[14px] border border-[#e7e4dc] px-3 py-2 text-left hover:bg-[#eaf0ff]">
                     <span>
                       <span className="block text-sm font-semibold text-[#17252b]">{u.name}</span>
                       <span className="text-xs text-[#667378]">{u.email}</span>
@@ -407,7 +404,7 @@ export function Login() {
           role="presentation"
         >
           <section role="dialog" aria-modal="true" aria-labelledby="reset-title"
-                   className="w-full max-w-md rounded-[24px] border border-[#dcd9cf] bg-[#fffdf7] p-6">
+                   className="w-full max-w-md rounded-[24px] border border-[#e7e4dc] bg-white p-6">
             <h2 id="reset-title" className="text-xl font-extrabold text-[#17252b]">Reset your password</h2>
             <p className="mt-2 text-sm text-[#667378]">
               We'll email a secure link to <strong className="text-[#17252b]">{email || "your account address"}</strong>.
@@ -415,7 +412,7 @@ export function Login() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setResetOpen(false)}
-                      className="min-h-[44px] rounded-[14px] border border-[#dcd9cf] px-4 font-bold text-[#667378] hover:bg-[#eaf0ff]">
+                      className="min-h-[44px] rounded-[14px] border border-[#e7e4dc] px-4 font-bold text-[#667378] hover:bg-[#eaf0ff]">
                 Cancel
               </button>
               <button autoFocus onClick={requestReset}
@@ -431,7 +428,7 @@ export function Login() {
 }
 
 const inputCls =
-  "w-full rounded-[14px] border border-[#dcd9cf] bg-white px-4 py-3 text-[#17252b] outline-none transition placeholder:text-[#a4aeb1] focus:border-[#2768ff] focus:ring-4 focus:ring-[#2768ff]/12";
+  "w-full rounded-[14px] border border-[#e7e4dc] bg-white px-4 py-3 text-[#17252b] outline-none transition placeholder:text-[#a4aeb1] focus:border-[#2768ff] focus:ring-4 focus:ring-[#2768ff]/12";
 
 function Field({ label, aside, children }: { label: string; aside?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -447,14 +444,7 @@ function Field({ label, aside, children }: { label: string; aside?: React.ReactN
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="min-h-screen bg-[#f6f2e8]"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 8% 10%, rgba(255,201,71,.18), transparent 26rem)," +
-          "radial-gradient(circle at 92% 90%, rgba(39,104,255,.10), transparent 30rem)",
-      }}
-    >
+    <div className="min-h-screen bg-white">
       <div className="mx-auto w-[min(1180px,calc(100%-40px))] py-6 pb-11">{children}</div>
     </div>
   );
