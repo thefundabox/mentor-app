@@ -1,55 +1,77 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { ArrowLeft, Search, Trophy, ChevronDown, ChevronUp, Filter, PlayCircle } from "lucide-react";
-import type { PYQ } from "@/types";
-import { loadPyqYears, type PyqYear } from "@/lib/pyqStore";
+import type { Question } from "@/types";
+import { loadAllPyqs, loadPyqYears, type PyqYear } from "@/lib/pyqStore";
+import { findTopic } from "@/data";
 
 /**
  * Past-paper archive.
  *
- * Leads with whole papers a student can sit, because "attempt it" is what a
- * past paper is for; browsing a question whose answer is already printed next
- * to it teaches recognition, not recall.
+ * Two ways in, because they answer different questions. Whole papers are for
+ * "can I clear the cut-off under time"; the browse below is for "what has RPSC
+ * actually asked about irrigation", and any filtered slice of it can be
+ * attempted as a paper of its own.
  *
- * The curated bank below is the older hand-entered PYQ list. It stays because
- * an admin may have written notes into it, but it is no longer the main event.
+ * The hand-entered `pyqBank` used to render here as prose cards with the answer
+ * one click away. It is gone from the student surfaces: seven demo questions
+ * sitting next to 546 real ones made the tab look like it had never been
+ * converted. Admin CRUD over that bank is untouched.
  */
 export function PYQArchive() {
-  const { pyqBank, subjects, setRoute, setPyqTarget } = useAppState();
+  const { subjects, setRoute, setPyqTarget } = useAppState();
   const [query, setQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("");
   const [subjectFilter, setSubjectFilter] = useState<string>("");
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
 
   const [papers, setPapers] = useState<PyqYear[] | null>(null);
+  const [all, setAll] = useState<Question[] | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     void loadPyqYears().then((ys) => { if (!cancelled) setPapers(ys); });
+    void loadAllPyqs().then((qs) => { if (!cancelled) setAll(qs); });
     return () => { cancelled = true; };
   }, []);
 
-  const years = useMemo(() => {
-    const all = pyqBank.map((p) => p.year).filter(Boolean);
-    return [...new Set(all)].sort((a, b) => b.localeCompare(a));
-  }, [pyqBank]);
+  const subjectLookup = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+
+  /** Subject id for a question, by the `<subjectId>-mNN` convention. */
+  const subjectOf = (q: Question) => q.concept.replace(/-m\d+$/, "");
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return pyqBank.filter((p) => {
-      if (yearFilter && p.year !== yearFilter) return false;
-      if (subjectFilter && !(p.subjectIds || []).includes(subjectFilter)) return false;
-      if (q) {
-        const hay = `${p.q} ${p.a} ${p.explain}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+    if (!all) return [];
+    const needle = query.trim().toLowerCase();
+    return all.filter((q) => {
+      if (yearFilter && q.sourceYear !== yearFilter) return false;
+      if (subjectFilter && subjectOf(q) !== subjectFilter) return false;
+      if (needle) {
+        const hay = `${q.q} ${q.options.join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [pyqBank, query, yearFilter, subjectFilter]);
+  }, [all, query, yearFilter, subjectFilter]);
 
-  const subjectLookup = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const hasFilter = !!(query || yearFilter || subjectFilter);
 
   const startPaper = (year: string) => {
-    setPyqTarget({ kind: "year", year });
+    setPyqTarget({ label: `RAS Prelims ${year}`, year });
+    setRoute("pyq_attempt");
+  };
+
+  /**
+   * Attempt whatever the filters currently describe. Only offered when the
+   * filters are expressible as a target -- a free-text search is not, so it is
+   * excluded rather than silently attempting something wider than what is on
+   * screen.
+   */
+  const startFiltered = () => {
+    const subjectName = subjectFilter ? subjectLookup.get(subjectFilter)?.name : null;
+    const label = [subjectName, yearFilter ? `RAS ${yearFilter}` : null]
+      .filter(Boolean).join(" - ") || "Past questions";
+    setPyqTarget({ label, year: yearFilter || undefined, subjectId: subjectFilter || undefined });
     setRoute("pyq_attempt");
   };
 
@@ -63,8 +85,8 @@ export function PYQArchive() {
         <div className="text-sm font-semibold text-indigo-600">PYQ archive</div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Previous-year questions</h1>
         <p className="text-slate-600 mt-2 max-w-2xl">
-          Sit a full RAS Prelims paper under exam conditions, then review every
-          question with the official answer. Marked against the final answer key
+          Sit a full RAS Prelims paper under exam conditions, or filter down to a
+          subject and attempt just those. Marked against the final answer key
           RPSC published, not an in-house key.
         </p>
       </div>
@@ -75,9 +97,7 @@ export function PYQArchive() {
           Attempt a full paper
         </h2>
 
-        {papers === null && (
-          <div className="text-sm text-slate-500">Loading papers…</div>
-        )}
+        {papers === null && <div className="text-sm text-slate-500">Loading papers…</div>}
 
         {papers !== null && papers.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 text-sm text-slate-600">
@@ -110,94 +130,106 @@ export function PYQArchive() {
         )}
       </div>
 
-      {/* --------------------------------------------------- curated notes bank */}
-      {pyqBank.length > 0 && (
-        <>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
-            Curated notes bank
-          </h2>
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-4">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search question, answer, or explanation"
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:border-slate-400 outline-none text-sm" />
-              </div>
-              <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm">
-                <option value="">All years</option>
-                {years.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm">
-                <option value="">All subjects</option>
-                {subjects.filter((s) => !s.archived).map((s) => (
-                  <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
-                ))}
-              </select>
-            </div>
-            {(query || yearFilter || subjectFilter) && (
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 text-slate-500">
-                  <Filter className="w-3 h-3" /> {filtered.length} of {pyqBank.length}
-                </div>
-                <button onClick={() => { setQuery(""); setYearFilter(""); setSubjectFilter(""); }}
-                  className="text-slate-500 hover:text-slate-900">clear filters</button>
-              </div>
-            )}
-          </div>
+      {/* --------------------------------------------------------- browse all */}
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
+        Browse every past question
+      </h2>
 
-          <div className="space-y-2">
-            {filtered.length === 0 && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
-                No questions match your filters.
-              </div>
-            )}
-            {filtered.map((p, i) => (
-              <PYQCard key={p.id || i} pyq={p}
-                open={!!openIds[p.id || String(i)]}
-                onToggle={() => setOpenIds((prev) => ({ ...prev, [p.id || String(i)]: !prev[p.id || String(i)] }))}
-                subjectLookup={subjectLookup}
-              />
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search the question or its options"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:border-slate-400 outline-none text-sm" />
+          </div>
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm">
+            <option value="">All years</option>
+            {(papers ?? []).map((y) => <option key={y.year} value={y.year}>{y.year}</option>)}
+          </select>
+          <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm">
+            <option value="">All subjects</option>
+            {subjects.filter((s) => !s.archived).map((s) => (
+              <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
             ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PYQCard({ pyq, open, onToggle, subjectLookup }: {
-  pyq: PYQ;
-  open: boolean;
-  onToggle: () => void;
-  subjectLookup: Map<string, { id: string; icon: string; name: string }>;
-}) {
-  const subjects = (pyq.subjectIds || []).map((id) => subjectLookup.get(id)).filter(Boolean);
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <Trophy className="w-3.5 h-3.5 text-amber-600" />
-        <span className="text-xs font-bold text-amber-700">{pyq.year}</span>
-        {pyq.marks && <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 rounded px-2 py-0.5">{pyq.marks} marks</span>}
-        {subjects.map((s) => (
-          <span key={s!.id} className="text-[10px] uppercase font-bold bg-indigo-50 text-indigo-700 rounded px-2 py-0.5">
-            {s!.icon} {s!.name}
-          </span>
-        ))}
-      </div>
-      <div className="text-slate-800 mb-3">{pyq.q}</div>
-      <button onClick={onToggle} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-        {open ? "Hide answer" : "Reveal answer"}
-        {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-      </button>
-      {open && (
-        <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-          <div className="text-sm"><span className="font-semibold text-emerald-700">Answer:</span> {pyq.a}</div>
-          {pyq.explain && <div className="text-sm text-slate-600 mt-1">{pyq.explain}</div>}
+          </select>
         </div>
-      )}
+
+        {all !== null && (
+          <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <Filter className="w-3 h-3" /> {filtered.length} of {all.length} questions
+              {hasFilter && (
+                <button onClick={() => { setQuery(""); setYearFilter(""); setSubjectFilter(""); }}
+                  className="ml-2 text-slate-500 hover:text-slate-900 underline">clear</button>
+              )}
+            </div>
+            {(yearFilter || subjectFilter) && !query && filtered.length > 0 && (
+              <button
+                onClick={startFiltered}
+                className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5"
+              >
+                <PlayCircle className="w-4 h-4" /> Attempt these {filtered.length}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {all === null && <div className="text-sm text-slate-500 px-1">Loading questions…</div>}
+        {all !== null && filtered.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+            No past questions match your filters.
+          </div>
+        )}
+        {filtered.map((q) => {
+          const key = q.id ?? q.q;
+          const found = findTopic(q.concept);
+          return (
+            <div key={key} className="bg-white border border-slate-200 rounded-2xl p-5">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                <span className="text-xs font-bold text-amber-700">
+                  RAS {q.sourceYear}{q.paperQno ? ` · Q${q.paperQno}` : ""}
+                </span>
+                {found && (
+                  <span className="text-[10px] uppercase font-bold bg-indigo-50 text-indigo-700 rounded px-2 py-0.5">
+                    {found.topic.name}
+                  </span>
+                )}
+              </div>
+              <div className="text-slate-800 mb-3 whitespace-pre-line leading-[1.6]">{q.q}</div>
+              <button
+                onClick={() => setOpenIds((prev) => ({ ...prev, [key]: !prev[key] }))}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                {openIds[key] ? "Hide answer" : "Reveal answer"}
+                {openIds[key] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {openIds[key] && (
+                <div className="mt-3 space-y-1.5">
+                  {q.options.map((opt, oi) => (
+                    <div key={oi} className={`text-sm rounded-lg px-3 py-2 border flex items-start gap-2 ${
+                      oi === q.correct
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                        : "border-slate-200 text-slate-600"
+                    }`}>
+                      <span className="font-semibold">{String.fromCharCode(65 + oi)}</span>
+                      <span className="flex-1">{opt}</span>
+                    </div>
+                  ))}
+                  <div className="text-xs text-slate-500 pt-1">
+                    {q.why || "Answer as per the official RPSC final answer key."}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

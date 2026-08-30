@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { Check, Flag, X, ChevronLeft, ChevronRight, Clock, LayoutGrid } from "lucide-react";
 import type { Question } from "@/types";
-import { loadPyqPaper, loadPyqForTopic } from "@/lib/pyqStore";
+import { loadPyqs } from "@/lib/pyqStore";
 import { findTopic } from "@/data";
 
 /**
@@ -37,31 +37,14 @@ export function PYQAttempt() {
 
   const [pool, setPool] = useState<Question[] | null>(null);
 
-  // Where "leave" and "done" go back to, and what the header calls this paper.
-  const heading = useMemo(() => {
-    if (!pyqTarget) return { title: "", sub: "", back: "pyq_archive" as const };
-    if (pyqTarget.kind === "year") {
-      return {
-        title: `RAS Prelims ${pyqTarget.year}`,
-        sub: "Official paper, graded against the RPSC final answer key",
-        back: "pyq_archive" as const,
-      };
-    }
-    const found = findTopic(pyqTarget.topicId);
-    return {
-      title: found?.topic.name ?? pyqTarget.topicId,
-      sub: "Every past question asked on this microtheme",
-      back: "topic" as const,
-    };
-  }, [pyqTarget]);
+  // Where "leave" and "done" go back to. A microtheme attempt was reached from
+  // the topic screen; anything else from the archive.
+  const backTo = pyqTarget?.topicId ? ("topic" as const) : ("pyq_archive" as const);
 
   useEffect(() => {
     if (!pyqTarget) { setPool([]); return; }
     let cancelled = false;
-    const load = pyqTarget.kind === "year"
-      ? loadPyqPaper(pyqTarget.year)
-      : loadPyqForTopic(pyqTarget.topicId);
-    void load.then((qs) => { if (!cancelled) setPool(qs); });
+    void loadPyqs(pyqTarget).then((qs) => { if (!cancelled) setPool(qs); });
     return () => { cancelled = true; };
   }, [pyqTarget]);
 
@@ -118,10 +101,10 @@ export function PYQAttempt() {
           <div className="text-5xl mb-3">🗂️</div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">No past questions here yet</h1>
           <p className="text-sm text-slate-600 mb-6">
-            Nothing in the past-paper bank is tagged to {heading.title}. Showing
+            Nothing in the past-paper bank is tagged to {pyqTarget.label}. Showing
             questions from somewhere else would only mislead you.
           </p>
-          <Button onClick={() => setRoute(heading.back)}>Back</Button>
+          <Button onClick={() => setRoute(backTo)}>Back</Button>
         </div>
       </div>
     );
@@ -162,7 +145,7 @@ export function PYQAttempt() {
           <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-4">
             <div>
               <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">
-                {heading.title}
+                {pyqTarget.label}
               </div>
               <div className="text-2xl font-bold text-slate-900 leading-none">
                 {score}%
@@ -174,7 +157,7 @@ export function PYQAttempt() {
             <div className="ml-auto text-xs text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" /> {fmtClock(elapsed)}
             </div>
-            <Button onClick={() => setRoute(heading.back)}>Done</Button>
+            <Button onClick={() => setRoute(backTo)}>Done</Button>
           </div>
         </div>
 
@@ -241,7 +224,7 @@ export function PYQAttempt() {
             );
           })}
           <div className="pt-2 flex justify-center">
-            <Button onClick={() => setRoute(heading.back)}>Done</Button>
+            <Button onClick={() => setRoute(backTo)}>Done</Button>
           </div>
         </div>
       </div>
@@ -255,7 +238,7 @@ export function PYQAttempt() {
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
         <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-3">
           <button
-            onClick={() => setRoute(heading.back)}
+            onClick={() => setRoute(backTo)}
             className="text-slate-400 hover:text-slate-700"
             title="Leave the attempt"
           >
@@ -325,7 +308,7 @@ export function PYQAttempt() {
         <motion.div key={current} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <span className="text-[11px] uppercase tracking-wide font-semibold text-indigo-600">
-              {q.sourceYear ? `RAS ${q.sourceYear}` : heading.title}
+              {q.sourceYear ? `RAS ${q.sourceYear}${q.paperQno ? ` Q${q.paperQno}` : ""}` : pyqTarget.label}
             </span>
             <span className="text-xs text-slate-400 tabular-nums">Q{current + 1} of {total}</span>
             <button

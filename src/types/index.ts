@@ -59,6 +59,8 @@ export interface Question {
   rajasthanAngle?: boolean;
   /** Adaptive: year of past paper this came from, if any (e.g., "2018"). */
   sourceYear?: string;
+  /** Question number on the printed paper. Past papers only. */
+  paperQno?: number;
   /** Adaptive: marks for mains items (1/2/5). MCQs default to 1 in scoring code. */
   marks?: number;
   /** Adaptive: tier 1=easy / 2=medium / 3=hard. Used by the question selector. */
@@ -572,12 +574,19 @@ export interface StudentData {
 }
 
 /**
- * What a PYQ attempt is over: one whole past paper, or every past question
- * tagged to a single microtheme.
+ * What a PYQ attempt is over.
+ *
+ * A filter rather than a tagged union, because the useful attempts are
+ * intersections: "2024", "Rajasthan History", "this microtheme", and
+ * "Rajasthan History in 2024" are all the same shape. `label` is what the
+ * attempt screen calls itself, decided by whoever built the filter.
  */
-export type PyqTarget =
-  | { kind: "year"; year: string }
-  | { kind: "topic"; topicId: string };
+export interface PyqTarget {
+  label: string;
+  year?: string;
+  subjectId?: string;
+  topicId?: string;
+}
 
 export type Route =
   | "auto"

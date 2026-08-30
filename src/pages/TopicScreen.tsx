@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "@/hooks/useAppState";
-import type { PYQ } from "@/types";
 import { topicQuestions, topicNotes, MAINS_PROMPT } from "@/data";
 import { loadPool, buildAttempt, describeAttempt } from "@/lib/topicPool";
 import { resumableSeed } from "@/lib/attemptDraft";
-import { loadPyqForTopic } from "@/lib/pyqStore";
+import { loadPyqs } from "@/lib/pyqStore";
 import { passThresholdOf } from "@/lib/passThreshold";
 import { Button } from "@/components/ui/button";
 import { TopicMediaCard } from "@/components/TopicMediaCard";
@@ -415,56 +414,57 @@ function QuizTab({
 
 // --- PYQs Tab ---
 /**
- * Past questions for the microtheme actually on screen.
+ * Past questions for the microtheme on screen.
  *
- * This used to render PYQS_MEWAR unconditionally, so every one of the 243
- * microthemes showed the same handful of Maharana Pratap questions — the same
- * shape of bug the quiz had, where the topic was ignored and one demo pool was
- * served to everybody.
+ * Twice now this tab has shown the wrong thing. First it rendered PYQS_MEWAR
+ * unconditionally, so all 243 microthemes showed the same Maharana Pratap
+ * questions. Then it led with the seven hand-entered prose cards -- stem,
+ * answer and explanation all visible at once -- which on the 82 microthemes
+ * with no real past question was the only thing a student saw, and looked like
+ * the attemptable mode had never shipped. Those cards are gone from here.
  *
- * Two tiers, because the bank is tagged unevenly: entries carrying this
- * topic id are the real match, and the rest of the subject is offered
- * separately rather than passed off as microtheme-specific. Note that no
- * seeded PYQ currently carries a topic id that exists in the syllabus, so in
- * practice today every match arrives through the subject tier.
+ * Both counts are offered because the arithmetic is unforgiving: four papers is
+ * 546 usable questions across 243 microthemes, so 82 have none and another 86
+ * have one or two. A microtheme-only tab would be empty two thirds of the time.
+ * When the microtheme has nothing, say so plainly -- that is a real signal
+ * about yield -- and offer the subject set instead.
  */
 function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subjectId: string; subjectName: string }) {
-  const { pyqBank, setRoute, setPyqTarget } = useAppState();
+  const { setRoute, setPyqTarget } = useAppState();
 
-  // Real past questions for this microtheme, from Postgres. Counted here so the
-  // card can say how many there are before the student commits to sitting them.
-  const [pyqCount, setPyqCount] = useState<number | null>(null);
+  // Two counts, because one microtheme rarely holds enough past questions to be
+  // worth sitting on its own. Four papers is 600 questions spread over 243
+  // microthemes: 82 have none at all and another 86 have one or two. Offering
+  // only the microtheme would leave two thirds of the syllabus showing an empty
+  // tab, so the subject is offered alongside it.
+  const [counts, setCounts] = useState<{ topic: number; subject: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void loadPyqForTopic(topicId).then((qs) => { if (!cancelled) setPyqCount(qs.length); });
+    void Promise.all([
+      loadPyqs({ label: "", topicId }),
+      loadPyqs({ label: "", subjectId }),
+    ]).then(([t, sub]) => {
+      if (!cancelled) setCounts({ topic: t.length, subject: sub.length });
+    });
     return () => { cancelled = true; };
-  }, [topicId]);
+  }, [topicId, subjectId]);
 
-  const { onTopic, onSubject } = useMemo(() => {
-    const onTopic: PYQ[] = [];
-    const onSubject: PYQ[] = [];
-    for (const p of pyqBank) {
-      if ((p.topicIds || []).includes(topicId)) onTopic.push(p);
-      else if ((p.subjectIds || []).includes(subjectId)) onSubject.push(p);
-    }
-    return { onTopic, onSubject };
-  }, [pyqBank, topicId, subjectId]);
-
-  const attemptable = (pyqCount ?? 0) > 0;
-  const hasLegacy = onTopic.length > 0 || onSubject.length > 0;
-
-  const startAttempt = () => {
-    setPyqTarget({ kind: "topic", topicId });
+  const attempt = (target: { label: string; topicId?: string; subjectId?: string }) => {
+    setPyqTarget(target);
     setRoute("pyq_attempt");
   };
 
-  if (!attemptable && !hasLegacy && pyqCount !== null) {
+  if (counts === null) {
+    return <div className="text-sm text-slate-500 px-1 py-4">Checking the past-paper bank...</div>;
+  }
+
+  if (counts.subject === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
-        <div className="text-slate-800 font-medium mb-1">No past questions tagged to this microtheme yet</div>
+        <div className="text-slate-800 font-medium mb-1">No past questions for {subjectName} yet</div>
         <div className="text-sm text-slate-500 mb-4">
-          Nothing in the past-paper bank is tagged to {subjectName}. Showing questions from
-          another subject here would only mislead you.
+          Nothing in the past-paper bank is tagged to this subject. Showing questions
+          from another subject here would only mislead you.
         </div>
         <button
           onClick={() => setRoute("pyq_archive")}
@@ -478,85 +478,56 @@ function PYQsTab({ topicId, subjectId, subjectName }: { topicId: string; subject
 
   return (
     <div className="space-y-3">
-      {attemptable && (
+      {counts.topic > 0 ? (
         <div className="bg-white rounded-2xl border border-indigo-200 p-5">
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-4 h-4 text-amber-600" />
             <span className="font-semibold text-slate-900">
-              {pyqCount} past question{pyqCount === 1 ? "" : "s"} on this microtheme
+              {counts.topic} past question{counts.topic === 1 ? "" : "s"} on this microtheme
             </span>
           </div>
           <p className="text-sm text-slate-600 mb-4">
-            Everything RPSC has asked here, from the papers held in the bank. Sit
-            them like a paper -- answers stay hidden until you submit, then every
-            question is shown with the official key.
+            Exactly what RPSC has asked here. Answers stay hidden until you submit,
+            then every question is shown with the official key.
           </p>
-          <Button onClick={startAttempt}>Attempt these questions</Button>
+          <Button onClick={() => attempt({ label: subjectName, topicId })}>
+            Attempt these questions
+          </Button>
         </div>
-      )}
-
-      {pyqCount === null && (
-        <div className="text-sm text-slate-500 px-1">Checking the past-paper bank...</div>
-      )}
-
-      {hasLegacy && (
-        <>
-          {attemptable && (
-            <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Curated notes
-            </div>
-          )}
-          {onTopic.map((pyq, i) => (
-            <PYQCard key={pyq.id ?? `topic-${i}`} pyq={pyq} />
-          ))}
-          {onSubject.length > 0 && (
-            <>
-              <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {onTopic.length > 0 ? `Also from ${subjectName}` : `From ${subjectName}`}
-              </div>
-              {onSubject.map((pyq, i) => (
-                <PYQCard key={pyq.id ?? `subject-${i}`} pyq={pyq} />
-              ))}
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function PYQCard({ pyq }: { pyq: PYQ }) {
-  const [open, setOpen] = useState(false);
-  const { currentUser, markPyqReviewed } = useAppState();
-
-  const reveal = () => {
-    setOpen(true);
-    if (currentUser) markPyqReviewed(currentUser.id, pyq.year);
-  };
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-5">
-      <div className="text-xs font-semibold text-indigo-600 mb-1">{pyq.year}</div>
-      <div className="text-slate-800 mb-3">{pyq.q}</div>
-      {!open ? (
-        <button
-          onClick={reveal}
-          className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition"
-        >
-          Reveal answer (+10 XP)
-        </button>
       ) : (
-        <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
-          <div className="text-sm">
-            <span className="font-semibold text-emerald-700">Answer:</span>{" "}
-            {pyq.a}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="font-semibold text-slate-900 mb-1">
+            RPSC has not asked this microtheme directly
           </div>
-          <div className="text-sm text-slate-600 mt-1">{pyq.explain}</div>
+          <p className="text-sm text-slate-600">
+            No past question in the bank is tagged to it. That is worth knowing in
+            itself -- it is a low-yield microtheme, not a gap in the app.
+          </p>
         </div>
       )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Trophy className="w-4 h-4 text-slate-400" />
+          <span className="font-semibold text-slate-900">
+            {counts.subject} past question{counts.subject === 1 ? "" : "s"} across {subjectName}
+          </span>
+        </div>
+        <p className="text-sm text-slate-600 mb-4">
+          Every past question from this subject, newest paper first, in the order
+          RPSC printed them.
+        </p>
+        <Button
+          variant={counts.topic > 0 ? "outline" : "default"}
+          onClick={() => attempt({ label: subjectName, subjectId })}
+        >
+          Attempt the {subjectName} set
+        </Button>
+      </div>
     </div>
   );
 }
+
 
 // --- Mains Tab ---
 function MainsTab({ dayNum, topicId }: { dayNum: number; topicId: string }) {
