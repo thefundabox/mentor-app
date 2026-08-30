@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ExamCountdown } from "@/components/ExamCountdown";
 import { useAppState } from "@/hooks/useAppState";
 import { motion } from "framer-motion";
 import { Loader2, MailCheck } from "lucide-react";
@@ -100,6 +101,15 @@ export function Login() {
         className="w-full max-w-md"
       >
         <button onClick={() => setRoute("landing")} className="text-sm text-slate-500 hover:text-slate-800 mb-4">← back</button>
+
+        {/* Students only. A mentor signing in does not need the clock, and an
+            admin certainly does not -- it would read as pressure aimed at the
+            wrong person. */}
+        {role === "student" && (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-5 py-4">
+            <ExamCountdown />
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
           <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide ${labelColor} mb-2`}>

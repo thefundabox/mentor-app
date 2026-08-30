@@ -7,6 +7,7 @@ import type { Role } from "@/types";
 import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED } from "@/data/pyqStats";
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
 import { TasterQuiz } from "@/components/TasterQuiz";
+import { ExamCountdown } from "@/components/ExamCountdown";
 
 /**
  * The homepage.
@@ -59,19 +60,17 @@ export function Landing() {
       <section className="max-w-6xl mx-auto px-6 pt-16 pb-14 sm:pt-24 sm:pb-20">
         <div className="grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-16 items-start">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600 mb-5">
-              RPSC Prelims · {PLAN_START_LABEL} intake
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-[3.4rem] font-bold tracking-tight text-slate-900 leading-[1.06] text-balance">
-              Eighty days. Two hundred and forty-three things to know.
+            <ExamCountdown className="mb-7" />
+
+            <h1 className="text-4xl sm:text-5xl lg:text-[3.4rem] font-bold tracking-tight text-slate-900 leading-[1.04] text-balance">
+              80 days. 243 things to know.
             </h1>
-            <p className="text-lg text-slate-600 mt-6 leading-relaxed max-w-xl">
-              The RPSC syllabus gives you eleven headings. We broke six real papers
-              down until every question landed on one small, studiable idea — then
-              built a day-by-day plan across all of them, with a mentor watching.
+            <p className="text-lg text-slate-600 mt-5 leading-relaxed max-w-lg">
+              RPSC publishes 11 headings. We decoded 6 real papers into 243 studiable
+              ideas — then built the plan that walks every one.
             </p>
 
-            <div className="flex flex-wrap gap-3 mt-8">
+            <div className="flex flex-wrap gap-3 mt-7">
               <Button size="lg" onClick={() => go("student")}>
                 Start preparing <ArrowRight className="w-4 h-4" />
               </Button>

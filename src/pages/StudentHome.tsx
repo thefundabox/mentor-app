@@ -6,6 +6,7 @@ import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
+import { ExamCountdown } from "@/components/ExamCountdown";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles, CalendarClock } from "lucide-react";
 import { SCOPE_DAYS, type CommitmentScope } from "@/types";
@@ -88,6 +89,9 @@ export function StudentHome() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Day {currentDay} of {totalDays}
           </h1>
+          {/* Where a student actually needs it: next to how far along they are,
+              so the two numbers can be read against each other. */}
+          <ExamCountdown variant="bar" className="mt-2" />
         </div>
         <div className="flex gap-2 flex-wrap">
           {SMART_PRACTICE_ENABLED && (
