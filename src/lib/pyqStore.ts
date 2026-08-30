@@ -48,9 +48,6 @@ function toQuestion(r: PyqRow): Question {
   };
 }
 
-const COLS =
-  "id,topic_id,type,question_type,difficulty_tier,q,q_hindi,options,correct,why,source_year,paper_qno,rajasthan_angle";
-
 /** Every microtheme id belonging to a subject, by convention: `<subjectId>-mNN`. */
 const subjectPattern = (subjectId: string) => `${subjectId}-m%`;
 
@@ -63,21 +60,25 @@ const subjectPattern = (subjectId: string) => `${subjectId}-m%`;
  */
 export async function loadPyqs(target: PyqTarget, limit = 600): Promise<Question[]> {
   if (!supabase) return [];
-  let query = supabase
-    .from("questions")
-    .select(COLS)
-    .not("source_year", "is", null)
-    .eq("reviewed", true);
-
-  if (target.year) query = query.eq("source_year", target.year);
-  // topicId is the narrower of the two and wins when both are set.
-  if (target.topicId) query = query.eq("topic_id", target.topicId);
-  else if (target.subjectId) query = query.like("topic_id", subjectPattern(target.subjectId));
-
-  const { data, error } = await query
-    .order("source_year", { ascending: false })
-    .order("paper_qno", { ascending: true, nullsFirst: false })
-    .limit(limit);
+  // Through unlock_questions, not a direct select. Since 0026 a student can
+  // only read rows already unlocked for them, so a plain select returns the
+  // ones they have seen before and nothing new -- the archive would simply stop
+  // growing. The RPC returns both: everything already unlocked for this target
+  // plus as much new ground as today's allowance covers, and it is the only
+  // thing permitted to write the unlock ledger.
+  //
+  // Ordering is done server-side by the same year-then-printed-number rule, so
+  // the 2024 paper still opens at Q1.
+  const { data, error } = await supabase.rpc("unlock_questions", {
+    p_topic_id: target.topicId ?? null,
+    // topicId is the narrower of the two and wins when both are set.
+    p_subject_prefix:
+      !target.topicId && target.subjectId ? subjectPattern(target.subjectId) : null,
+    p_source_year: target.year ?? null,
+    p_pyq_only: true,
+    p_min_tier: null,
+    p_limit: limit,
+  });
   if (error || !data) return [];
   return (data as PyqRow[]).map(toQuestion);
 }
@@ -101,20 +102,14 @@ export interface PyqYear {
  */
 export async function loadPyqYears(): Promise<PyqYear[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("questions")
-    .select("source_year")
-    .not("source_year", "is", null)
-    .eq("reviewed", true)
-    .limit(5000);
+  // Counted server-side. What EXISTS is not the content, and a locked bank must
+  // still be able to say how big it is -- otherwise a free student is told the
+  // 2024 paper has however many questions they happen to have unlocked, which
+  // under-reports the product rather than protecting it.
+  const { data, error } = await supabase.rpc("pyq_counts_by_year");
   if (error || !data) return [];
-
-  const counts = new Map<string, number>();
-  for (const row of data as { source_year: string }[]) {
-    counts.set(row.source_year, (counts.get(row.source_year) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([year, count]) => ({ year, count }))
+  return (data as { source_year: string; n: number }[])
+    .map((r) => ({ year: r.source_year, count: r.n }))
     .sort((a, b) => b.year.localeCompare(a.year));
 }
 
@@ -126,16 +121,10 @@ export async function loadPyqYears(): Promise<PyqYear[]> {
  */
 export async function loadPyqCoverage(): Promise<Record<string, number>> {
   if (!supabase) return {};
-  const { data, error } = await supabase
-    .from("questions")
-    .select("topic_id")
-    .not("source_year", "is", null)
-    .eq("reviewed", true)
-    .limit(5000);
+  // Counts again, server-side and unaffected by what this student has unlocked.
+  const { data, error } = await supabase.rpc("pyq_counts_by_topic");
   if (error || !data) return {};
   const out: Record<string, number> = {};
-  for (const row of data as { topic_id: string }[]) {
-    out[row.topic_id] = (out[row.topic_id] ?? 0) + 1;
-  }
+  for (const row of data as { topic_id: string; n: number }[]) out[row.topic_id] = row.n;
   return out;
 }

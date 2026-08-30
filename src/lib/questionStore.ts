@@ -83,28 +83,45 @@ export async function loadTopicQuestions(
   opts: { limit?: number; tilt?: "hard" | "even"; includeUnreviewed?: boolean } = {},
 ): Promise<Question[]> {
   if (!supabase) return [];
-  const { limit = 40, tilt = "hard", includeUnreviewed = false } = opts;
+  const { limit = 40, tilt = "hard" } = opts;
 
-  let query = supabase.from("questions").select("*").eq("topic_id", topicId);
-  if (!includeUnreviewed) query = query.eq("reviewed", true);
-  if (tilt === "hard") query = query.gte("difficulty_tier", 2);
-
-  // Ordered on purpose. Postgres makes no promise about row order without an
-  // ORDER BY, and buildAttempt shuffles this list deterministically from the
-  // attempt seed -- so an unordered pool means the same seed can deal a
-  // different paper after any change that moves rows around. That silently
-  // breaks anything holding an index into the paper, an in-progress attempt
-  // most of all.
-  const { data, error } = await query.order("id", { ascending: true }).limit(limit);
+  // Through unlock_questions since 0026: a student may read only rows already
+  // unlocked for them, so a direct select can never hand out anything new. The
+  // RPC returns what is already unlocked plus as much new ground as today's
+  // allowance covers, and is the only writer of the unlock ledger.
+  //
+  // includeUnreviewed is not passed on. It exists for admin review screens, and
+  // the RPC refuses to unlock unreviewed rows for a student in any case -- an
+  // authored key nobody has checked should not cost a day's allowance.
+  //
+  // Ordering stays deterministic (server-side, by year then printed number then
+  // id). buildAttempt shuffles this list from the attempt seed, so an unordered
+  // pool would let the same seed deal a different paper after any change that
+  // moves rows around -- which silently breaks anything holding an index into
+  // the paper, an in-progress attempt most of all.
+  const { data, error } = await supabase.rpc("unlock_questions", {
+    p_topic_id: topicId,
+    p_subject_prefix: null,
+    p_source_year: null,
+    p_pyq_only: false,
+    p_min_tier: tilt === "hard" ? 2 : null,
+    p_limit: limit,
+  });
   if (error || !data) return [];
 
   const qs = (data as QuestionRow[]).map(toQuestion);
   // Fall back to the full difficulty range if the hard-tilted filter came back
-  // thin — but never fall back past the reviewed gate.
+  // thin. Cheap now: those questions are already unlocked, so widening the tier
+  // costs the student nothing against today's cap.
   if (tilt === "hard" && qs.length < Math.min(8, limit)) {
-    let all = supabase.from("questions").select("*").eq("topic_id", topicId);
-    if (!includeUnreviewed) all = all.eq("reviewed", true);
-    const { data: rest } = await all.order("id", { ascending: true }).limit(limit);
+    const { data: rest } = await supabase.rpc("unlock_questions", {
+      p_topic_id: topicId,
+      p_subject_prefix: null,
+      p_source_year: null,
+      p_pyq_only: false,
+      p_min_tier: null,
+      p_limit: limit,
+    });
     return ((rest ?? []) as QuestionRow[]).map(toQuestion);
   }
   return qs;
