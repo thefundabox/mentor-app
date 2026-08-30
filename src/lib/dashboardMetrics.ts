@@ -201,11 +201,15 @@ function buildSubjectRows(
         subjectId: s.id,
         subjectName: s.name,
         icon: s.icon,
-        // `t || s`, matching scheduler.ts, selector.ts and questionImport.ts.
-        // Subject-level alone is right for today's catalog (Rajasthan sits in
-        // four dedicated subjects) but breaks the moment a Rajasthan
-        // microtheme is filed under a general one.
-        rajasthanSpecific: !!(s.rajasthanSpecific || s.topics.some((t) => t.rajasthanSpecific)),
+        // Subject-level on purpose, and deliberately NOT the `t || s` rule used
+        // by scheduler.ts / selector.ts / questionImport.ts. This drives a
+        // "Rajasthan" badge beside the subject name, so it must describe the
+        // subject: Current Affairs holds one Rajasthan statute (m243) among
+        // eight national microthemes, and badging the whole subject Rajasthan
+        // on that basis would misread it. Rajasthan readiness does not come
+        // from here -- it is computed per microtheme off syllabusCoverage,
+        // which does apply `t || s` and so does count m243.
+        rajasthanSpecific: !!s.rajasthanSpecific,
         attempts,
         correct,
         accuracy,

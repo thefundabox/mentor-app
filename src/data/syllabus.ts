@@ -434,7 +434,11 @@ export const RPSC_SUBJECTS: SubjectCatalogEntry[] = [
       { id: "current-affairs-m241", name: "Sports & Games", theme: "Sports, Awards, Publications" },
       { id: "current-affairs-m242", name: "Awards, Publications, Authors", theme: "Sports, Awards, Publications" },
       // T5 — Statutory Current-Affairs Items
-      { id: "current-affairs-m243", name: "Rajasthan Public Examination (Measures for Prevention of Unfair Means in Recruitment) Act, 2022", theme: "Statutory Current-Affairs Items" },
+      // A Rajasthan statute inside a subject that is not Rajasthan-flagged as a
+      // whole. The `t || s` rule exists for exactly this case: it belongs in the
+      // Rajasthan question pool and in Rajasthan readiness, while the rest of
+      // Current Affairs stays national.
+      { id: "current-affairs-m243", name: "Rajasthan Public Examination (Measures for Prevention of Unfair Means in Recruitment) Act, 2022", theme: "Statutory Current-Affairs Items", rajasthanSpecific: true },
     ],
   },
 ];
