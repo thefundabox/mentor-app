@@ -182,15 +182,22 @@ export function buildSlots(args: {
 
     windows.sort((a, b) => a.start - b.start);
     const slots: Slot[] = [];
+    // Deduped by start instant. 0022 stops overlapping windows being stored at
+    // all, but an 'extra' override can still overlap the weekly pattern, and a
+    // slot rendered twice would also collide on its React key.
+    const seen = new Set<number>();
     for (const w of windows) {
       for (let m = w.start; m + settings.slot_minutes <= w.end; m += settings.slot_minutes) {
         const startsAt = new Date(day);
         startsAt.setHours(0, m, 0, 0);
         if (startsAt < earliest) continue;
+        if (seen.has(startsAt.getTime())) continue;
+        seen.add(startsAt.getTime());
         const endsAt = new Date(startsAt.getTime() + settings.slot_minutes * 60_000);
         slots.push({ startsAt, endsAt, taken: takenAt.has(startsAt.getTime()) });
       }
     }
+    slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
     if (slots.length > 0) out.push({ date: day, key, slots });
   }
   return out;
@@ -228,7 +235,17 @@ export async function addRule(
   if (end_min <= start_min) return { error: "The end time has to be after the start time." };
   const { error } = await supabase
     .from("mentor_availability").insert({ mentor_id: mentorId, weekday, start_min, end_min });
-  return error ? { error: error.message } : { data: true };
+  if (error) {
+    // 23P01 is mentor_availability_no_overlap (migration 0022). Overlapping
+    // windows silently doubled every slot inside the overlap, so this is
+    // refused rather than merged -- the mentor should see what they already
+    // have and adjust it.
+    if (error.code === "23P01") {
+      return { error: `You already have hours covering part of that ${WEEKDAYS[weekday]} window. Remove or adjust the existing one first.` };
+    }
+    return { error: error.message };
+  }
+  return { data: true };
 }
 
 export async function removeRule(id: string): Promise<Result<true>> {
