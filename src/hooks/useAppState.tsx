@@ -95,6 +95,13 @@ interface AppContextValue extends AppState {
   markOverrideSeen: (studentId: string, overrideId: number) => void;
   addMainsScore: (studentId: string, score: MainsScore) => void;
   markPyqReviewed: (studentId: string, label: string) => void;
+  /**
+   * Record a finished past-paper attempt. Returns the points earned, which go
+   * to the separate PYQ pool and never to the study-plan total.
+   */
+  recordPyqAttempt: (studentId: string, a: { label: string; correct: number; total: number }) => number;
+  /** The separate past-paper points pool. */
+  pyqPointsOf: (studentId: string) => number;
 
   // multi-topic helpers
   topicCleared: (studentId: string, day: number, topicId: string) => boolean;
@@ -1164,6 +1171,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [patchStudent]);
 
+  /**
+   * Points for a past-paper attempt, banked separately from plan XP.
+   *
+   * Proportional to what the student actually got right rather than a flat
+   * completion award, because a past paper can be re-sat any number of times
+   * and a flat award would pay the same for clicking through it blind.
+   */
+  const recordPyqAttempt = useCallback((id: string, a: { label: string; correct: number; total: number }) => {
+    const amount = a.correct * POINTS.PYQ_CORRECT;
+    patchStudent(id, (s) => {
+      const pool = s.pyqPoints ?? { total: 0, history: [] };
+      const evt: PointEvent = {
+        id: Date.now() + Math.random(),
+        when: Date.now(),
+        kind: "pyq_attempt",
+        amount,
+        meta: { label: `${a.label} - ${a.correct}/${a.total}` },
+      };
+      return { ...s, pyqPoints: { total: pool.total + amount, history: [...pool.history, evt] } };
+    });
+    return amount;
+  }, [patchStudent]);
+
+  const pyqPointsOf = useCallback((id: string) => getStudent(id).pyqPoints?.total ?? 0, [getStudent]);
+
   const levelInfo = useCallback((id: string) => {
     const s = getStudent(id);
     const total = s.points.total;
@@ -1576,6 +1608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getStudent, setChart, submitChartForApproval, approveChart, requestChartChanges,
     isDayUnlocked,
     finishQuiz, addOverride, updateOverride, markOverrideSeen, addMainsScore, markPyqReviewed,
+    recordPyqAttempt, pyqPointsOf,
     topicCleared, markTopicStudied, questionCoverage, topicHasQuestions, dayCleared, completedDays,
     levelInfo,
     findTopicLive,

@@ -359,6 +359,7 @@ export type PointKind =
   | "first_try_bonus"
   | "mains_submit"
   | "pyq_review"
+  | "pyq_attempt"
   | "chart_approved"
   | "streak_bonus";
 
@@ -545,6 +546,16 @@ export interface StudentData {
   attempts: Attempt[];
   mainsScores: MainsScore[];
   points: PointsState;
+  /**
+   * Points earned attempting past papers, deliberately kept out of `points`.
+   *
+   * `points` measures progress through the study plan -- it drives the level and
+   * the streak, and a mentor reads it as "how far has this student got". Past
+   * papers are revision a student can sit any number of times, in any order, so
+   * folding them in would let somebody out-level their own plan without
+   * studying a day of it.
+   */
+  pyqPoints?: PointsState;
   pyqsReviewed: string[];
   lastActivityAt?: number;
   /** Set once the student finishes the signup assessment. Missing on legacy/seed users. */

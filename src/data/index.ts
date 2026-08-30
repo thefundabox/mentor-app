@@ -731,7 +731,8 @@ export const POINTS = {
   QUIZ_PASS: 100,        // ≥80% on a day's quiz
   FIRST_TRY_BONUS: 50,   // cleared on first attempt
   MAINS_SUBMIT: 25,      // submitted a mains answer
-  PYQ_REVIEW: 10,        // revealed a PYQ explanation
+  PYQ_REVIEW: 10,        // revealed a PYQ explanation (legacy prose bank)
+  PYQ_CORRECT: 5,        // per correct answer in a past-paper attempt; separate pool
   CHART_APPROVED: 20,    // mentor approved the prep chart
   STREAK_3: 30,          // 3-day streak
   STREAK_7: 100,         // 7-day streak
@@ -752,6 +753,7 @@ export function emptyStudentData(): StudentData {
     attempts: [],
     mainsScores: [],
     points: { total: 0, history: [] },
+    pyqPoints: { total: 0, history: [] },
     pyqsReviewed: [],
     topicRecords: [],
     confusionPairs: [],

@@ -33,7 +33,7 @@ function fmtClock(ms: number) {
 }
 
 export function PYQAttempt() {
-  const { currentUser, pyqTarget, setRoute, recordStudentConfusion } = useAppState();
+  const { currentUser, pyqTarget, setRoute, recordStudentConfusion, recordPyqAttempt } = useAppState();
 
   const [pool, setPool] = useState<Question[] | null>(null);
 
@@ -60,6 +60,7 @@ export function PYQAttempt() {
   const [showPalette, setShowPalette] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [earned, setEarned] = useState<number | null>(null);
 
   const spent = useRef<number[]>([]);
   const landedAt = useRef<number>(0);
@@ -132,6 +133,8 @@ export function PYQAttempt() {
         recordStudentConfusion(user.id, question.concept || "unknown", distractor, question.concept);
       }
     });
+    // Separate pool: past-paper practice must not move the study-plan level.
+    setEarned(recordPyqAttempt(user.id, { label: pyqTarget.label, correct: correctCount, total }));
     setConfirmSubmit(false);
     setPhase("review");
   };
@@ -154,6 +157,14 @@ export function PYQAttempt() {
                 </span>
               </div>
             </div>
+            {earned !== null && (
+              <div className="text-xs font-semibold text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">
+                +{earned} PYQ points
+                <span className="block text-[10px] font-normal text-amber-800/70">
+                  kept separate from plan XP
+                </span>
+              </div>
+            )}
             <div className="ml-auto text-xs text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" /> {fmtClock(elapsed)}
             </div>

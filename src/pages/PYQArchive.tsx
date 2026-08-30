@@ -19,7 +19,7 @@ import { findTopic } from "@/data";
  * converted. Admin CRUD over that bank is untouched.
  */
 export function PYQArchive() {
-  const { subjects, setRoute, setPyqTarget } = useAppState();
+  const { subjects, setRoute, setPyqTarget, currentUser, pyqPointsOf } = useAppState();
   const [query, setQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("");
   const [subjectFilter, setSubjectFilter] = useState<string>("");
@@ -89,6 +89,13 @@ export function PYQArchive() {
           subject and attempt just those. Marked against the final answer key
           RPSC published, not an in-house key.
         </p>
+        {currentUser && (
+          <div className="mt-3 inline-flex items-center gap-2 text-sm bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+            <Trophy className="w-4 h-4 text-amber-600" />
+            <span className="font-semibold text-amber-900">{pyqPointsOf(currentUser.id)} PYQ points</span>
+            <span className="text-amber-800/70 text-xs">tracked separately from your plan XP</span>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------- attemptable papers */}
