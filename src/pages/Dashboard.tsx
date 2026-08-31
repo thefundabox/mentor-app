@@ -27,6 +27,10 @@ import {
   computeDashboard, type DashboardMetrics, type SubjectBreakdownRow,
   type NegativeMarkingRisk, type TopicStatus, type TrendDirection, type CoverageCount,
 } from "@/lib/dashboardMetrics";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 import { HabitsCard } from "@/components/HabitsCard";
 import { StatTile } from "@/components/StatTile";
@@ -110,27 +114,42 @@ export function Dashboard({ studentId }: { studentId: string }) {
           </h1>
         </div>
         {!isMentorView && (
-          <div className="flex gap-2 flex-wrap">
-            {SMART_PRACTICE_ENABLED && (
-              <Button onClick={() => setRoute("smart_practice")}>
-                <Sparkles className="w-4 h-4" /> Smart practice
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
+            {/* Journey keeps its button: it is the way to the plan, and the plan
+                is the thing this screen exists to send you back to. Everything
+                else moves into the same quiet menu used on the journey screen
+                -- students land here first, so leaving "Plan ahead" sitting in
+                the open would undo the point of tucking it away there. */}
             <Button variant="secondary" onClick={() => setRoute("home")}>
               <MapIcon className="w-4 h-4" /> Journey
             </Button>
-            <Button variant="secondary" onClick={() => setRoute("discussion")}>
-              <MessagesSquare className="w-4 h-4" /> Discussion
-            </Button>
-            <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
-              <Library className="w-4 h-4" /> PYQ bank
-            </Button>
-            <Button variant="secondary" onClick={() => setRoute("tests")}>
-              <FileText className="w-4 h-4" /> Mock tests
-            </Button>
-            <Button variant="secondary" onClick={() => setRoute("onboarding")}>
-              <Pencil className="w-4 h-4" /> Plan ahead
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
+                  More <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {SMART_PRACTICE_ENABLED && (
+                  <DropdownMenuItem onSelect={() => setRoute("smart_practice")}>
+                    <Sparkles className="w-4 h-4" /> Smart practice
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => setRoute("discussion")}>
+                  <MessagesSquare className="w-4 h-4" /> Discussion
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setRoute("pyq_archive")}>
+                  <Library className="w-4 h-4" /> PYQ bank
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setRoute("tests")}>
+                  <FileText className="w-4 h-4" /> Mock tests
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setRoute("onboarding")}>
+                  <Pencil className="w-4 h-4" /> Change my plan
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </header>

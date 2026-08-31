@@ -3,13 +3,17 @@ import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { QuotaMeter } from "@/components/QuotaMeter";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { AnnouncementsBanner } from "@/components/AnnouncementsBanner";
 import { OverrideDecisionBanner } from "@/components/OverrideDecisionBanner";
 import { CurrentAffairsDigest } from "@/components/CurrentAffairsDigest";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import { ExamCountdown } from "@/components/ExamCountdown";
 import { dateForBatchDay, pacingStatus, formatDate, daysUntilBatchStart } from "@/lib/calendar";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles, CalendarClock } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Trophy, Circle, Send, FileText, Library, Sparkles, CalendarClock, Pencil } from "lucide-react";
 import { SCOPE_DAYS, type CommitmentScope } from "@/types";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
@@ -94,23 +98,50 @@ export function StudentHome() {
               so the two numbers can be read against each other. */}
           <ExamCountdown variant="bar" className="mt-2" />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {SMART_PRACTICE_ENABLED && (
-            <Button onClick={() => setRoute("smart_practice")}>
-              <Sparkles className="w-4 h-4" /> Smart practice
-            </Button>
-          )}
-          <Button variant="secondary" onClick={() => setRoute("book_session")}>
-            <CalendarClock className="w-4 h-4" /> Book a session
-          </Button>
-          <Button variant="secondary" onClick={() => setRoute("tests")}>
-            <FileText className="w-4 h-4" /> Mock tests
-          </Button>
-          <Button variant="secondary" onClick={() => setRoute("pyq_archive")}>
-            <Library className="w-4 h-4" /> PYQ bank
-          </Button>
-          <Button variant="secondary" data-tour="edit-chart" onClick={() => setRoute("onboarding")}>Plan ahead</Button>
-        </div>
+        {/* Everything except the plan itself now lives behind one quiet link.
+            Five buttons sitting above the journey competed with it, and the
+            most dangerous of them -- Plan ahead, which rewrites the chart --
+            looked exactly as inviting as the harmless ones. A student opening
+            this screen should see the plan and today's work, not a menu of
+            ways to go somewhere else or change what they committed to.
+
+            Deliberately a text link, not a button: it reads as a way out for
+            someone who already knows what they want, rather than an
+            invitation. `data-tour="edit-chart"` stays on the trigger so the
+            product tour still has something to point at. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              data-tour="edit-chart"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            >
+              More <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {SMART_PRACTICE_ENABLED && (
+              <DropdownMenuItem onSelect={() => setRoute("smart_practice")}>
+                <Sparkles className="w-4 h-4" /> Smart practice
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => setRoute("book_session")}>
+              <CalendarClock className="w-4 h-4" /> Book a session
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setRoute("tests")}>
+              <FileText className="w-4 h-4" /> Mock tests
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setRoute("pyq_archive")}>
+              <Library className="w-4 h-4" /> PYQ bank
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {/* Separated and labelled for what it does. This is the one that
+                changes the plan, so it should not sit flush against the four
+                that merely navigate. */}
+            <DropdownMenuItem onSelect={() => setRoute("onboarding")}>
+              <Pencil className="w-4 h-4" /> Change my plan
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/*
