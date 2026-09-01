@@ -133,7 +133,7 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs") => void;
+  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits") => void;
 
   // Tests (admin-managed)
   upsertTest: (t: Test) => void;
@@ -314,7 +314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
   const [activeSessionMeta, setActiveSessionMeta] = useLocalStorage<{ mode: SessionMode; startedAt: number } | null>("v5_activeSessionMeta", null);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs">("v5_adminTab", "people");
+  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits">("v5_adminTab", "people");
 
   // PR 6: on every mount and whenever the CA list changes, prune items that
   // have passed their 18-month expiry. Cheap (O(n)) and runs in the browser

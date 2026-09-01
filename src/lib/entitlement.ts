@@ -81,3 +81,53 @@ export async function claimTestAttempt(
   if (error) return { error: error.message };
   return { id: (data as { id: string }).id };
 }
+
+export interface PlanLimitRow {
+  plan: "free" | "paid";
+  /** New questions per IST day. Null = unmetered. */
+  dailyUnlocks: number | null;
+  /** Distinct mock tests. Null = unlimited. */
+  maxTests: number | null;
+}
+
+/** Both plans and their current limits. Readable by anyone signed in. */
+export async function loadPlanLimits(): Promise<PlanLimitRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("plan_limits")
+    .select("plan, daily_unlocks, max_tests")
+    .order("plan");
+  if (error || !data) return [];
+  return (data as { plan: string; daily_unlocks: number | null; max_tests: number | null }[])
+    .map((r) => ({
+      plan: r.plan === "paid" ? "paid" : "free",
+      dailyUnlocks: r.daily_unlocks,
+      maxTests: r.max_tests,
+    }));
+}
+
+/**
+ * Change a plan's limits. Admin-only, enforced in Postgres.
+ *
+ * Goes through the RPC rather than writing the table: 0028 revoked direct
+ * writes on plan_limits and 0031 deliberately did not hand them back, so this
+ * function is the only route in from a client.
+ *
+ * null means unmetered, and is passed through as null rather than 0 -- 0 is a
+ * real, different setting meaning "this plan gets none".
+ */
+export async function setPlanLimits(
+  plan: "free" | "paid",
+  dailyUnlocks: number | null,
+  maxTests: number | null,
+): Promise<{ error?: string }> {
+  if (!supabase) return { error: "Not connected." };
+  const { error } = await supabase.rpc("set_plan_limits", {
+    target_plan: plan,
+    new_daily_unlocks: dailyUnlocks,
+    new_max_tests: maxTests,
+  });
+  // The database's message names what is wrong ("Only an admin can change plan
+  // limits"), so it is surfaced rather than replaced with a generic failure.
+  return error ? { error: error.message } : {};
+}

@@ -680,5 +680,5 @@ export interface AppState {
   /** Attempt record id for the test in progress / just submitted. */
   activeAttemptId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs";
+  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits";
 }
