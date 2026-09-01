@@ -1537,8 +1537,15 @@ function BatchEditor({
             <select value={defaultPlanTemplateId} onChange={(e) => setDefaultPlanTemplateId(e.target.value)}
               className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-slate-400 outline-none text-sm">
               <option value="">— none —</option>
+              {/* Name alone is not enough to choose by: two seeded plans have
+                  carried the identical name "RAS Prelims in 80 days" since
+                  0012, and an admin picking one had no way to tell which was
+                  which. Length and id disambiguate, and an id is the right
+                  thing to show on an admin screen. */}
               {planTemplates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name} — {t.days.length} days · {t.id}
+                </option>
               ))}
               {/* A stored id that is no longer on offer -- an archived plan, or
                   one of the old demo seeds -- still gets an option, so the
