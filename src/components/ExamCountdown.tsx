@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { EXAM_LABEL, EXAM_TIME_LABEL, timeToExam } from "@/data/exam";
+import { timeToExam } from "@/data/exam";
+import { useAppState } from "@/hooks/useAppState";
 
 /**
  * How long is left until the paper.
@@ -23,17 +24,25 @@ export function ExamCountdown({ variant = "hero", tone = "classic", className = 
         eyebrow: "text-[#164ed3]", dot: "bg-[#b6ec51]", foot: "text-[#667378]" }
     : { cell: "border-slate-200 bg-white", num: "text-slate-900", lab: "text-slate-400",
         eyebrow: "text-slate-500", dot: "bg-emerald-500", foot: "text-slate-500" };
-  const [t, setT] = useState(() => timeToExam());
+  const { settings } = useAppState();
+  // Formatted from the stored instant rather than kept as its own text field,
+  // so the label can never disagree with the date the countdown is counting to.
+  const examLabel = new Date(settings.examAt).toLocaleDateString("en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata",
+  });
+
+  const [t, setT] = useState(() => timeToExam(Date.now(), settings.examAt));
 
   useEffect(() => {
-    const id = setInterval(() => setT(timeToExam()), 1000);
+    setT(timeToExam(Date.now(), settings.examAt));
+    const id = setInterval(() => setT(timeToExam(Date.now(), settings.examAt)), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [settings.examAt]);
 
   if (t.past) {
     return (
       <div className={`text-sm font-medium text-slate-600 ${className}`}>
-        The paper was on {EXAM_LABEL}. Best of luck with the result.
+        The paper was on {examLabel}. Best of luck with the result.
       </div>
     );
   }
@@ -61,7 +70,7 @@ export function ExamCountdown({ variant = "hero", tone = "classic", className = 
           <span className={`absolute inline-flex h-full w-full rounded-full ${t0.dot} opacity-70 motion-safe:animate-ping`} />
           <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${t0.dot}`} />
         </span>
-        {t.today ? "The paper is today" : "RAS Prelims countdown"}
+        {t.today ? "The paper is today" : `${settings.examName} countdown`}
       </div>
 
       <div className="flex gap-2 sm:gap-2.5">
@@ -72,7 +81,7 @@ export function ExamCountdown({ variant = "hero", tone = "classic", className = 
       </div>
 
       <div className={`text-xs ${t0.foot} mt-2.5`}>
-        {EXAM_LABEL} · {EXAM_TIME_LABEL}
+        {examLabel} · {settings.examTimeLabel}
       </div>
     </div>
   );

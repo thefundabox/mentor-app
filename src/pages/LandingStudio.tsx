@@ -57,7 +57,7 @@ function useTaxonomyShape() {
 
 export function LandingStudio() {
   const tax = useTaxonomyShape();
-  const { setLoginRoleIntent, setRoute, authEnabled } = useAppState();
+  const { setLoginRoleIntent, setRoute, authEnabled, settings } = useAppState();
   const go = (role: Role) => { setLoginRoleIntent(role); setRoute("login"); };
 
   return (
@@ -67,7 +67,7 @@ export function LandingStudio() {
         <div className="mx-auto flex h-[68px] w-[min(1180px,calc(100%-40px))] items-center">
           <button onClick={() => setRoute("landing")} className="flex items-center gap-3">
             <BrandMark className="h-10" />
-            <span className="font-extrabold tracking-tight">RAS Mentorship</span>
+            <span className="font-extrabold tracking-tight">{settings.productName}</span>
           </button>
 
           {/* One row, one baseline, one height. Every item is h-11 and centred,
@@ -105,17 +105,16 @@ export function LandingStudio() {
                 even the 3:1 bar large text has to clear; this keeps the hue
                 recognisably the brand's at 3.59:1. */}
             <h1 className="text-[clamp(2.3rem,5.2vw,3.4rem)] font-extrabold leading-[1.04] tracking-[-.035em]">
-              <span className="block">80 days.</span>
+              <span className="block">{settings.landingHeadlineTop}</span>
               {/* Its own block so text-balance applies to THIS line alone. With
                   a bare <br/> the balancer sees one box and does nothing, which
                   left "know." orphaned on a third line at desktop widths. */}
               <span className="block text-balance">
-                <span className="text-[#CA7022]">243</span> microthemes to know.
+                <AccentLeadingNumber text={settings.landingHeadlineBottom} />
               </span>
             </h1>
             <p className="mt-5 max-w-lg text-[1.08rem] leading-relaxed text-[#667378]">
-              RPSC publishes 11 headings. We decoded 6 real papers into 243 studiable
-              ideas — then built the plan that walks every one.
+              {settings.landingSubhead}
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -438,3 +437,26 @@ export function LandingStudio() {
 const card = "rounded-[24px] border border-[#e7e4dc] bg-white shadow-[0_10px_30px_rgba(23,37,43,.05)]";
 const navBtn = "inline-flex h-11 items-center rounded-[12px] px-3 text-sm font-bold text-[#667378] transition hover:bg-[#2768ff]/[.07] hover:text-[#2768ff]";
 const primaryBtn = "inline-flex items-center justify-center gap-2 rounded-[16px] bg-[#2768ff] font-extrabold text-white shadow-[0_5px_0_#164ed3] transition hover:bg-[#164ed3] hover:shadow-[0_3px_0_#123fae]";
+
+/**
+ * Colours a leading number in the headline's second line.
+ *
+ * The count is the thing the page is about, so it carries the accent. Rather
+ * than storing the split as three separate settings -- which an admin would
+ * have to reassemble in their head -- the rule is simply: digits at the front
+ * get the accent, the rest does not. "243 microthemes to know." works, and so
+ * does a line with no number at all.
+ *
+ * The accent is the owl's orange darkened from #EE8428 to #CA7022: the logo
+ * colour reaches only 2.64:1 on this background and fails even the 3:1 bar
+ * large text must clear, while this keeps the hue at 3.59:1.
+ */
+function AccentLeadingNumber({ text }: { text: string }) {
+  const m = /^(\d[\d,]*)(\s*)([\s\S]*)$/.exec(text);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      <span className="text-[#CA7022]">{m[1]}</span>{m[2]}{m[3]}
+    </>
+  );
+}

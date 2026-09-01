@@ -55,8 +55,7 @@ const ROLE_COPY: Record<Role, { label: string; title: string; intro: string; but
 export function Login() {
   const {
     loginRoleIntent, loginAs, setRoute, users,
-    signIn, signUp, sendPasswordReset, authError, authEnabled,
-  } = useAppState();
+    signIn, signUp, sendPasswordReset, authError, authEnabled, settings } = useAppState();
 
   const role: Role = loginRoleIntent || "student";
   const copy = ROLE_COPY[role];
@@ -165,7 +164,7 @@ export function Login() {
       <header className="mb-7 flex min-h-[52px] items-center justify-between gap-5">
         <button onClick={() => setRoute("landing")} className="inline-flex items-center gap-3 font-extrabold tracking-tight text-[#17252b]">
           <BrandMark className="h-10" />
-          RAS Mentorship
+          {settings.productName}
         </button>
         {/* An explicit way out. The brand mark navigates too, but nobody reads a
             logo as "back", and a sign-in page with no exit feels like a trap. */}

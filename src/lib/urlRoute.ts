@@ -15,11 +15,9 @@
  * `auto` deliberately has no path. It is a request to resolve, not a place, and
  * writing it to the address bar would put "/auto" in someone's history.
  */
-import type { Route } from "@/types";
+import type { Route, AdminTab } from "@/types";
 
-export type AdminTab =
-  | "people" | "catalog" | "plans" | "tour" | "questions"
-  | "batches" | "tests" | "stats" | "current_affairs" | "limits";
+export type { AdminTab };
 
 /** Path segment per admin section. Hyphens read better in a URL than snake_case. */
 const ADMIN_TAB_PATH: Record<AdminTab, string> = {
@@ -33,6 +31,7 @@ const ADMIN_TAB_PATH: Record<AdminTab, string> = {
   tests: "tests",
   stats: "stats",
   limits: "limits",
+  settings: "settings",
 };
 
 const ADMIN_PATH_TAB: Record<string, AdminTab> = Object.fromEntries(

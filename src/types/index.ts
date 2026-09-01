@@ -609,6 +609,17 @@ export interface PyqTarget {
   topicId?: string;
 }
 
+/**
+ * Which admin section is open.
+ *
+ * Lives here rather than beside the URL map so the state, the context type and
+ * the path table all name one type. It had drifted into three separate copies
+ * of the same union, and adding a section meant finding all three.
+ */
+export type AdminTab =
+  | "people" | "catalog" | "plans" | "tour" | "questions"
+  | "batches" | "tests" | "stats" | "current_affairs" | "limits" | "settings";
+
 export type Route =
   | "auto"
   | "landing"
@@ -680,5 +691,5 @@ export interface AppState {
   /** Attempt record id for the test in progress / just submitted. */
   activeAttemptId: string | null;
   /** Active admin sub-tab */
-  adminTab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits";
+  adminTab: AdminTab;
 }

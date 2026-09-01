@@ -7,6 +7,9 @@ import { loadSubjects, saveSubjects } from "@/lib/subjectStore";
 import { loadBatches, saveBatches } from "@/lib/batchStore";
 import { syncUrl, parsePath, type AdminTab } from "@/lib/urlRoute";
 import {
+  loadSettings, saveSettings, DEFAULT_SETTINGS, type InstituteSettings,
+} from "@/lib/settingsStore";
+import {
   loadAnnouncements, createAnnouncement, removeAnnouncement, dismissAnnouncementFor,
 } from "@/lib/announcementStore";
 
@@ -139,7 +142,7 @@ interface AppContextValue extends AppState {
   // user/admin ops
   addUser: (u: Omit<User, "id" | "createdAt"> & { id?: string }) => User;
   assignStudentToMentor: (studentId: string, mentorId: string) => void;
-  setAdminTab: (tab: "people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits") => void;
+  setAdminTab: (tab: AdminTab) => void;
 
   // Tests (admin-managed)
   upsertTest: (t: Test) => void;
@@ -212,6 +215,10 @@ interface AppContextValue extends AppState {
   ensureStudentRecord: (studentId: string) => Promise<void>;
   /** True while either of the above is in flight. */
   studentRecordsLoading: boolean;
+
+  /** Exam identity, product name and landing copy. Editable by an admin. */
+  settings: InstituteSettings;
+  updateSettings: (next: InstituteSettings) => Promise<{ error?: string }>;
 
   /** The Batch object for a student, or null. */
   batchForStudent: (studentId: string) => Batch | null;
@@ -767,6 +774,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, [authProfile, setSubjectsLocal]);
+
+  /* ---------- institute settings ----------
+   *
+   * Deliberately NOT gated on authProfile, unlike every other pull here. The
+   * landing page shows the countdown and the product name to visitors who have
+   * not signed in and may never sign in, so this fetch has to happen without a
+   * session -- which is why 0037 grants anon SELECT on that one table.
+   */
+  const [settings, setSettingsLocal] =
+    useLocalStorage<InstituteSettings>("v1_settings", DEFAULT_SETTINGS);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadSettings().then((remote) => {
+      if (!cancelled && remote) setSettingsLocal(remote);
+    });
+    return () => { cancelled = true; };
+  }, [setSettingsLocal]);
+
+  /** Admin-only by RLS. Writes through, then keeps the local copy in step. */
+  const updateSettings = useCallback(async (next: InstituteSettings): Promise<{ error?: string }> => {
+    const res = await saveSettings(next);
+    if (res.error) return res;
+    setSettingsLocal(next);
+    return {};
+  }, [setSettingsLocal]);
 
   // Same shape for cohorts. Deliberately not via setBatches, which would push
   // what we just pulled straight back.
@@ -1975,6 +2008,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
     ensureStudentRecords, ensureStudentRecord, studentRecordsLoading,
     ensureQuestionCoverage,
+    settings, updateSettings,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
     tests, testAttempts, testSchedules, activeTestId, activeAttemptId,

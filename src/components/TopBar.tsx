@@ -4,7 +4,7 @@ import { HelpCircle } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 
 export function TopBar() {
-  const { currentUser, resetAll, logout, setRoute, setActiveDay, setViewingStudentId, getStudent, levelInfo } = useAppState();
+  const { currentUser, resetAll, logout, setRoute, setActiveDay, setViewingStudentId, getStudent, levelInfo, settings } = useAppState();
   const { startTour } = useTour();
 
   const goHome = () => {
@@ -34,7 +34,7 @@ export function TopBar() {
         <button onClick={goHome} className="flex items-center gap-2 group">
           <BrandMark className="h-9" />
           <div className="font-bold tracking-tight text-slate-900 group-hover:text-indigo-700 transition">
-            RAS Mentorship
+            {settings.productName}
           </div>
         </button>
 

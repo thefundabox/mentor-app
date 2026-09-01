@@ -16,7 +16,7 @@ import { lazy, Suspense } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import {
   Users, BookOpen, BarChart3, SlidersHorizontal, Layout, Compass,
-  HelpCircle, GraduationCap, FileText, Newspaper, Loader2,
+  HelpCircle, GraduationCap, FileText, Newspaper, Loader2, Settings2,
 } from "lucide-react";
 
 // One chunk per section. The import() calls are deliberately static string
@@ -30,6 +30,7 @@ const QuestionsTab      = lazy(() => import("./admin/Questions").then((m) => ({ 
 const CurrentAffairsTab = lazy(() => import("./admin/CurrentAffairs").then((m) => ({ default: m.CurrentAffairsTab })));
 const TestsTab          = lazy(() => import("./admin/Tests").then((m) => ({ default: m.TestsTab })));
 const StatsTab          = lazy(() => import("./admin/Stats").then((m) => ({ default: m.StatsTab })));
+const SettingsTab       = lazy(() => import("./admin/Settings").then((m) => ({ default: m.SettingsTab })));
 const LimitsTab         = lazy(() => import("./admin/Limits").then((m) => ({ default: m.LimitsTab })));
 
 const TABS = [
@@ -43,6 +44,7 @@ const TABS = [
   { id: "tests",           label: "Tests",           icon: FileText },
   { id: "stats",           label: "Stats",           icon: BarChart3 },
   { id: "limits",          label: "Plans & limits",  icon: SlidersHorizontal },
+  { id: "settings",        label: "Institute",       icon: Settings2 },
 ] as const;
 
 export function AdminDashboard() {
@@ -80,6 +82,7 @@ export function AdminDashboard() {
         {adminTab === "tests"           && <TestsTab />}
         {adminTab === "stats"           && <StatsTab />}
         {adminTab === "limits"          && <LimitsTab />}
+        {adminTab === "settings"        && <SettingsTab />}
       </Suspense>
     </div>
   );

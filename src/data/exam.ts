@@ -24,8 +24,16 @@ export interface Remaining {
   today: boolean;
 }
 
-export function timeToExam(now: number = Date.now()): Remaining {
-  const ms = EXAM_AT - now;
+/**
+ * Time left until the paper.
+ *
+ * `examAt` is a parameter now rather than the module constant, because the date
+ * moved into institute_settings (0037) and is editable without a deploy. The
+ * constant remains the default so demo mode and the first paint, before the
+ * settings fetch lands, still count down to something real.
+ */
+export function timeToExam(now: number = Date.now(), examAt: number = EXAM_AT): Remaining {
+  const ms = examAt - now;
   if (ms <= 0) {
     return { days: 0, hours: 0, minutes: 0, seconds: 0, past: true, today: false };
   }

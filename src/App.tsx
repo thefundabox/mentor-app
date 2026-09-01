@@ -44,7 +44,7 @@ import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
 function AppContent() {
-  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authLoading, authError, clearAuthError, defaultTemplate, adoptPlanTemplate, authEnabled } = useAppState();
+  const { currentUser, route, setRoute, activeDay, lastResult, getStudent, viewingStudentId, setViewingStudentId, recoveryMode, authLoading, authError, clearAuthError, defaultTemplate, adoptPlanTemplate, authEnabled, settings } = useAppState();
 
   // A signed-out visitor must never be *restored* onto a public inner screen.
   //
@@ -241,7 +241,7 @@ function AppContent() {
           {/* Was "all data lives in your browser", which stopped being true once
               progress moved to Postgres -- and told every student their work
               was local when it is synced and visible to their mentor. */}
-          RAS Mentorship · {authEnabled
+          {settings.productName} · {authEnabled
             ? "your progress is saved to your account"
             : "local demo mode — data stays in this browser"}
         </div>
