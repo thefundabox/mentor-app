@@ -5,6 +5,7 @@ import { Loader2, MailCheck, ArrowRight } from "lucide-react";
 import { timeToExam, EXAM_LABEL } from "@/data/exam";
 import { TASTER_QUESTIONS } from "@/data/taster";
 import type { Role } from "@/types";
+import { BrandMark } from "@/components/BrandMark";
 
 /**
  * Student sign-in.
@@ -154,7 +155,7 @@ export function Login() {
       {/* ---------------------------------------------------------- topbar */}
       <header className="mb-7 flex min-h-[52px] items-center justify-between gap-5">
         <button onClick={() => setRoute("landing")} className="inline-flex items-center gap-3 font-extrabold tracking-tight text-[#17252b]">
-          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#17252b] text-white shadow-[0_4px_0_rgba(23,37,43,.15)]">R</span>
+          <BrandMark className="h-10" />
           RAS Mentorship
         </button>
         {/* An explicit way out. The brand mark navigates too, but nobody reads a

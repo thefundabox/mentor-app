@@ -9,6 +9,7 @@ import { PRIORITY_AXES, SUBJECT_SHARE, MODEL_PAPERS, MODEL_QUESTIONS, MODEL_MICR
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
 import { TasterQuiz } from "@/components/TasterQuiz";
 import { ExamCountdown } from "@/components/ExamCountdown";
+import { BrandMark } from "@/components/BrandMark";
 
 /**
  * The homepage.
@@ -65,7 +66,7 @@ export function LandingStudio() {
       <header className="sticky top-0 z-20 border-b border-[#e7e4dc] bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-[68px] w-[min(1180px,calc(100%-40px))] items-center">
           <button onClick={() => setRoute("landing")} className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#17252b] text-sm font-extrabold text-white shadow-[0_4px_0_rgba(23,37,43,.15)]">R</span>
+            <BrandMark className="h-10" />
             <span className="font-extrabold tracking-tight">RAS Mentorship</span>
           </button>
 

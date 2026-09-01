@@ -8,6 +8,7 @@ import { PYQ_TOTAL, PYQ_YEARS, MICROTHEMES_ASKED } from "@/data/pyqStats";
 import { PLAN_PREVIEW, PLAN_START_LABEL, PLAN_END_LABEL } from "@/data/planPreview";
 import { TasterQuiz } from "@/components/TasterQuiz";
 import { ExamCountdown } from "@/components/ExamCountdown";
+import { BrandMark } from "@/components/BrandMark";
 
 /**
  * The original homepage — white ground, slate and indigo.
@@ -39,7 +40,7 @@ export function LandingClassic() {
       {/* ------------------------------------------------------------ nav */}
       <header className="sticky top-0 z-20 bg-white/85 backdrop-blur border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center font-bold text-sm">R</div>
+          <BrandMark className="h-8" />
           <span className="font-bold text-slate-900">RAS Mentorship</span>
 
           <nav className="ml-auto flex items-center gap-1 sm:gap-2">

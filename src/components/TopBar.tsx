@@ -1,6 +1,7 @@
 import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { HelpCircle } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export function TopBar() {
   const { currentUser, resetAll, logout, setRoute, setActiveDay, setViewingStudentId, getStudent, levelInfo } = useAppState();
@@ -31,9 +32,7 @@ export function TopBar() {
     <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-slate-200">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-3">
         <button onClick={goHome} className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 text-white flex items-center justify-center font-bold">
-            R
-          </div>
+          <BrandMark className="h-9" />
           <div className="font-bold tracking-tight text-slate-900 group-hover:text-indigo-700 transition">
             RAS Mentorship
           </div>
