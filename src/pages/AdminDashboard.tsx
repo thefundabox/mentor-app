@@ -1346,7 +1346,15 @@ function QuestionCard({
 /* ==================== Batches tab ==================== */
 
 function BatchesTab() {
-  const { batches, upsertBatch, archiveBatch, unarchiveBatch, mentors, batchStudents, planTemplates, assignStudentToBatch, students } = useAppState();
+  const { batches, upsertBatch, archiveBatch, unarchiveBatch, mentors, batchStudents,
+          planTemplates, remotePlanTemplates, assignStudentToBatch, students } = useAppState();
+  // Published plans win over the bundled demo seeds, same precedence as
+  // ChoosePlan and adoptPlanTemplate. Offering only `planTemplates` here meant
+  // the dropdown listed three demo templates and NOT the 80-day plan the
+  // institute actually publishes -- so a batch could not be pointed at the one
+  // plan anybody wanted, and the seeds it was left holding now win over the
+  // institute default since batch plans started being honoured.
+  const templateChoices = remotePlanTemplates.length > 0 ? remotePlanTemplates : planTemplates;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -1356,7 +1364,7 @@ function BatchesTab() {
       batch={editing}
       onDone={() => setEditingId(null)}
       mentors={mentors}
-      planTemplates={planTemplates}
+      planTemplates={templateChoices}
       students={students.filter((s) => !s.batchId || s.batchId === editing.id)}
       enrolled={batchStudents(editing.id)}
       onUpsert={upsertBatch}
@@ -1532,6 +1540,17 @@ function BatchEditor({
               {planTemplates.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
+              {/* A stored id that is no longer on offer -- an archived plan, or
+                  one of the old demo seeds -- still gets an option, so the
+                  editor shows what the batch actually holds. Without this the
+                  select renders blank and merely opening the editor and saving
+                  would quietly change the setting. */}
+              {defaultPlanTemplateId &&
+                !planTemplates.some((t) => t.id === defaultPlanTemplateId) && (
+                <option value={defaultPlanTemplateId}>
+                  {defaultPlanTemplateId} (no longer available)
+                </option>
+              )}
             </select>
           </div>
         </div>
