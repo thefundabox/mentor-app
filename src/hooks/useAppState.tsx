@@ -46,6 +46,9 @@ interface AppContextValue extends AppState {
   remotePlanTemplates: PlanTemplateRow[];
   /** The institute-wide default plan, from Postgres. Null when none is set. */
   defaultTemplate: PlanTemplateRow | null;
+  /** Resolve the fall-back plan for a specific student: batch, then their
+      mentor's default, then the institute-wide one. */
+  defaultTemplateFor: (studentId: string | null) => PlanTemplateRow | null;
   /** Every real account from public.profiles. Admin/mentor only, per RLS. */
   listProfiles: () => Promise<ProfileRow[]>;
   /** Change a user's role via the admin-checked RPC. */
@@ -589,9 +592,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, [authProfile]);
+  /**
+   * Which plan a student falls into when they have not chosen one.
+   *
+   * Most specific wins:
+   *   1. the plan set on their batch  -- an admin's deliberate choice for that
+   *      cohort, so two batches can run different plans
+   *   2. their mentor's own default   -- a template with owner_id = that mentor
+   *   3. the institute-wide default   -- owner_id null
+   *
+   * Only (3) used to exist. The resolution filtered on `!t.ownerId`, which
+   * discarded a mentor's default outright even though 0009 grants mentors
+   * insert/update on their own rows; and Batch.defaultPlanTemplateId was
+   * written by the admin form and by the seed but never read by anything, so
+   * picking a plan for a batch did nothing at all.
+   *
+   * Resolved from `users`/`batches` rather than batchForStudent because that
+   * helper is defined much further down this file.
+   */
+  const defaultTemplateFor = useCallback((studentId: string | null): PlanTemplateRow | null => {
+    const live = remoteTemplates.filter((t) => !t.archived);
+    const u = studentId ? users.find((x) => x.id === studentId) : null;
+
+    const batch = u?.batchId ? batches.find((b) => b.id === u.batchId) : null;
+    if (batch?.defaultPlanTemplateId) {
+      // Remote first, then the local seeds -- the same order adoptPlanTemplate
+      // resolves in. The admin's batch dropdown lists `planTemplates` (local),
+      // so looking only at Postgres here would mean picking a plan for a batch
+      // silently did nothing: exactly the dead-field bug this change fixes.
+      const t = live.find((x) => x.id === batch.defaultPlanTemplateId);
+      if (t) return t;
+      const local = planTemplates.find((x) => x.id === batch.defaultPlanTemplateId);
+      if (local) {
+        return { ...local, isDefault: false, version: 0, ownerId: null, archived: false };
+      }
+    }
+    if (u?.mentorId) {
+      const t = live.find((x) => x.isDefault && x.ownerId === u.mentorId);
+      if (t) return t;
+    }
+    return live.find((x) => x.isDefault && !x.ownerId) ?? null;
+  }, [remoteTemplates, planTemplates, users, batches]);
+
+  /** The plan for whoever is signed in. Staff viewing a student should call
+      defaultTemplateFor(studentId) instead -- this one follows the viewer. */
   const defaultTemplate = useMemo(
-    () => remoteTemplates.find((t) => t.isDefault && !t.ownerId) ?? null,
-    [remoteTemplates],
+    () => defaultTemplateFor(currentUserId),
+    [defaultTemplateFor, currentUserId],
   );
 
   const [dataLoading, setDataLoading] = useState(false);
@@ -1628,7 +1675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pyqTarget, setPyqTarget,
     currentUser, students, mentors,
     loginAs, signIn, signUp, sendPasswordReset, updatePassword, recoveryMode,
-    listProfiles, setUserRole, setUserMentor, defaultTemplate,
+    listProfiles, setUserRole, setUserMentor, defaultTemplate, defaultTemplateFor,
     remotePlanTemplates: remoteTemplates,
     authLoading, authError, clearAuthError, authEnabled: isSupabaseConfigured,
     dataLoading, dataSynced,

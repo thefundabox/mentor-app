@@ -16,7 +16,8 @@ import {
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
           approveChart, requestChartChanges, addOverride, tests, testAttempts,
-          defaultTemplate, adoptPlanTemplate, startBlankPlan } = useAppState();
+          defaultTemplateFor, adoptPlanTemplate, startBlankPlan } = useAppState();
+  const defaultTemplate = defaultTemplateFor(studentId);
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);
   const info = levelInfo(studentId);
@@ -104,7 +105,12 @@ export function MentorStudentDetail({ studentId }: { studentId: string }) {
             </Button>
           )}
           {/* Whose plan is this? The mentor decides per student: hand them the
-              institute's plan, or an empty chart to build themselves. */}
+              plan that student falls under, or an empty chart to build
+              themselves.
+
+              Resolved for the STUDENT, not the mentor viewing them: a mentor
+              opening someone from another batch should be offering that
+              batch's plan, not their own. */}
           {defaultTemplate && s.adoptedTemplateId !== defaultTemplate.id && (
             <Button
               variant="secondary"
