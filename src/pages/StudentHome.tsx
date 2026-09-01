@@ -3,6 +3,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { useTour } from "@/hooks/useTour";
 import { Button } from "@/components/ui/button";
 import { QuotaMeter } from "@/components/QuotaMeter";
+import { GuideNote } from "@/components/GuideNote";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
@@ -143,6 +144,28 @@ export function StudentHome() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Babo Sa reads the student's actual pacing rather than greeting them.
+          A line that changes when their situation changes is worth reading; the
+          same welcome every morning is not. */}
+      <GuideNote className="mb-5">
+        {pacing?.status === "behind" && (
+          <>You are {-pacing.delta} day{-pacing.delta === 1 ? "" : "s"} behind, which is normal and fixable.
+          Clear today's card first &mdash; then take one extra day when you have the time,
+          rather than trying to win it all back at once.</>
+        )}
+        {pacing?.status === "ahead" && (
+          <>You are {pacing.delta} day{pacing.delta === 1 ? "" : "s"} ahead. Rather than racing further
+          on, open a revise day: what you have covered sticks better than what you add next.</>
+        )}
+        {pacing?.status === "on-schedule" && (
+          <>On schedule. Today&rsquo;s card is the only one that matters &mdash; the rest of the week
+          will still be here tomorrow.</>
+        )}
+        {pacing?.status === "not-started" && (
+          <>Your plan has not begun yet. Nothing is late, and nothing needs doing today.</>
+        )}
+      </GuideNote>
 
       {/*
         Two-column layout:

@@ -143,6 +143,28 @@ export function LandingStudio() {
                 </li>
               ))}
             </ul>
+
+            {/* Introduces the guide by name before anyone signs up, so he is a
+                familiar face on the other side of the door rather than a
+                character who appears from nowhere once you are in.
+
+                Styled to the landing palette rather than reusing GuideNote:
+                that component belongs to the signed-in app and carries its
+                slate/indigo colours, which would read as a foreign object
+                here. */}
+            <aside className="mt-7 flex items-start gap-3.5 rounded-[20px] border border-[#e7e4dc] bg-[#fbfaf7] p-4">
+              <img
+                src="/babosa-guide.png"
+                alt=""
+                aria-hidden="true"
+                className="h-14 w-14 shrink-0 rounded-[14px] bg-white object-cover object-top"
+              />
+              <p className="text-sm leading-relaxed text-[#667378]">
+                <strong className="block text-[#17252b]">Babo Sa!</strong>
+                I will be with you the whole way &mdash; telling you what today asks for,
+                and where you stand against the paper.
+              </p>
+            </aside>
           </motion.div>
 
           {/* ------------------------------------------------- plan preview */}

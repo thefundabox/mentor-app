@@ -4,6 +4,7 @@ import { ArrowLeft, Search, Trophy, ChevronDown, ChevronUp, Filter, PlayCircle }
 import type { Question } from "@/types";
 import { loadAllPyqs, loadPyqYears, type PyqYear } from "@/lib/pyqStore";
 import { findTopic } from "@/data";
+import { GuideNote } from "@/components/GuideNote";
 
 /**
  * Past-paper archive.
@@ -97,6 +98,14 @@ export function PYQArchive() {
           </div>
         )}
       </div>
+
+      {/* The rule students most often get wrong: revisiting is free, and only
+          opening new ground draws on the daily allowance. */}
+      <GuideNote className="mb-5">
+        Anything you have opened before stays open &mdash; going back over a question
+        never counts against your questions for the day. It is only new ground that does,
+        so re-reading what caught you out yesterday costs nothing.
+      </GuideNote>
 
       {/* ------------------------------------------------- attemptable papers */}
       <div className="mb-8">

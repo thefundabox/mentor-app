@@ -31,6 +31,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { GuideNote } from "@/components/GuideNote";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 import { HabitsCard } from "@/components/HabitsCard";
 import { StatTile } from "@/components/StatTile";
@@ -153,6 +154,28 @@ export function Dashboard({ studentId }: { studentId: string }) {
           </div>
         )}
       </header>
+
+      {/* Only for the student themselves -- a mentor reviewing someone does not
+          need coaching, and the line is written in the second person.
+
+          It explains the readiness number rather than greeting anyone, because
+          that number counts the whole syllabus and therefore starts near zero.
+          Without a word of explanation a student reads "3/100" as failure
+          instead of "you have practised 8 of 243 microthemes so far". */}
+      {!isMentorView && (
+        <GuideNote className="mb-4">
+          {metrics.prelimsCoverage.practised === 0 ? (
+            <>Readiness counts every one of the {metrics.prelimsCoverage.total} microthemes, so it
+            starts at zero and climbs as you practise. Open today&rsquo;s card on the journey and it
+            will start moving.</>
+          ) : (
+            <>Readiness is {metrics.prelimsReadiness}/100 because it counts the whole syllabus, not
+            just what you have attempted &mdash; you have practised{" "}
+            {metrics.prelimsCoverage.practised} of {metrics.prelimsCoverage.total} microthemes.
+            It climbs as coverage does.</>
+          )}
+        </GuideNote>
+      )}
 
       {!isMentorView && (
         <div className="flex gap-1 border-b border-slate-200">

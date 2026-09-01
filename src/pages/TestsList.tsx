@@ -3,6 +3,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Play, ClipboardCheck, Lock, Clock } from "lucide-react";
 import { claimTestAttempt } from "@/lib/entitlement";
+import { GuideNote } from "@/components/GuideNote";
 
 export function TestsList() {
   const { currentUser, tests, testAttempts, testSchedules, setRoute, setActiveTestId, setActiveAttemptId, startTestAttempt, schedulesForTest, batchForStudent, authEnabled } = useAppState();
@@ -84,6 +85,14 @@ export function TestsList() {
           Mock tests and sectionals to sharpen for exam day. Timer enforced; negative marking applied per the test's config.
         </p>
       </div>
+
+      {/* Says what the paragraph above does not: how the allowance behaves.
+          True on either plan, so it needs no live numbers. */}
+      <GuideNote className="mb-4">
+        A mock is only worth what it costs you &mdash; one sitting, timer running, nothing
+        open beside it. Re-opening a paper you have already sat is free, so the honest
+        run is the one that counts.
+      </GuideNote>
 
       {/* The database's own words. It names the actual allowance, which is what
           someone needs in order to know what to do about it -- a generic "not
