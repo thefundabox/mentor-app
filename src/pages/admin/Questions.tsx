@@ -5,16 +5,21 @@
  * section at once. Each section is now its own module and its own lazy chunk,
  * so opening People no longer downloads the PYQ importer.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { QuestionImportPanel } from "@/components/QuestionImportPanel";
 import { QuestionReview } from "@/components/QuestionReview";
-import { releaseTopic, holdTopic } from "@/lib/questionStore";
+import {
+  releaseTopic, holdTopic, setQuestionReviewed, deleteQuestion,
+} from "@/lib/questionStore";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { conceptLabel } from "@/data";
-import { parsePYQCSV } from "@/lib/csv";
-import type { Question } from "@/types";
+import {
+  loadPyqPage, loadPyqYears, updatePyq,
+  type AdminPyqRow, type PyqPage, type PyqYear,
+} from "@/lib/pyqStore";
+import type { Question, SubjectCatalogEntry } from "@/types";
 
 export function QuestionsTab() {
   const [sub, setSub] = useState<"review" | "upload" | "coverage" | "quiz" | "foundation" | "placement" | "pyq">("review");
@@ -398,381 +403,240 @@ function QuestionCard({
   );
 }
 
-/* ==================== Batches tab ==================== */
 
+/* ==================== PYQ bank ==================== */
+
+/**
+ * The past-paper bank, from Postgres.
+ *
+ * This screen used to edit `v5_pyqBank` in localStorage: twelve seeded prose
+ * question/answer pairs, private to one browser, while the 806 real past
+ * papers lived in `questions` and were visible only to students through the
+ * archive. An admin was administering a bank they could not see, and the CSV
+ * importer here wrote to the same dead end.
+ *
+ * Paged server-side. 806 rows each carrying a stem, four options and an
+ * explanation is not a payload to pull down in order to filter it in a browser.
+ */
 function PYQBankEditor() {
-  const { pyqBank, upsertPYQ, removePYQ, subjects } = useAppState();
+  const { subjects } = useAppState();
+
+  const [years, setYears] = useState<PyqYear[]>([]);
+  const [year, setYear] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [typed, setTyped] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+
+  const [data, setData] = useState<PyqPage | null>(null);
+  const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [showImport, setShowImport] = useState(false);
-  const [yearFilter, setYearFilter] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("");
-  const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const years = useMemo(() => {
-    const all = pyqBank.map((p) => p.year).filter(Boolean);
-    return [...new Set(all)].sort((a, b) => b.localeCompare(a));
-  }, [pyqBank]);
+  const PAGE = 50;
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return pyqBank.filter((p) => {
-      if (yearFilter && p.year !== yearFilter) return false;
-      if (subjectFilter && !(p.subjectIds || []).includes(subjectFilter)) return false;
-      if (q) {
-        const hay = `${p.q} ${p.a} ${p.explain}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
+  useEffect(() => { void loadPyqYears().then(setYears); }, []);
+
+  // Debounced: a keystroke should not be a round trip against 806 rows.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(typed), 350);
+    return () => clearTimeout(t);
+  }, [typed]);
+
+  // Any filter change starts again at the first page; staying on page 7 of a
+  // narrower result set shows an empty screen that looks like no matches.
+  useEffect(() => { setPage(0); }, [year, subjectId, search]);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const res = await loadPyqPage({
+      year: year || undefined,
+      subjectId: subjectId || undefined,
+      search: search || undefined,
+      limit: PAGE, offset: page * PAGE,
     });
-  }, [pyqBank, query, yearFilter, subjectFilter]);
+    setData(res);
+    setLoading(false);
+  }, [year, subjectId, search, page]);
 
-  const addNew = () => {
-    const id = `pyq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
-    upsertPYQ({
-      id,
-      year: years[0] || "RAS 2024",
-      q: "New question",
-      a: "",
-      explain: "",
-      subjectIds: [],
-      topicIds: [],
-      marks: 2,
-    });
-    setOpenId(id);
-  };
+  useEffect(() => { void reload(); }, [reload]);
 
-  const subjectLookup = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const total = data?.total ?? 0;
+  const lastPage = Math.max(0, Math.ceil(total / PAGE) - 1);
+  const bankTotal = useMemo(() => years.reduce((a, y) => a + y.count, 0), [years]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center gap-2 flex-wrap">
-        <p className="text-sm text-slate-500">
-          {pyqBank.length} question{pyqBank.length === 1 ? "" : "s"} in the bank. Students search and filter this from the PYQ archive.
-        </p>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowImport(true)}><Plus className="w-4 h-4" /> Bulk import</Button>
-          <Button onClick={addNew}><Plus className="w-4 h-4" /> Add PYQ</Button>
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h3 className="text-sm font-bold text-slate-800">Past questions</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {bankTotal > 0
+              ? `${bankTotal} past questions in the bank, graded against RPSC's own key.`
+              : "Loading the bank…"}
+            {" "}Edits here are live for every student.
+          </p>
         </div>
+        <p className="text-xs text-slate-400 max-w-xs text-right">
+          To add past papers, use the <span className="font-semibold">Import</span> sub-tab —
+          set <code className="text-[11px]">source_year</code> on each row.
+        </p>
       </div>
 
-      {showImport && <PYQBulkImportPanel onClose={() => setShowImport(false)} />}
-
-      {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
-        <input value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search question, answer, or explanation"
-          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm">
+      <div className="flex gap-2 flex-wrap items-center">
+        <select className={SEL} value={year} onChange={(e) => setYear(e.target.value)}>
           <option value="">All years</option>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          {years.map((y) => <option key={y.year} value={y.year}>{y.year} ({y.count})</option>)}
         </select>
-        <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-sm">
+        <select className={SEL} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
           <option value="">All subjects</option>
-          {subjects.filter((s) => !s.archived).map((s) => (
-            <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
-          ))}
+          {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        <input
+          className={`${SEL} flex-1 min-w-[200px]`}
+          placeholder="Search the question text…"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
       </div>
 
-      {filtered.length === 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
-          {pyqBank.length === 0 ? "Bank is empty. Add a PYQ or bulk import." : "No questions match your filters."}
+      {notice && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {notice}
         </div>
       )}
+
+      <div className="text-xs text-slate-500">
+        {loading ? "Loading…" : total === 0 ? "No past questions match." :
+          `Showing ${page * PAGE + 1}–${Math.min((page + 1) * PAGE, total)} of ${total}`}
+      </div>
 
       <div className="space-y-2">
-        {filtered.map((p) => {
-          const isOpen = openId === p.id;
-          const subjectChips = (p.subjectIds || []).map((id) => subjectLookup.get(id)).filter(Boolean);
-          return (
-            <div key={p.id} className="bg-white border border-slate-200 rounded-2xl">
-              <button onClick={() => setOpenId(isOpen ? null : (p.id || null))}
-                className="w-full text-left p-3 hover:bg-slate-50 rounded-2xl">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-700 rounded px-2 py-0.5">{p.year}</span>
-                  {p.marks && <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 rounded px-2 py-0.5">{p.marks} marks</span>}
-                  {subjectChips.map((s) => (
-                    <span key={s!.id} className="text-[10px] uppercase font-bold bg-indigo-50 text-indigo-700 rounded px-2 py-0.5">
-                      {s!.icon} {s!.name}
-                    </span>
-                  ))}
-                </div>
-                <div className="text-sm text-slate-800 truncate">{p.q}</div>
-              </button>
-
-              {isOpen && (
-                <PYQEditorBody pyq={p} onSave={(patch) => upsertPYQ({ ...p, ...patch })}
-                  onRemove={() => { removePYQ(p.id!); setOpenId(null); }} />
-              )}
-            </div>
-          );
-        })}
+        {(data?.rows ?? []).map((r) => (
+          <PyqRowCard
+            key={r.id}
+            row={r}
+            subjects={subjects}
+            open={openId === r.id}
+            onToggle={() => setOpenId(openId === r.id ? null : r.id)}
+            onChanged={(msg) => { setNotice(msg ?? null); void reload(); }}
+          />
+        ))}
       </div>
-    </div>
-  );
-}
 
-function PYQEditorBody({ pyq, onSave, onRemove }: {
-  pyq: import("@/types").PYQ;
-  onSave: (patch: Partial<import("@/types").PYQ>) => void;
-  onRemove: () => void;
-}) {
-  const { subjects } = useAppState();
-  const [draft, setDraft] = useState(pyq);
-
-  const update = (patch: Partial<import("@/types").PYQ>) => setDraft({ ...draft, ...patch });
-  const commit = () => onSave(draft);
-
-  const toggleSubject = (id: string) => {
-    const cur = draft.subjectIds || [];
-    update({ subjectIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
-  };
-
-  const allTopics = subjects.flatMap((s) => s.topics.map((t) => ({ subject: s, topic: t })));
-  const toggleTopic = (id: string) => {
-    const cur = draft.topicIds || [];
-    update({ topicIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
-  };
-
-  return (
-    <div className="border-t border-slate-100 p-4 space-y-3 bg-slate-50/50 rounded-b-2xl">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div>
-          <label className="text-[10px] font-bold uppercase text-slate-500">Year</label>
-          <input value={draft.year} onChange={(e) => update({ year: e.target.value })}
-            placeholder="RAS 2024"
-            className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
+      {total > PAGE && (
+        <div className="flex items-center justify-between pt-2">
+          <Button variant="secondary" disabled={page === 0 || loading}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
+          <span className="text-xs text-slate-500">Page {page + 1} of {lastPage + 1}</span>
+          <Button variant="secondary" disabled={page >= lastPage || loading}
+            onClick={() => setPage((p) => Math.min(lastPage, p + 1))}>Next</Button>
         </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase text-slate-500">Marks</label>
-          <input type="number" min={0} step={0.5} value={draft.marks ?? ""}
-            onChange={(e) => update({ marks: e.target.value ? Number(e.target.value) : undefined })}
-            className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
-        </div>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase text-slate-500">Question</label>
-        <textarea value={draft.q} onChange={(e) => update({ q: e.target.value })} rows={3}
-          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm resize-y" />
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase text-slate-500">Answer</label>
-        <input value={draft.a} onChange={(e) => update({ a: e.target.value })}
-          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm" />
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase text-slate-500">Explanation</label>
-        <textarea value={draft.explain} onChange={(e) => update({ explain: e.target.value })} rows={2}
-          className="mt-0.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none text-sm resize-y" />
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase text-slate-500">Subject tags</label>
-        <div className="mt-0.5 flex flex-wrap gap-1">
-          {subjects.filter((s) => !s.archived).map((s) => {
-            const active = (draft.subjectIds || []).includes(s.id);
-            return (
-              <button key={s.id} onClick={() => toggleSubject(s.id)}
-                className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                  active ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold" : "border-slate-200 text-slate-600 hover:border-slate-300"
-                }`}>
-                {s.icon} {s.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase text-slate-500">Topic tags (optional)</label>
-        <div className="mt-0.5 max-h-24 overflow-y-auto flex flex-wrap gap-1 border border-slate-200 rounded-lg p-2 bg-white">
-          {allTopics
-            .filter((p) => !draft.subjectIds || draft.subjectIds.length === 0 || draft.subjectIds.includes(p.subject.id))
-            .map(({ topic }) => {
-              const active = (draft.topicIds || []).includes(topic.id);
-              return (
-                <button key={topic.id} onClick={() => toggleTopic(topic.id)}
-                  className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                    active ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold" : "border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}>
-                  {topic.name}
-                </button>
-              );
-            })}
-        </div>
-      </div>
-
-      <div className="flex justify-between gap-2">
-        <Button variant="ghost" onClick={onRemove}><Trash2 className="w-4 h-4 text-rose-600" /> Delete</Button>
-        <Button onClick={commit}>Save</Button>
-      </div>
-    </div>
-  );
-}
-
-function PYQBulkImportPanel({ onClose }: { onClose: () => void }) {
-  const { subjects, upsertPYQ } = useAppState();
-  const [text, setText] = useState("");
-  const [stage, setStage] = useState<"input" | "preview" | "done">("input");
-  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
-
-  const parsed = useMemo(() => (text.trim() ? parsePYQCSV(text) : null), [text]);
-
-  // Resolve subject/topic text -> ids
-  const resolveSubjects = (raw?: string): string[] => {
-    if (!raw) return [];
-    const tokens = raw.split(/[;|]/).map((s) => s.trim()).filter(Boolean);
-    const out: string[] = [];
-    for (const tok of tokens) {
-      const lo = tok.toLowerCase();
-      const s = subjects.find((s) => s.name.toLowerCase() === lo || s.id.toLowerCase() === lo);
-      if (s) out.push(s.id);
-    }
-    return out;
-  };
-  const resolveTopics = (raw?: string): string[] => {
-    if (!raw) return [];
-    const tokens = raw.split(/[;|]/).map((s) => s.trim()).filter(Boolean);
-    const out: string[] = [];
-    for (const tok of tokens) {
-      const lo = tok.toLowerCase();
-      for (const s of subjects) {
-        const t = s.topics.find((t) => t.name.toLowerCase() === lo || t.id.toLowerCase() === lo);
-        if (t) { out.push(t.id); break; }
-      }
-    }
-    return out;
-  };
-
-  const SAMPLE = `year,subject,topic,q,a,explain,marks
-RAS 2019,Geography of Rajasthan,Rivers & Drainage,Which river is called the lifeline of Mewar?,Banas,Tributary of the Chambal flowing through Mewar.,2
-RAS 2020,Indian Polity,Preamble & Basic Structure,Words 'Socialist' and 'Secular' were added by which amendment?,42nd Amendment 1976,Mini-Constitution amendment under Indira Gandhi.,2`;
-
-  const previewRows = useMemo(() => {
-    if (!parsed) return [];
-    return parsed.rows.map((r) => ({
-      ...r,
-      resolvedSubjects: resolveSubjects(r.subjects),
-      resolvedTopics: resolveTopics(r.topics),
-    }));
-  }, [parsed, subjects]);
-
-  const confirm = () => {
-    let created = 0, skipped = 0;
-    for (const r of previewRows) {
-      if (!r.q || !r.a) { skipped++; continue; }
-      const id = `pyq_imp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      upsertPYQ({
-        id, year: r.year, q: r.q, a: r.a, explain: r.explain || "",
-        marks: r.marks,
-        subjectIds: r.resolvedSubjects,
-        topicIds: r.resolvedTopics,
-      });
-      created++;
-    }
-    setResult({ created, skipped });
-    setStage("done");
-  };
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-900">Bulk import PYQs</h3>
-        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-900">close</button>
-      </div>
-
-      {stage === "input" && (
-        <>
-          <div className="text-xs text-slate-600">
-            Format: <code className="bg-slate-100 px-1.5 py-0.5 rounded">year, subject, topic, q, a, explain, marks</code>.
-            Subjects/topics can be semicolon-separated (e.g. <code className="bg-slate-100 px-1 rounded">Polity;Indian Polity</code>) and match by name or id. Header row auto-detected.
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <label className="text-sm px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-              Upload CSV
-              <input type="file" accept=".csv,text/csv" className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = (ev) => setText(String(ev.target?.result || ""));
-                  reader.readAsText(f);
-                }} />
-            </label>
-            <Button variant="ghost" onClick={() => setText(SAMPLE)}>Paste sample</Button>
-          </div>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6}
-            placeholder={SAMPLE}
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-mono resize-y" />
-          {parsed && parsed.errors.length > 0 && (
-            <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 space-y-1">
-              {parsed.errors.slice(0, 5).map((e, i) => (
-                <div key={i}>Line {e.line}: {e.reason}</div>
-              ))}
-              {parsed.errors.length > 5 && <div>… and {parsed.errors.length - 5} more</div>}
-            </div>
-          )}
-          <div className="flex justify-end">
-            <Button onClick={() => setStage("preview")} disabled={!parsed || parsed.rows.length === 0}>
-              Preview {parsed?.rows.length || 0} →
-            </Button>
-          </div>
-        </>
       )}
+    </div>
+  );
+}
 
-      {stage === "preview" && (
-        <>
-          <div className="text-xs text-slate-500">Rows with no resolvable subject will still import with empty tags.</div>
-          <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-            {previewRows.map((r, i) => (
-              <div key={i} className="px-3 py-2 text-xs">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-bold text-amber-700">{r.year}</span>
-                  {r.marks && <span className="text-slate-500">{r.marks} marks</span>}
-                  {r.resolvedSubjects.map((id) => {
-                    const s = subjects.find((x) => x.id === id);
-                    return s ? <span key={id} className="text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">{s.name}</span> : null;
-                  })}
-                  {!r.resolvedSubjects.length && r.subjects && (
-                    <span className="text-rose-600 bg-rose-50 rounded px-1.5 py-0.5">unmatched: {r.subjects}</span>
-                  )}
-                </div>
-                <div className="text-slate-800 mt-0.5 truncate">{r.q}</div>
+const SEL = "rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300";
+
+/** One past question: summary, and the editor when opened. */
+function PyqRowCard({ row, subjects, open, onToggle, onChanged }: {
+  row: AdminPyqRow;
+  subjects: SubjectCatalogEntry[];
+  open: boolean;
+  onToggle: () => void;
+  onChanged: (error?: string) => void;
+}) {
+  const [q, setQ] = useState(row.q);
+  const [options, setOptions] = useState<string[]>(row.options);
+  const [correct, setCorrect] = useState(row.correct);
+  const [why, setWhy] = useState(row.why ?? "");
+  const [saving, setSaving] = useState(false);
+
+  // The row can be replaced under us by a reload; adopt the new values rather
+  // than editing a stale copy.
+  useEffect(() => {
+    setQ(row.q); setOptions(row.options); setCorrect(row.correct); setWhy(row.why ?? "");
+  }, [row.id, row.q, row.options, row.correct, row.why]);
+
+  const topicName = useMemo(() => {
+    for (const s of subjects) {
+      const t = s.topics.find((x) => x.id === row.topicId);
+      if (t) return `${s.name} · ${t.name}`;
+    }
+    return row.topicId;
+  }, [subjects, row.topicId]);
+
+  const save = async () => {
+    setSaving(true);
+    const res = await updatePyq(row.id, { q, options, correct, why });
+    setSaving(false);
+    onChanged(res.error);
+  };
+
+  const toggleReleased = async () => {
+    setSaving(true);
+    const res = await setQuestionReviewed(row.id, !row.reviewed);
+    setSaving(false);
+    onChanged(res.error);
+  };
+
+  const remove = async () => {
+    if (!confirm("Delete this past question permanently?")) return;
+    setSaving(true);
+    const res = await deleteQuestion(row.id);
+    setSaving(false);
+    onChanged(res.error);
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <button onClick={onToggle} className="w-full text-left px-4 py-3 flex items-start gap-3">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 shrink-0 pt-0.5 w-24">
+          {row.sourceYear}{row.paperQno ? ` · Q${row.paperQno}` : ""}
+        </span>
+        <span className="flex-1 text-sm text-slate-800 line-clamp-2">{row.q}</span>
+        {!row.reviewed && (
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 shrink-0">
+            held
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3">
+          <div className="text-[11px] text-slate-500">{topicName}</div>
+
+          <textarea rows={3} className={`${SEL} w-full`} value={q}
+            onChange={(e) => setQ(e.target.value)} />
+
+          <div className="space-y-1.5">
+            {options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input type="radio" name={`correct-${row.id}`} checked={correct === i}
+                  onChange={() => setCorrect(i)} title="Mark as the correct answer" />
+                <input className={`${SEL} flex-1`} value={opt}
+                  onChange={(e) => setOptions(options.map((o, j) => j === i ? e.target.value : o))} />
               </div>
             ))}
           </div>
-          <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setStage("input")}>← back</Button>
-            <Button onClick={confirm}>Create {previewRows.length} PYQ{previewRows.length === 1 ? "" : "s"}</Button>
-          </div>
-        </>
-      )}
 
-      {stage === "done" && result && (
-        <>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-900">
-            Created {result.created} PYQ{result.created === 1 ? "" : "s"}{result.skipped > 0 && <> · {result.skipped} skipped</>}.
+          <textarea rows={2} className={`${SEL} w-full`} placeholder="Why this answer is right"
+            value={why} onChange={(e) => setWhy(e.target.value)} />
+
+          <div className="flex justify-between gap-2 flex-wrap">
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={remove} disabled={saving}>
+                <Trash2 className="w-4 h-4 text-rose-600" /> Delete
+              </Button>
+              <Button variant="secondary" onClick={toggleReleased} disabled={saving}>
+                {row.reviewed ? "Hold back" : "Release"}
+              </Button>
+            </div>
+            <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={onClose}>Done</Button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
-
-/* =========================================================================
- * Current Affairs admin tab (Adaptive PR 6)
- * =========================================================================
- *
- * Manages CA topics — headline, category, date, expiry (auto-set to date +
- * 18 months), source URL, note, and an attached array of mcq_current
- * questions. The selector reads active items with non-empty questions to
- * fulfil the 15% CA quota in prelims_practice mode.
- */
