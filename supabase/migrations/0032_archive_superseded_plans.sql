@@ -14,6 +14,10 @@
 -- has to survive for that reference to mean anything. Archiving takes it out of
 -- every picker (loadPlanTemplates filters archived = false) while leaving the
 -- history intact.
+--
+-- NOTE: 0013 upserts with `on conflict (id) do update set name = excluded.name`,
+-- so re-running 0013 would revert the rename below. It should not need running
+-- again, but if it ever is, re-run this migration after it.
 -- ---------------------------------------------------------------------------
 
 -- Refuse to run if the replacement is not there, rather than archiving the old
@@ -28,12 +32,30 @@ begin
   end if;
 end $$;
 
+-- Renamed as well as archived. Archiving takes them out of the pickers, but
+-- they still surface in an admin's archived view and in any chart that adopted
+-- them, and "RAS Prelims in 80 days" appearing twice is confusing wherever it
+-- is read. The suffix says which is which without anyone having to check ids.
 update public.plan_templates
    set archived = true,
        is_default = false,
+       name = case id
+                when 'ras-75-day'    then 'RAS Prelims in 75 days (retired)'
+                when 'ras-80-day-v2' then 'RAS Prelims in 80 days, earlier version (retired)'
+                else name
+              end,
        updated_at = now()
  where id in ('ras-75-day', 'ras-80-day-v2')
    and not archived;
+
+-- The live plan gets a name that says which exam and which shape it is, rather
+-- than a bare duration that any future plan could also claim. Matches what the
+-- PDF and the landing page call it.
+update public.plan_templates
+   set name = 'RAS Prelims 2026 - 80-day plan',
+       updated_at = now()
+ where id = 'ras-80-day-balanced'
+   and name <> 'RAS Prelims 2026 - 80-day plan';
 
 -- The survivor is the institute default. 0013 set this, but an admin may have
 -- moved it since, and a batch pointing at an archived plan now falls through to
@@ -47,9 +69,9 @@ declare live_named int; dflt text;
 begin
   select count(*) into live_named
     from public.plan_templates
-   where not archived and name = 'RAS Prelims in 80 days';
+   where not archived and name like 'RAS Prelims%80-day%';
   if live_named <> 1 then
-    raise exception 'expected exactly one live plan named "RAS Prelims in 80 days", found %', live_named;
+    raise exception 'expected exactly one live 80-day plan, found %', live_named;
   end if;
 
   select id into dflt from public.plan_templates
