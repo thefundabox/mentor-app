@@ -153,10 +153,39 @@ drop policy if exists "students read unlocked questions" on public.questions;
 create policy "students read unlocked questions"
   on public.questions for select
   using (
-    (questions.source_year is not null and questions.reviewed)
+    -- auth.uid() is not null is load-bearing, not decoration. Supabase's
+    -- default privileges leave `anon` holding SELECT on public tables, so a
+    -- clause without it would publish every past question -- stem, options,
+    -- the correct index and the explanation -- to anyone with the anon key,
+    -- which ships in the client bundle. Free to every signed-in student is
+    -- the intent; free to the open internet is not.
+    (auth.uid() is not null and questions.source_year is not null and questions.reviewed)
     or exists (
       select 1 from public.question_unlocks u
        where u.question_id = questions.id
          and u.student_id  = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------------------------
+-- Defence in depth: the anonymous role has no business reading the bank at all.
+--
+-- The policy above already requires a session, but `anon` was holding a table
+-- grant it never needed, so any future policy written without an auth.uid()
+-- check would leak straight to the public internet. Take the grant away and
+-- that whole class of mistake stops being possible.
+-- ---------------------------------------------------------------------------
+
+revoke select on public.questions from anon;
+
+do $$
+declare anon_can_read int;
+begin
+  select count(*) into anon_can_read
+    from information_schema.column_privileges
+   where table_schema = 'public' and table_name = 'questions'
+     and grantee = 'anon' and privilege_type = 'SELECT';
+  if anon_can_read > 0 then
+    raise exception 'anon still holds SELECT on questions (% columns)', anon_can_read;
+  end if;
+end $$;
