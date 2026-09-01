@@ -5,6 +5,9 @@ import { passThresholdOf, clampPassThreshold } from "@/lib/passThreshold";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 import { loadSubjects, saveSubjects } from "@/lib/subjectStore";
 import { loadBatches, saveBatches } from "@/lib/batchStore";
+import {
+  loadAnnouncements, createAnnouncement, removeAnnouncement, dismissAnnouncementFor,
+} from "@/lib/announcementStore";
 
 import {
   loadStudent, loadStudents, loadAllProfiles, saveChart, updateChart, saveProgress,
@@ -281,7 +284,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // the corrected seed -- existing installs have the old row cached under
   // v5_users and would otherwise keep the collision forever. Real accounts are
   // re-added by reconciliation on sign-in and by loadStudentProfiles for staff.
-  const [users, setUsers] = useLocalStorage<User[]>("v6_users", SEED_USERS);
+  // v7: the demo cast (Admin Singh, Priya Sharma, two invented students) was
+  // seeded even when the app is wired to a real Supabase project, so a live
+  // institute's admin panel listed four people who do not exist beside the
+  // people who do -- and they could be picked as a student's mentor. Seeded
+  // only when there is no database to be the truth. Existing installs have the
+  // cast cached under v6_users, so the key had to move for the change to land.
+  const [users, setUsers] = useLocalStorage<User[]>(
+    "v7_users", isSupabaseConfigured ? [] : SEED_USERS,
+  );
   const [studentData, setStudentData] = useLocalStorage<Record<string, StudentData>>("v5_studentData", seedStudentData());
   const [currentUserId, setCurrentUserId] = useLocalStorage<string | null>("v5_currentUserId", null);
   const [route, setRoute] = useLocalStorage<Route>("v5_route", "auto");
@@ -705,6 +716,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [authProfile, setBatchesLocal]);
 
+  // Announcements too. Unlike subjects and batches this list is not a cache of
+  // something the client owns -- it is the only copy -- so an empty result is
+  // meaningful and is allowed to replace what is here.
+  useEffect(() => {
+    if (!authProfile) return;
+    let cancelled = false;
+    void loadAnnouncements(authProfile.id).then((remote) => {
+      if (cancelled || !remote) return;
+      setAnnouncements(remote);
+    });
+    return () => { cancelled = true; };
+  }, [authProfile, setAnnouncements]);
+
   const defaultTemplateFor = useCallback((studentId: string | null): PlanTemplateRow | null => {
     const live = remoteTemplates.filter((t) => !t.archived);
     const u = studentId ? users.find((x) => x.id === studentId) : null;
@@ -783,7 +807,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (profiles.length) {
           setUsers((prev) => {
-            const next = [...prev];
+            // Staff hold every profile here, so anything local that is not among
+            // them is an invention -- a demo seed, or a ghost from before
+            // accounts moved to Supabase. Dropping them is what stops the admin
+            // panel showing people who cannot sign in. The signed-in user is
+            // kept regardless: reconciliation may not have written them yet.
+            const real = new Set(profiles.map((p) => p.id));
+            const next = prev.filter((u) => real.has(u.id) || u.id === authProfile?.id);
             for (const pr of profiles) {
               const i = next.findIndex((u) => u.id === pr.id || u.email.toLowerCase() === pr.email.toLowerCase());
               const merged: User = {
@@ -1620,11 +1650,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dismissedBy: [],
     };
     setAnnouncements((prev) => [...prev, ann]);
+    // The server stamps posted_by from the session; the local id above is only
+    // what this browser shows until the next pull replaces it.
+    void createAnnouncement(ann).then((r) => {
+      if (r.error) setAuthError(`Could not post the announcement: ${r.error}`);
+    });
     return ann;
   }, [setAnnouncements, currentUserId]);
 
   const deleteAnnouncement = useCallback((id: string) => {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    void removeAnnouncement(id).then((r) => {
+      if (r.error) setAuthError(`Could not delete the announcement: ${r.error}`);
+    });
   }, [setAnnouncements]);
 
   const dismissAnnouncement = useCallback((id: string, userId: string) => {
@@ -1633,6 +1671,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? { ...a, dismissedBy: [...a.dismissedBy, userId] }
         : a
     ));
+    // Deliberately silent on failure. Dismissing is a convenience, and a red
+    // banner saying an announcement could not be hidden is worse than the
+    // announcement simply reappearing on the next load.
+    void dismissAnnouncementFor(id, userId);
   }, [setAnnouncements]);
 
   const announcementsForStudent = useCallback((studentId: string): Announcement[] => {
