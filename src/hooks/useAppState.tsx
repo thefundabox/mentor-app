@@ -5,6 +5,7 @@ import { passThresholdOf, clampPassThreshold } from "@/lib/passThreshold";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 import { loadSubjects, saveSubjects } from "@/lib/subjectStore";
 import { loadBatches, saveBatches } from "@/lib/batchStore";
+import { syncUrl, parsePath, type AdminTab } from "@/lib/urlRoute";
 import {
   loadAnnouncements, createAnnouncement, removeAnnouncement, dismissAnnouncementFor,
 } from "@/lib/announcementStore";
@@ -395,7 +396,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
   const [activeSessionMeta, setActiveSessionMeta] = useLocalStorage<{ mode: SessionMode; startedAt: number } | null>("v5_activeSessionMeta", null);
-  const [adminTab, setAdminTab] = useLocalStorage<"people" | "catalog" | "plans" | "tour" | "questions" | "batches" | "tests" | "stats" | "current_affairs" | "limits">("v5_adminTab", "people");
+  const [adminTab, setAdminTab] = useLocalStorage<AdminTab>("v5_adminTab", "people");
+
+  /* ---------- the address bar ----------
+   *
+   * The route was a string in localStorage and the URL never left "/", so there
+   * was no back button, no shareable link, and nothing in the address naming
+   * which admin section was wanted -- which is what made loading one section on
+   * demand impossible. main.tsx seeds the route from the path before the first
+   * render; these two effects keep the two in step afterwards.
+   */
+
+  // Set while applying a popstate, so the effect below does not push a new
+  // entry for a navigation the user made with the Back button.
+  const applyingPop = useRef(false);
+  const prevRoute = useRef<Route | null>(null);
+
+  useEffect(() => {
+    if (applyingPop.current) { applyingPop.current = false; prevRoute.current = route; return; }
+    // Resolving out of "auto" continues the navigation that got here rather
+    // than starting a new one, so it replaces instead of pushing. Otherwise
+    // Back would land on a URL that resolves forward again.
+    const replace = prevRoute.current === null || prevRoute.current === "auto";
+    syncUrl(route, adminTab, replace);
+    prevRoute.current = route;
+  }, [route, adminTab]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const hit = parsePath(window.location.pathname);
+      if (!hit) return;
+      applyingPop.current = true;
+      setRoute(hit.route);
+      if (hit.adminTab) setAdminTab(hit.adminTab);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [setRoute, setAdminTab]);
 
   // PR 6: on every mount and whenever the CA list changes, prune items that
   // have passed their 18-month expiry. Cheap (O(n)) and runs in the browser

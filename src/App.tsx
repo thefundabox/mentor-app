@@ -1,33 +1,45 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { AppProvider, useAppState } from "@/hooks/useAppState";
+import type { Route } from "@/types";
 import { TopBar } from "@/components/TopBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Landing } from "@/pages/Landing";
+
+/* ----------------------------------------------------------------------
+ * Every screen below is fetched when it is first shown, not up front.
+ *
+ * These were all static imports, so one chunk carried every page: a student
+ * downloaded the whole admin shell and the mentor dashboard before their own
+ * journey could paint, and a mentor downloaded the quiz engine. Landing, Login,
+ * Methodology and SetPassword stay eager -- they are the first paint for a
+ * signed-out visitor and the password-recovery path, so deferring them would
+ * only add a spinner to the fastest screens.
+ * -------------------------------------------------------------------- */
+const Assessment = lazy(() => import("@/pages/Assessment").then((m) => ({ default: m.Assessment })));
+const ChoosePlan = lazy(() => import("@/pages/ChoosePlan").then((m) => ({ default: m.ChoosePlan })));
+const Onboarding = lazy(() => import("@/pages/Onboarding").then((m) => ({ default: m.Onboarding })));
+const ApprovalGate = lazy(() => import("@/pages/ApprovalGate").then((m) => ({ default: m.ApprovalGate })));
+const TestsList = lazy(() => import("@/pages/TestsList").then((m) => ({ default: m.TestsList })));
+const TakeTest = lazy(() => import("@/pages/TakeTest").then((m) => ({ default: m.TakeTest })));
+const TestResult = lazy(() => import("@/pages/TestResult").then((m) => ({ default: m.TestResult })));
+const PYQArchive = lazy(() => import("@/pages/PYQArchive").then((m) => ({ default: m.PYQArchive })));
+const PYQAttempt = lazy(() => import("@/pages/PYQAttempt").then((m) => ({ default: m.PYQAttempt })));
+const BookSession = lazy(() => import("@/pages/BookSession").then((m) => ({ default: m.BookSession })));
+const MentorAvailability = lazy(() => import("@/pages/MentorAvailability").then((m) => ({ default: m.MentorAvailability })));
+const Discussion = lazy(() => import("@/pages/Discussion").then((m) => ({ default: m.Discussion })));
+const SmartPractice = lazy(() => import("@/pages/SmartPractice").then((m) => ({ default: m.SmartPractice })));
+const SmartSessionScreen = lazy(() => import("@/pages/SmartSessionScreen").then((m) => ({ default: m.SmartSessionScreen })));
+const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const StudentHome = lazy(() => import("@/pages/StudentHome").then((m) => ({ default: m.StudentHome })));
+const TopicScreen = lazy(() => import("@/pages/TopicScreen").then((m) => ({ default: m.TopicScreen })));
+const QuizScreen = lazy(() => import("@/pages/QuizScreen").then((m) => ({ default: m.QuizScreen })));
+const Results = lazy(() => import("@/pages/Results").then((m) => ({ default: m.Results })));
+const MentorDashboard = lazy(() => import("@/pages/MentorDashboard").then((m) => ({ default: m.MentorDashboard })));
+const MentorStudentDetail = lazy(() => import("@/pages/MentorStudentDetail").then((m) => ({ default: m.MentorStudentDetail })));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 import { Login } from "@/pages/Login";
 import { Methodology } from "@/pages/Methodology";
 import { SetPassword } from "@/pages/SetPassword";
-import { Assessment } from "@/pages/Assessment";
-import { ChoosePlan } from "@/pages/ChoosePlan";
-import { Onboarding } from "@/pages/Onboarding";
-import { ApprovalGate } from "@/pages/ApprovalGate";
-import { TestsList } from "@/pages/TestsList";
-import { TakeTest } from "@/pages/TakeTest";
-import { TestResult } from "@/pages/TestResult";
-import { PYQArchive } from "@/pages/PYQArchive";
-import { PYQAttempt } from "@/pages/PYQAttempt";
-import { BookSession } from "@/pages/BookSession";
-import { MentorAvailability } from "@/pages/MentorAvailability";
-import { Discussion } from "@/pages/Discussion";
-import { SmartPractice } from "@/pages/SmartPractice";
-import { SmartSessionScreen } from "@/pages/SmartSessionScreen";
-import { Dashboard } from "@/pages/Dashboard";
-import { StudentHome } from "@/pages/StudentHome";
-import { TopicScreen } from "@/pages/TopicScreen";
-import { QuizScreen } from "@/pages/QuizScreen";
-import { Results } from "@/pages/Results";
-import { MentorDashboard } from "@/pages/MentorDashboard";
-import { MentorStudentDetail } from "@/pages/MentorStudentDetail";
-import { AdminDashboard } from "@/pages/AdminDashboard";
 import { motion } from "framer-motion";
 import { SMART_PRACTICE_ENABLED } from "@/lib/features";
 
@@ -94,6 +106,38 @@ function AppContent() {
   // Leaving route untouched means a transient blip shows Landing while it
   // lasts and returns the student to exactly where they were afterwards. A
   // genuine sign-out still lands correctly: logout() sets the route itself.
+
+  /* ---------- keep the address bar honest about the role ----------
+   *
+   * The admin branch below renders AdminDashboard whatever the route says, and
+   * the mentor branch falls through to MentorDashboard the same way. That was
+   * invisible while the URL was always "/", but now the address bar is real: an
+   * admin landing on /journey saw the admin screen at a student's URL, and Back
+   * or a refresh from there went somewhere else again.
+   *
+   * Rather than teach every branch to render foreign routes, a route the
+   * current role cannot serve is normalised to that role's home. The URL then
+   * always names what is actually on screen.
+   */
+  const ROLE_ROUTES: Record<string, Route[]> = {
+    admin: ["admin"],
+    mentor: ["mentor", "mentor_student", "mentor_availability", "dashboard", "onboarding", "discussion", "methodology"],
+    student: [
+      "home", "methodology", "assessment", "choose_plan", "onboarding", "approval_gate",
+      "topic", "quiz", "results", "tests", "take_test", "test_result", "pyq_archive",
+      "pyq_attempt", "book_session", "discussion", "smart_practice", "smart_session", "dashboard",
+    ],
+  };
+  const ROLE_HOME: Record<string, Route> = { admin: "admin", mentor: "mentor", student: "home" };
+
+  useEffect(() => {
+    if (!currentUser || route === "auto" || recoveryMode) return;
+    const allowed = ROLE_ROUTES[currentUser.role];
+    if (allowed && !allowed.includes(route)) setRoute(ROLE_HOME[currentUser.role]);
+    // ROLE_ROUTES / ROLE_HOME are literals rebuilt each render; depending on
+    // them would loop. Role and route are what actually decide this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.role, route, recoveryMode, setRoute]);
 
   let content: React.ReactNode = null;
 
@@ -186,7 +230,10 @@ function AppContent() {
           key={route + (currentUser?.id || "none")}
           onReset={() => { setViewingStudentId(null); setRoute("auto"); }}
         >
-          {content}
+          {/* Inside the ErrorBoundary, so a chunk that fails to download is
+              caught by the same reset path as any other render failure rather
+              than blanking the app. */}
+          <Suspense fallback={<ScreenLoading />}>{content}</Suspense>
         </ErrorBoundary>
       </motion.div>
       {showTopBar && (
@@ -212,3 +259,11 @@ function App() {
 }
 
 export default App;
+
+function ScreenLoading() {
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-24 text-center text-sm text-slate-400">
+      Loading…
+    </div>
+  );
+}
