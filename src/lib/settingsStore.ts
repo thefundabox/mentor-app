@@ -72,34 +72,30 @@ export async function loadSettings(): Promise<InstituteSettings | null> {
 }
 
 /**
- * Admin-only, enforced by RLS in 0037.
+ * Save the settings row. Admin-only, enforced inside the function.
  *
- * `.select()` is not decoration. Without it PostgREST answers an UPDATE that
- * matched no rows with 204 and no error, so a write RLS silently filtered out
- * came back indistinguishable from a write that succeeded -- and the caller
- * then updated its local copy, so the header changed on screen while the
- * database kept the old value. Asking for the row back turns "denied" into
- * something we can see and say.
+ * Through an RPC rather than a PATCH, and not merely for tidiness. The direct
+ * PATCH reported success while the row never moved, with the obvious causes
+ * ruled out: the profile is admin, the policy accepted a write carrying that
+ * account's own claim, and the feature-flag RPC -- same auth.uid(), same role
+ * check -- wrote and persisted. The transport was the difference.
+ *
+ * A function also cannot fail quietly. PostgREST answers an UPDATE that matched
+ * nothing with 204 and no error; a raise arrives as an error the admin reads.
+ *
+ * updated_at is set by the server. It used to come from the browser's clock,
+ * which is a value the client can get wrong.
  */
 export async function saveSettings(s: InstituteSettings): Promise<{ error?: string }> {
   if (!supabase) return { error: "Not connected." };
-  const { data, error } = await supabase.from("institute_settings").update({
-    product_name: s.productName,
-    exam_name: s.examName,
-    exam_at: new Date(s.examAt).toISOString(),
-    exam_time_label: s.examTimeLabel,
-    landing_headline_top: s.landingHeadlineTop,
-    landing_headline_bottom: s.landingHeadlineBottom,
-    landing_subhead: s.landingSubhead,
-    updated_at: new Date().toISOString(),
-  }).eq("id", true).select("product_name");
-
-  if (error) return { error: error.message };
-  if (!data || data.length === 0) {
-    return {
-      error: "The settings were not saved: the database refused the write. " +
-             "This account may no longer have the admin role.",
-    };
-  }
-  return {};
+  const { error } = await supabase.rpc("set_institute_settings", {
+    new_product_name: s.productName,
+    new_exam_name: s.examName,
+    new_exam_at: new Date(s.examAt).toISOString(),
+    new_exam_time_label: s.examTimeLabel,
+    new_landing_headline_top: s.landingHeadlineTop,
+    new_landing_headline_bottom: s.landingHeadlineBottom,
+    new_landing_subhead: s.landingSubhead,
+  });
+  return error ? { error: error.message } : {};
 }

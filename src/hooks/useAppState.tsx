@@ -10,6 +10,10 @@ import {
   loadSettings, saveSettings, DEFAULT_SETTINGS, type InstituteSettings,
 } from "@/lib/settingsStore";
 import {
+  loadFeatureFlags, setFeatureState, featureVisibleTo, DEFAULT_FLAGS,
+  type FeatureFlag, type FeatureState,
+} from "@/lib/featureStore";
+import {
   loadAnnouncements, createAnnouncement, removeAnnouncement, dismissAnnouncementFor,
 } from "@/lib/announcementStore";
 
@@ -215,6 +219,11 @@ interface AppContextValue extends AppState {
   ensureStudentRecord: (studentId: string) => Promise<void>;
   /** True while either of the above is in flight. */
   studentRecordsLoading: boolean;
+
+  /** Per-feature visibility, and whether the current viewer should see one. */
+  featureFlags: FeatureFlag[];
+  isFeatureVisible: (key: string) => boolean;
+  updateFeatureState: (key: string, state: FeatureState) => Promise<{ error?: string }>;
 
   /** Exam identity, product name and landing copy. Editable by an admin. */
   settings: InstituteSettings;
@@ -792,6 +801,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, [setSettingsLocal]);
+
+  /* ---------- feature visibility ----------
+   *
+   * Same shape as settings and read the same way -- ungated, because the flags
+   * decide what renders and the landing page has no session.
+   */
+  const [featureFlags, setFeatureFlags] =
+    useLocalStorage<FeatureFlag[]>("v1_featureFlags", DEFAULT_FLAGS);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadFeatureFlags().then((remote) => {
+      if (!cancelled && remote && remote.length > 0) setFeatureFlags(remote);
+    });
+    return () => { cancelled = true; };
+  }, [setFeatureFlags]);
+
+  /**
+   * Is this feature on for whoever is looking?
+   *
+   * Unknown keys are visible. A flag row that has not been created yet must not
+   * make a working feature disappear -- failing open is right here, because the
+   * cost of wrongly showing something is far below the cost of a student's
+   * screen silently losing a tab.
+   */
+  const isFeatureVisible = useCallback((key: string): boolean => {
+    const f = featureFlags.find((x) => x.key === key);
+    if (!f) return true;
+    return featureVisibleTo(f.state, currentUser?.role);
+  }, [featureFlags, currentUser?.role]);
+
+  /** Admin-only, through the RPC in 0038 so a refusal is an error, not silence. */
+  const updateFeatureState = useCallback(async (
+    key: string, state: FeatureState,
+  ): Promise<{ error?: string }> => {
+    const res = await setFeatureState(key, state);
+    if (res.error) return res;
+    setFeatureFlags((prev) => prev.map((f) => (f.key === key ? { ...f, state } : f)));
+    return {};
+  }, [setFeatureFlags]);
 
   /** Admin-only by RLS. Writes through, then keeps the local copy in step. */
   const updateSettings = useCallback(async (next: InstituteSettings): Promise<{ error?: string }> => {
@@ -2009,6 +2058,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ensureStudentRecords, ensureStudentRecord, studentRecordsLoading,
     ensureQuestionCoverage,
     settings, updateSettings,
+    featureFlags, isFeatureVisible, updateFeatureState,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
     tests, testAttempts, testSchedules, activeTestId, activeAttemptId,

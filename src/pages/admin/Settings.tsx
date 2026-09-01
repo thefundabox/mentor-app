@@ -11,6 +11,7 @@ import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { Save, Check } from "lucide-react";
 import type { InstituteSettings } from "@/lib/settingsStore";
+import type { FeatureState } from "@/lib/featureStore";
 
 /**
  * A timestamp as the value a `datetime-local` input wants.
@@ -36,7 +37,7 @@ function fromISTInput(v: string): number | null {
 }
 
 export function SettingsTab() {
-  const { settings, updateSettings } = useAppState();
+  const { settings, updateSettings, featureFlags, updateFeatureState } = useAppState();
   const [draft, setDraft] = useState<InstituteSettings>(settings);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -121,6 +122,17 @@ export function SettingsTab() {
         </div>
       </Section>
 
+      <Section title="Visibility">
+        <p className="text-xs text-slate-500 -mt-1">
+          Take part of the product down without a deploy. These save on click —
+          they do not wait for the Save button below.
+        </p>
+        {featureFlags.map((f) => (
+          <FeatureRow key={f.key} flagKey={f.key} label={f.label} state={f.state}
+            onSet={updateFeatureState} />
+        ))}
+      </Section>
+
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
           {error}
@@ -171,4 +183,75 @@ function previewAccent(text: string) {
   const m = /^(\d[\d,]*)(\s*)([\s\S]*)$/.exec(text);
   if (!m) return text;
   return (<><span className="text-[#CA7022]">{m[1]}</span>{m[2]}{m[3]}</>);
+}
+
+/**
+ * One feature's visibility.
+ *
+ * Saves the moment a state is picked, and through the RPC, so a refused write
+ * says so rather than reporting success and changing nothing -- the failure
+ * being chased on the settings form above.
+ */
+function FeatureRow({ flagKey, label, state, onSet }: {
+  flagKey: string;
+  label: string;
+  state: FeatureState;
+  onSet: (key: string, state: FeatureState) => Promise<{ error?: string }>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+
+  const pick = async (next: FeatureState) => {
+    if (next === state || busy) return;
+    setBusy(true); setErr(null); setJustSaved(false);
+    const res = await onSet(flagKey, next);
+    setBusy(false);
+    if (res.error) { setErr(res.error); return; }
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 2000);
+  };
+
+  const OPTIONS: { id: FeatureState; label: string; hint: string }[] = [
+    { id: "visible", label: "Visible", hint: "Everyone sees it." },
+    // Deliberately not promising a preview. "Hidden" keeps a feature for staff
+    // on screens staff can actually open -- and the topic screen is not one of
+    // them: a mentor sent to /topic is routed to their own dashboard. For that
+    // tab Hidden and Removed come to the same thing, and saying otherwise here
+    // would be a small lie in the interface.
+    { id: "hidden",  label: "Hidden",  hint: "Students don't see it. Staff still do, but only on screens staff can open." },
+    { id: "removed", label: "Removed", hint: "Nobody sees it, including you." },
+  ];
+
+  return (
+    <div className="rounded-xl border border-slate-200 p-3.5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-800">{label}</span>
+        {justSaved && (
+          <span className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+            <Check className="w-3.5 h-3.5" /> Saved
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-1.5 flex-wrap">
+        {OPTIONS.map((o) => (
+          <button key={o.id} onClick={() => pick(o.id)} disabled={busy}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+              state === o.id
+                ? "border-slate-800 bg-slate-800 text-white"
+                : "border-slate-200 text-slate-600 hover:border-slate-400"
+            } ${busy ? "opacity-60" : ""}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-xs text-slate-400">
+        {OPTIONS.find((o) => o.id === state)?.hint}
+      </p>
+
+      {err && <p className="text-xs text-rose-700">{err}</p>}
+    </div>
+  );
 }

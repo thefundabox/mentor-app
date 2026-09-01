@@ -23,7 +23,7 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, topicHasQuestions, findTopicLive: findTopic, ensureQuestionCoverage } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, topicHasQuestions, findTopicLive: findTopic, ensureQuestionCoverage, isFeatureVisible } = useAppState();
 
   // Which topics have questions decides what this screen offers, so ask for it
   // here rather than on every sign-in.
@@ -112,13 +112,25 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
     alert("Override request sent to your mentor.");
   };
 
+  // Mains can be switched off from Admin → Institute while its content is not
+  // ready. Filtered rather than disabled: a tab that is present but refuses to
+  // open is worse than one that is not there.
   const tabs = [
     { key: "notes", label: "Notes", Icon: BookOpen },
     { key: "quiz", label: "Quiz", Icon: Sparkles },
     { key: "pyqs", label: "PYQs", Icon: Trophy },
-    { key: "mains", label: "Mains", Icon: BookOpen },
+    ...(isFeatureVisible("topic_mains")
+      ? [{ key: "mains", label: "Mains", Icon: BookOpen }]
+      : []),
     { key: "discuss", label: "Discuss", Icon: MessagesSquare },
   ];
+
+  // A student already sitting on Mains when it comes down would otherwise be
+  // left on a tab with no button and no content. Send them back to Notes.
+  useEffect(() => {
+    if (!tabs.some((t) => t.key === tab)) setTab("notes");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs.length, tab]);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
