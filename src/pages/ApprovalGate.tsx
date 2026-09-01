@@ -1,7 +1,7 @@
 import { useAppState } from "@/hooks/useAppState";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Clock, AlertCircle, ArrowRight, Pencil } from "lucide-react";
+import { Clock, AlertCircle, ArrowRight, Pencil, CheckCircle2 } from "lucide-react";
 import { SCOPE_LABEL } from "@/types";
 
 export function ApprovalGate() {
@@ -9,24 +9,42 @@ export function ApprovalGate() {
   if (!currentUser) return null;
   const s = getStudent(currentUser.id);
   const isPending = s.chart.status === "pending_approval";
+  // Checked explicitly rather than inferred as "not pending". This screen used
+  // to treat every non-pending status as changes_requested, so the moment a
+  // mentor approved a plan the student -- still parked here, because the route
+  // is persisted and the resolver had already run -- was told "Mentor requested
+  // changes" about a plan that had just been approved.
   const isChanges = s.chart.status === "changes_requested";
+  const isApproved = s.chart.status === "approved";
+  // A draft chart has no business on this screen -- the resolver sends drafts to
+  // onboarding -- but the route is persisted, so a stale one can land here. It
+  // gets the neutral panel rather than being told a mentor said something.
+  const isDraft = !isPending && !isChanges && !isApproved;
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
       <motion.div
         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-        className={`rounded-2xl border-2 ${isPending ? "border-amber-200 bg-amber-50/40" : "border-rose-200 bg-rose-50/40"} p-8 text-center`}
+        className={`rounded-2xl border-2 ${isPending ? "border-amber-200 bg-amber-50/40" : isApproved ? "border-emerald-200 bg-emerald-50/40" : isDraft ? "border-slate-200 bg-slate-50/40" : "border-rose-200 bg-rose-50/40"} p-8 text-center`}
       >
-        <div className={`inline-flex w-16 h-16 items-center justify-center rounded-full ${isPending ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"} mb-4`}>
-          {isPending ? <Clock className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
+        <div className={`inline-flex w-16 h-16 items-center justify-center rounded-full ${isPending ? "bg-amber-100 text-amber-700" : isApproved ? "bg-emerald-100 text-emerald-700" : isDraft ? "bg-slate-100 text-slate-600" : "bg-rose-100 text-rose-700"} mb-4`}>
+          {isPending ? <Clock className="w-8 h-8" /> : isApproved ? <CheckCircle2 className="w-8 h-8" /> : isDraft ? <Pencil className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
         </div>
         <h1 className="text-2xl font-bold text-slate-900">
-          {isPending ? `Waiting for mentor approval — ${SCOPE_LABEL[s.chart.commitmentScope]} plan` : "Mentor requested changes"}
+          {isPending
+            ? `Waiting for mentor approval — ${SCOPE_LABEL[s.chart.commitmentScope]} plan`
+            : isApproved ? "Your plan is approved"
+              : isDraft ? "Your plan isn't waiting on anyone"
+              : "Mentor requested changes"}
         </h1>
         <p className="text-slate-600 mt-2 max-w-md mx-auto">
           {isPending
             ? `You've committed Day ${s.chart.approvedThrough + 1}–${s.chart.committedThrough} for approval. You'll be notified here when your mentor approves.`
-            : "Your mentor reviewed the plan and asked for changes. Update your chart and resubmit."}
+            : isApproved
+              ? `Your mentor approved Day 1–${s.chart.approvedThrough}. You can start straight away.`
+              : isDraft
+                ? "There's nothing pending approval. Pick up your plan whenever you're ready."
+                : "Your mentor reviewed the plan and asked for changes. Update your chart and resubmit."}
         </p>
 
         {isChanges && s.chart.feedback && (
@@ -40,6 +58,10 @@ export function ApprovalGate() {
           {isChanges ? (
             <Button onClick={() => setRoute("onboarding")}>
               Update plan <Pencil className="w-4 h-4" />
+            </Button>
+          ) : isApproved ? (
+            <Button onClick={() => setRoute("dashboard")}>
+              Start today's work <ArrowRight className="w-4 h-4" />
             </Button>
           ) : (
             <Button variant="secondary" onClick={() => setRoute("onboarding")}>
