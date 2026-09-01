@@ -201,6 +201,18 @@ interface AppContextValue extends AppState {
   assignStudentToBatch: (studentId: string, batchId: string | null) => void;
   /** All students whose batchId matches the given batch id. */
   batchStudents: (batchId: string) => User[];
+  /**
+   * Fetch every student's chart and progress, once. Heavy -- only for screens
+   * that show the whole cohort (the mentor dashboard, admin stats).
+   */
+  /** Load which microthemes have questions. For topic/plan/question screens. */
+  ensureQuestionCoverage: () => Promise<void>;
+  ensureStudentRecords: () => Promise<void>;
+  /** Fetch one student's record. What a mentor opening one student needs. */
+  ensureStudentRecord: (studentId: string) => Promise<void>;
+  /** True while either of the above is in flight. */
+  studentRecordsLoading: boolean;
+
   /** The Batch object for a student, or null. */
   batchForStudent: (studentId: string) => Batch | null;
 
@@ -683,12 +695,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Which microthemes have questions in Postgres. One small round trip covers
   // all 243, instead of asking per topic.
   const [questionCoverage, setQuestionCoverage] = useState<Record<string, Coverage>>({});
-  useEffect(() => {
-    if (!isSupabaseConfigured || !authProfile) return;
-    let cancelled = false;
-    void loadCoverage().then((c) => { if (!cancelled) setQuestionCoverage(c); });
-    return () => { cancelled = true; };
-  }, [authProfile]);
+  const coverageLoaded = useRef(false);
+  const coverageInFlight = useRef<Promise<void> | null>(null);
+
+  /**
+   * Which microthemes have released questions.
+   *
+   * Fetched on request rather than on sign-in: only the topic screens, the plan
+   * builder and Admin -> Questions read it, so an admin editing plan limits or
+   * a mentor reading their dashboard no longer pays for all 243 rows. One round
+   * trip still covers every topic -- the saving is in not making it at all.
+   */
+  const ensureQuestionCoverage = useCallback((): Promise<void> => {
+    if (!isSupabaseConfigured || !authProfileRef.current) return Promise.resolve();
+    if (coverageLoaded.current) return Promise.resolve();
+    if (coverageInFlight.current) return coverageInFlight.current;
+    const run = loadCoverage()
+      .then((c) => { setQuestionCoverage(c); coverageLoaded.current = true; })
+      .finally(() => { coverageInFlight.current = null; });
+    coverageInFlight.current = run;
+    return run;
+  }, []);
 
   const topicHasQuestions = useCallback((topicId: string) => {
     if (hasRealQuestions(topicId)) return true;             // bundled past papers
@@ -836,11 +863,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       } else {
-        // Mentor / admin: pull every student's record so the dashboard has
-        // real data instead of whatever happens to be in this browser.
+        // Mentor / admin: profiles only.
+        //
+        // This used to also call loadStudents() for every student in the
+        // institute -- three unbounded reads, one of them the full progress
+        // blob per student and every override row -- on sign-in, before anyone
+        // had said which screen they wanted. Opening Admin -> Plans & limits
+        // fetched the entire cohort's answer history to render two number
+        // inputs, and the cost grew with every student enrolled.
+        //
+        // Profiles stay eager because they are six small columns and nearly
+        // every staff screen names people. The heavy records moved behind
+        // ensureStudentRecords() below, which the two screens that actually
+        // show the whole cohort ask for themselves.
         const profiles = await loadAllProfiles();
-        if (cancelled) return;
-        const remote = await loadStudents(profiles.filter((p) => p.role === "student").map((p) => p.id));
         if (cancelled) return;
         if (profiles.length) {
           setUsers((prev) => {
@@ -864,10 +900,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return next;
           });
         }
-        if (Object.keys(remote).length) {
-          skipNextPush.current = true;
-          setStudentData((prev) => ({ ...prev, ...remote }));
-        }
       }
       if (!cancelled) { setDataLoading(false); setDataSynced(true); }
     })();
@@ -875,6 +907,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authProfile, currentUserId]);
+
+  /* ---------- student records, fetched per screen ----------
+   *
+   * loadStudents() reads three tables unbounded -- charts, the whole progress
+   * blob, and every override row -- for every student in the institute. It used
+   * to run on sign-in for all staff, so the cost of opening ANY admin screen
+   * scaled with enrolment even when the screen showed no student data at all.
+   *
+   * These two make that a request rather than a reflex. Both are idempotent and
+   * cached: a screen can call on every render without refetching, and two
+   * screens mounting together share one in-flight request instead of racing.
+   */
+
+  const allRecordsLoaded = useRef(false);
+  const allRecordsInFlight = useRef<Promise<void> | null>(null);
+  const loadedRecordIds = useRef<Set<string>>(new Set());
+  const [studentRecordsLoading, setStudentRecordsLoading] = useState(false);
+
+  /** Every student's record. For the screens that show the whole cohort. */
+  const ensureStudentRecords = useCallback((): Promise<void> => {
+    const me = authProfileRef.current;
+    if (!isSupabaseConfigured || !me || me.role === "student") return Promise.resolve();
+    if (allRecordsLoaded.current) return Promise.resolve();
+    if (allRecordsInFlight.current) return allRecordsInFlight.current;
+
+    setStudentRecordsLoading(true);
+    const run = (async () => {
+      const ids = usersRef.current.filter((u) => u.role === "student").map((u) => u.id);
+      const remote = await loadStudents(ids);
+      if (Object.keys(remote).length) {
+        skipNextPush.current = true;
+        setStudentData((prev) => ({ ...prev, ...remote }));
+      }
+      ids.forEach((id) => loadedRecordIds.current.add(id));
+      allRecordsLoaded.current = true;
+    })().finally(() => {
+      allRecordsInFlight.current = null;
+      setStudentRecordsLoading(false);
+    });
+
+    allRecordsInFlight.current = run;
+    return run;
+  }, [setStudentData]);
+
+  /**
+   * One student's record.
+   *
+   * A mentor opening a single student needs that student, not the cohort. This
+   * is the difference between one indexed lookup and a full-table read on the
+   * busiest screen a mentor uses.
+   */
+  const ensureStudentRecord = useCallback(async (studentId: string): Promise<void> => {
+    const me = authProfileRef.current;
+    if (!isSupabaseConfigured || !me || me.role === "student") return;
+    if (allRecordsLoaded.current || loadedRecordIds.current.has(studentId)) return;
+    loadedRecordIds.current.add(studentId);   // claim before awaiting, so a
+                                              // re-render mid-flight does not
+                                              // fire a second identical read
+    setStudentRecordsLoading(true);
+    try {
+      const res = await loadStudent(studentId);
+      if (res.data) {
+        skipNextPush.current = true;
+        setStudentData((prev) => ({ ...prev, [studentId]: res.data! }));
+      }
+    } finally {
+      setStudentRecordsLoading(false);
+    }
+  }, [setStudentData]);
 
   // Push local changes up. Students own their row; staff writes go through the
   // explicit chart/override actions rather than this blanket sync.
@@ -1872,6 +1973,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlacementPool, upsertPlacementQuestion, addPlacementQuestion, removePlacementQuestion,
     batches,
     upsertBatch, archiveBatch, unarchiveBatch, assignStudentToBatch, batchStudents, batchForStudent,
+    ensureStudentRecords, ensureStudentRecord, studentRecordsLoading,
+    ensureQuestionCoverage,
     announcements,
     postAnnouncement, deleteAnnouncement, dismissAnnouncement, announcementsForStudent,
     tests, testAttempts, testSchedules, activeTestId, activeAttemptId,

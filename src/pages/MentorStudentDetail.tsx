@@ -16,7 +16,14 @@ import {
 export function MentorStudentDetail({ studentId }: { studentId: string }) {
   const { users, getStudent, levelInfo, setRoute, setViewingStudentId,
           approveChart, requestChartChanges, addOverride, tests, testAttempts,
-          defaultTemplateFor, adoptPlanTemplate, startBlankPlan } = useAppState();
+          defaultTemplateFor, adoptPlanTemplate, startBlankPlan,
+          ensureStudentRecord } = useAppState();
+
+  // This student, not the cohort. The mentor dashboard may already have loaded
+  // everyone, in which case this is a no-op; arriving here directly -- from a
+  // link, or a refresh on /mentor/student -- fetches exactly one record.
+  useEffect(() => { void ensureStudentRecord(studentId); }, [studentId, ensureStudentRecord]);
+
   const defaultTemplate = defaultTemplateFor(studentId);
   const user = users.find((u) => u.id === studentId);
   const s = getStudent(studentId);

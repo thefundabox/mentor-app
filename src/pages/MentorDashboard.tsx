@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Clock, CheckCircle2, Star, AlertTriangle, Filter, CalendarClock } from "lucide-react";
@@ -7,7 +7,13 @@ import { conceptLabel } from "@/data";
 import { AnnouncementComposer } from "@/components/AnnouncementComposer";
 
 export function MentorDashboard() {
-  const { currentUser, students, getStudent, setViewingStudentId, setRoute, batches } = useAppState();
+  const { currentUser, students, getStudent, setViewingStudentId, setRoute, batches,
+          ensureStudentRecords, studentRecordsLoading } = useAppState();
+
+  // This screen ranks the whole cohort, so it is one of the two that genuinely
+  // needs every student's record. Asking here rather than on sign-in means the
+  // other staff screens no longer pay for it. Idempotent and cached.
+  useEffect(() => { void ensureStudentRecords(); }, [ensureStudentRecords]);
   const [batchFilter, setBatchFilter] = useState<string | "all">("all");
   if (!currentUser) return null;
 
@@ -65,6 +71,12 @@ export function MentorDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* The cohort's progress arrives after the page does now, so say so
+          rather than showing everyone at zero for a moment as if they had
+          done nothing. */}
+      {studentRecordsLoading && (
+        <div className="mb-4 text-xs font-medium text-slate-500">Loading student progress…</div>
+      )}
       <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
         <div>
           <div className="text-sm font-semibold text-emerald-700">Mentor dashboard</div>

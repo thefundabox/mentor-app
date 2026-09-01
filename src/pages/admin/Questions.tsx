@@ -5,7 +5,7 @@
  * section at once. Each section is now its own module and its own lazy chunk,
  * so opening People no longer downloads the PYQ importer.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { QuestionImportPanel } from "@/components/QuestionImportPanel";
 import { QuestionReview } from "@/components/QuestionReview";
@@ -51,7 +51,8 @@ export function QuestionsTab() {
  * the topic here. That is the whole point of this screen.
  */
 function CoverageTab() {
-  const { subjects, questionCoverage, currentUser } = useAppState();
+  const { subjects, questionCoverage, currentUser, ensureQuestionCoverage } = useAppState();
+  useEffect(() => { void ensureQuestionCoverage(); }, [ensureQuestionCoverage]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [local, setLocal] = useState<Record<string, number>>({});

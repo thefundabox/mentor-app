@@ -23,7 +23,11 @@ interface TopicScreenProps {
 }
 
 export function TopicScreen({ dayNum }: TopicScreenProps) {
-  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, topicHasQuestions, findTopicLive: findTopic } = useAppState();
+  const { currentUser, getStudent, setRoute, setAttemptSeed, addOverride, activeDay, activeTopicId, setActiveTopicId, topicCleared, markTopicStudied, topicHasQuestions, findTopicLive: findTopic, ensureQuestionCoverage } = useAppState();
+
+  // Which topics have questions decides what this screen offers, so ask for it
+  // here rather than on every sign-in.
+  useEffect(() => { void ensureQuestionCoverage(); }, [ensureQuestionCoverage]);
   if (!currentUser) return null;
   const user = currentUser;
   const student = getStudent(user.id);

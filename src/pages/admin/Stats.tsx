@@ -5,11 +5,16 @@
  * section at once. Each section is now its own module and its own lazy chunk,
  * so opening People no longer downloads the PYQ importer.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useAppState } from "@/hooks/useAppState";
 
 export function StatsTab() {
-  const { mentors, students, getStudent, levelInfo, completedDays, subjects } = useAppState();
+  const { mentors, students, getStudent, levelInfo, completedDays, subjects,
+          ensureStudentRecords, studentRecordsLoading } = useAppState();
+
+  // Aggregates over everyone, so it needs everyone. The fetch happens when this
+  // tab is opened, not when the admin signs in.
+  useEffect(() => { void ensureStudentRecords(); }, [ensureStudentRecords]);
 
   const totals = useMemo(() => {
     let attempts = 0, scoreSum = 0, days = 0, cleared = 0, xp = 0;
@@ -44,6 +49,11 @@ export function StatsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Totals count answers and cleared days, so they read low until the
+          records land. Better to say it is still counting. */}
+      {studentRecordsLoading && (
+        <div className="text-xs font-medium text-slate-500">Loading student records…</div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Students" value={totals.students} />
         <StatCard label="Mentors" value={totals.mentors} />

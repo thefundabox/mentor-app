@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext, type DragEndEvent, type DragStartEvent,
   PointerSensor, useSensor, useSensors, DragOverlay,
@@ -409,7 +409,8 @@ function DraggableSubjectHeader({ subject }: { subject: SubjectCatalogEntry }) {
 }
 
 function DraggableTopic({ subject, topic, highlight }: { subject: SubjectCatalogEntry; topic: { id: string; name: string }; highlight?: boolean | "" }) {
-  const { topicHasQuestions } = useAppState();
+  const { topicHasQuestions, ensureQuestionCoverage } = useAppState();
+  useEffect(() => { void ensureQuestionCoverage(); }, [ensureQuestionCoverage]);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `topic-${subject.id}-${topic.id}`,
     data: { subjectId: subject.id, topicId: topic.id, topicName: topic.name, subjectName: subject.name, icon: subject.icon, color: subject.color },
