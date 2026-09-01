@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { motion } from "framer-motion";
 import { Loader2, MailCheck, ArrowRight } from "lucide-react";
-import { timeToExam, EXAM_LABEL } from "@/data/exam";
+import { timeToExam, EXAM_LABEL, EXAM_AT } from "@/data/exam";
+import { PLAN_END_ISO } from "@/data/planPreview";
 import { TASTER_QUESTIONS } from "@/data/taster";
 import type { Role } from "@/types";
 import { BrandMark } from "@/components/BrandMark";
@@ -27,27 +28,27 @@ import { BrandMark } from "@/components/BrandMark";
  */
 type Mode = "signin" | "signup";
 
-const ROLE_COPY: Record<Role, { label: string; title: string; intro: string; button: string; rajsa: string }> = {
+const ROLE_COPY: Record<Role, { label: string; title: string; intro: string; button: string; guide: string }> = {
   student: {
     label: "Student sign-in",
     title: "Welcome back",
     intro: "Sign in and we'll open today's next task.",
     button: "Continue to today's plan",
-    rajsa: "Sign in and I'll take you straight to the next unfinished task.",
+    guide: "Sign in and I'll take you straight to the next unfinished task.",
   },
   mentor: {
     label: "Mentor sign-in",
     title: "Welcome, mentor",
     intro: "Open your students, your calendar and the follow-up work.",
     button: "Open mentor workspace",
-    rajsa: "Your student follow-ups and today's sessions are waiting.",
+    guide: "Your student follow-ups and today's sessions are waiting.",
   },
   admin: {
     label: "Admin sign-in",
     title: "Administration",
     intro: "Manage accounts, batches and the question bank.",
     button: "Open administration",
-    rajsa: "Use your institute-issued admin access to continue.",
+    guide: "Use your institute-issued admin access to continue.",
   },
 };
 
@@ -78,7 +79,15 @@ export function Login() {
     const id = setInterval(() => setLeft(timeToExam()), 60_000);
     return () => clearInterval(id);
   }, []);
-  const buffer = Math.max(0, left.days - 80);
+  // Measured from the END OF THE PUBLISHED PLAN, not from today. It used to be
+  // `daysToExam - 80`, which answers "if you started this very minute" and so
+  // drifted away from the plan everyone is actually handed: the PDF and the
+  // landing page both say 5 Sep -> 23 Nov, leaving 13 clear days. Two different
+  // numbers for the same thing on two screens is worse than one that ages.
+  const buffer = Math.max(
+    0,
+    Math.round((EXAM_AT - Date.parse(`${PLAN_END_ISO}T00:00:00Z`)) / 86_400_000),
+  );
 
   const warmup = useMemo(
     () => TASTER_QUESTIONS[Math.floor(Math.random() * TASTER_QUESTIONS.length)],
@@ -283,7 +292,7 @@ export function Login() {
               <Field label="Name · optional">
                 <input
                   type="text" value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="How should Rajsa address you?" autoComplete="name" className={inputCls}
+                  placeholder="How should Babo Sa address you?" autoComplete="name" className={inputCls}
                 />
               </Field>
             )}
@@ -361,14 +370,14 @@ export function Login() {
           <aside className="mt-6 flex items-center gap-3.5 rounded-[20px] border border-[#e7e4dc] bg-[#eaf0ff]/60 p-3.5">
             {/* Tall transparent portrait: object-top frames the turban and face
                 rather than cropping to his waistcoat. */}
-            <img src="/rajsa-guide.png" alt="" aria-hidden="true"
+            <img src="/babosa-guide.png" alt="" aria-hidden="true"
                  className="h-16 w-16 shrink-0 rounded-[14px] bg-white object-cover object-top" />
             <p className="text-sm text-[#17252b]">
-              <strong className="block">Rajsa</strong>
+              <strong className="block">Babo Sa!</strong>
               <span className="text-[#667378]">
                 {mode === "signup"
                   ? "Create your account, then I'll turn the syllabus into one finishable task at a time."
-                  : copy.rajsa}
+                  : copy.guide}
               </span>
             </p>
           </aside>

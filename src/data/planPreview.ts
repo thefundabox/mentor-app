@@ -8,6 +8,15 @@
 export const PLAN_START_LABEL = "5 September 2026";
 export const PLAN_END_LABEL = "23 November 2026";
 
+/**
+ * The same bounds, machine-readable. Anything deriving a number from the
+ * plan -- buffer days, pacing -- should read these rather than re-deriving
+ * from today, so the figure it shows agrees with the plan students are
+ * actually given.
+ */
+export const PLAN_START_ISO = "2026-09-05";
+export const PLAN_END_ISO = "2026-11-23";
+
 export interface PlanPreviewDay {
   day: number;
   dow: string;
