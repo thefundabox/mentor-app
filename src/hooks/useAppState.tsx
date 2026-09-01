@@ -3,6 +3,7 @@ import { useLocalStorage } from "./useLocalStorage";
 import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase";
 import { passThresholdOf, clampPassThreshold } from "@/lib/passThreshold";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
+import { loadSubjects, saveSubjects } from "@/lib/subjectStore";
 
 import {
   loadStudent, loadStudents, loadAllProfiles, saveChart, updateChart, saveProgress,
@@ -295,11 +296,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewingStudentId, setViewingStudentId] = useLocalStorage<string | null>("v5_viewingStudentId", null);
   const [activeTestId, setActiveTestId] = useLocalStorage<string | null>("v5_activeTestId", null);
   const [activeAttemptId, setActiveAttemptId] = useLocalStorage<string | null>("v5_activeAttemptId", null);
-  const [subjects, setSubjects] = // v6: the catalog was replaced wholesale with the RPSC syllabus (243
+  // v6: the catalog was replaced wholesale with the RPSC syllabus (243
   // microthemes). Bumping the key is what actually delivers it — existing
   // installs have the old 63-topic catalog cached under v5_subjects and would
   // otherwise never see the new one. Charts survive via LEGACY_TOPIC_ALIASES.
-  useLocalStorage<SubjectCatalogEntry[]>("v6_subjects", DEFAULT_SUBJECTS);
+  //
+  // Since 0033 the catalog lives in Postgres and this key is only a cache: it
+  // paints instantly on load and is the whole story in local demo mode, which
+  // has no database. Postgres wins the moment it answers.
+  const [subjects, setSubjectsLocal] =
+    useLocalStorage<SubjectCatalogEntry[]>("v6_subjects", DEFAULT_SUBJECTS);
+
+  // Written by setSubjects, drained by the effect below. The push happens after
+  // the state commits rather than inside the updater, so it cannot fire twice
+  // under StrictMode's double-invoked reducers.
+  const pendingSubjectPush = useRef<SubjectCatalogEntry[] | null>(null);
+
+  const setSubjects = useCallback((
+    next: SubjectCatalogEntry[] | ((prev: SubjectCatalogEntry[]) => SubjectCatalogEntry[]),
+  ) => {
+    setSubjectsLocal((prev) => {
+      const value = typeof next === "function"
+        ? (next as (p: SubjectCatalogEntry[]) => SubjectCatalogEntry[])(prev)
+        : next;
+      pendingSubjectPush.current = value;
+      return value;
+    });
+  }, [setSubjectsLocal]);
+
+  useEffect(() => {
+    const value = pendingSubjectPush.current;
+    if (!value) return;
+    pendingSubjectPush.current = null;
+    void saveSubjects(value).then((r) => {
+      // Admin-only by RLS. A mentor or student reaching this means a caller is
+      // wrong, and silently keeping a local-only edit is how the old
+      // localStorage behaviour hid itself -- so it is surfaced.
+      if (r.error) setAuthError(`Could not save the syllabus: ${r.error}`);
+    });
+  }, [subjects]);
+
   const [planTemplates, setPlanTemplates] = useLocalStorage<PlanTemplate[]>("v5_planTemplates", DEFAULT_PLAN_TEMPLATES);
   const [tourSteps, setTourSteps] = useLocalStorage<TourStep[]>("v5_tourSteps", DEFAULT_TOUR_STEPS);
   const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
@@ -610,6 +646,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * Resolved from `users`/`batches` rather than batchForStudent because that
    * helper is defined much further down this file.
    */
+  // Postgres is the source of truth; pull once the session resolves. Deliberately
+  // does NOT go through setSubjects -- that would push what we just pulled
+  // straight back.
+  useEffect(() => {
+    if (!authProfile) return;
+    let cancelled = false;
+    void loadSubjects().then((remote) => {
+      if (cancelled || !remote || remote.length === 0) return;
+      setSubjectsLocal(remote);
+    });
+    return () => { cancelled = true; };
+  }, [authProfile, setSubjectsLocal]);
+
   const defaultTemplateFor = useCallback((studentId: string | null): PlanTemplateRow | null => {
     const live = remoteTemplates.filter((t) => !t.archived);
     const u = studentId ? users.find((x) => x.id === studentId) : null;
