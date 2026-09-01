@@ -96,8 +96,22 @@ export function LandingStudio() {
             {/* Countdown first: the deadline is the reason anyone is reading. */}
             <ExamCountdown className="mb-7" />
 
-            <h1 className="text-[clamp(2.3rem,5.2vw,3.4rem)] font-extrabold leading-[1.04] tracking-[-.035em] text-balance">
-              80 days. 243 microthemes to know.
+            {/* Broken deliberately: "80 days." is the hook, the count is the
+                promise, and letting them share a line buried the number that
+                the whole page is about.
+
+                The accent is the owl's orange darkened from #EE8428 to #CA7022.
+                The logo colour itself only reaches 2.64:1 on white and fails
+                even the 3:1 bar large text has to clear; this keeps the hue
+                recognisably the brand's at 3.59:1. */}
+            <h1 className="text-[clamp(2.3rem,5.2vw,3.4rem)] font-extrabold leading-[1.04] tracking-[-.035em]">
+              <span className="block">80 days.</span>
+              {/* Its own block so text-balance applies to THIS line alone. With
+                  a bare <br/> the balancer sees one box and does nothing, which
+                  left "know." orphaned on a third line at desktop widths. */}
+              <span className="block text-balance">
+                <span className="text-[#CA7022]">243</span> microthemes to know.
+              </span>
             </h1>
             <p className="mt-5 max-w-lg text-[1.08rem] leading-relaxed text-[#667378]">
               RPSC publishes 11 headings. We decoded 6 real papers into 243 studiable
