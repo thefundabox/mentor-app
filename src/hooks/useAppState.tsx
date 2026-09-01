@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured, type ProfileRow } from "@/lib/supabase"
 import { passThresholdOf, clampPassThreshold } from "@/lib/passThreshold";
 import { loadPlanTemplates, type PlanTemplateRow } from "@/lib/planStore";
 import { loadSubjects, saveSubjects } from "@/lib/subjectStore";
+import { loadBatches, saveBatches } from "@/lib/batchStore";
 
 import {
   loadStudent, loadStudents, loadAllProfiles, saveChart, updateChart, saveProgress,
@@ -341,7 +342,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [quizPool, setQuizPool] = useLocalStorage<Question[]>("v5_quizPool", QPOOL_MEWAR);
   const [foundationPool, setFoundationPool] = useLocalStorage<Record<string, Question[]>>("v5_foundationPool", FOUNDATION_QS);
   const [placementPool, setPlacementPool] = useLocalStorage<Question[]>("v6_placementPool", PLACEMENT_MCQS);
-  const [batches, setBatches] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
+  // Since 0034 cohorts live in Postgres and this key is only a cache, exactly as
+  // v6_subjects is: it paints instantly, it is the whole story in local demo
+  // mode, and Postgres wins the moment it answers. Membership was already
+  // server-side (profiles.batch_id, set_user_batch) -- it was the batch rows
+  // that were stranded in one admin's browser.
+  const [batches, setBatchesLocal] = useLocalStorage<Batch[]>("v5_batches", DEFAULT_BATCHES);
+
+  // Written by setBatches, drained by the effect below. Pushing after the state
+  // commits rather than inside the updater keeps StrictMode's double-invoked
+  // reducers from sending it twice.
+  const pendingBatchPush = useRef<Batch[] | null>(null);
+
+  const setBatches = useCallback((
+    next: Batch[] | ((prev: Batch[]) => Batch[]),
+  ) => {
+    setBatchesLocal((prev) => {
+      const value = typeof next === "function"
+        ? (next as (p: Batch[]) => Batch[])(prev)
+        : next;
+      pendingBatchPush.current = value;
+      return value;
+    });
+  }, [setBatchesLocal]);
+
+  useEffect(() => {
+    const value = pendingBatchPush.current;
+    if (!value) return;
+    pendingBatchPush.current = null;
+    void saveBatches(value).then((r) => {
+      // Admin-only by RLS. Surfaced rather than swallowed: a batch edit that
+      // only ever reached localStorage is the exact failure 0034 exists to end.
+      if (r.error) setAuthError(`Could not save the batch: ${r.error}`);
+    });
+  }, [batches]);
   const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>("v5_announcements", []);
   const [tests, setTests] = useLocalStorage<Test[]>("v5_tests", DEFAULT_TESTS);
   const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>("v5_testAttempts", []);
@@ -658,6 +692,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, [authProfile, setSubjectsLocal]);
+
+  // Same shape for cohorts. Deliberately not via setBatches, which would push
+  // what we just pulled straight back.
+  useEffect(() => {
+    if (!authProfile) return;
+    let cancelled = false;
+    void loadBatches().then((remote) => {
+      if (cancelled || !remote || remote.length === 0) return;
+      setBatchesLocal(remote);
+    });
+    return () => { cancelled = true; };
+  }, [authProfile, setBatchesLocal]);
 
   const defaultTemplateFor = useCallback((studentId: string | null): PlanTemplateRow | null => {
     const live = remoteTemplates.filter((t) => !t.archived);
