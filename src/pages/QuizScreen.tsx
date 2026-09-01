@@ -7,6 +7,7 @@ import type { Question, QuizResult, ConceptStat, QuestionAttempt } from "@/types
 import { buildAttempt, loadPool, questionKey } from "@/lib/topicPool";
 import { draftKeyFor, paperFingerprint, readDraft, writeDraft } from "@/lib/attemptDraft";
 
+import { GuideNote } from "@/components/GuideNote";
 interface QuizScreenProps {
   dayNum: number;
 }
@@ -432,6 +433,16 @@ export function QuizScreen({ dayNum }: QuizScreenProps) {
       </div>
 
       <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-8 sm:py-10">
+        {/* First question only. A guide who speaks on every question is nagging,
+            not guiding -- and this is the one moment the advice is actionable,
+            before any answers have been committed. */}
+        {current === 0 && (
+          <GuideNote className="mb-6">
+            Skipping is a move, not a failure. RAS deducts for a wrong answer and
+            nothing for a blank, so an honest &ldquo;I don&rsquo;t know&rdquo; costs you less
+            than a confident guess. Flag it and come back.
+          </GuideNote>
+        )}
         <motion.div key={current} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-[11px] uppercase tracking-wide font-semibold text-indigo-600">

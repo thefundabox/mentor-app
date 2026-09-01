@@ -17,6 +17,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { GuideNote } from "@/components/GuideNote";
 interface TopicScreenProps {
   dayNum: number;
 }
@@ -134,6 +135,14 @@ export function TopicScreen({ dayNum }: TopicScreenProps) {
           </h1>
         </div>
       </div>
+
+      {/* What finishing a microtheme actually means. Reading it is the easy
+          half, and the half students stop at. */}
+      <GuideNote className="mb-5">
+        Read it once, then attempt the questions before you move on. A microtheme
+        you have read but never been tested on is not finished &mdash; the paper
+        will not ask whether you read it.
+      </GuideNote>
 
       {topicsInDay.length > 1 && (
         <div className="mb-5 p-3 rounded-2xl bg-indigo-50/60 border border-indigo-100">
