@@ -71,10 +71,19 @@ export async function loadSettings(): Promise<InstituteSettings | null> {
   };
 }
 
-/** Admin-only, enforced by RLS in 0037. */
+/**
+ * Admin-only, enforced by RLS in 0037.
+ *
+ * `.select()` is not decoration. Without it PostgREST answers an UPDATE that
+ * matched no rows with 204 and no error, so a write RLS silently filtered out
+ * came back indistinguishable from a write that succeeded -- and the caller
+ * then updated its local copy, so the header changed on screen while the
+ * database kept the old value. Asking for the row back turns "denied" into
+ * something we can see and say.
+ */
 export async function saveSettings(s: InstituteSettings): Promise<{ error?: string }> {
   if (!supabase) return { error: "Not connected." };
-  const { error } = await supabase.from("institute_settings").update({
+  const { data, error } = await supabase.from("institute_settings").update({
     product_name: s.productName,
     exam_name: s.examName,
     exam_at: new Date(s.examAt).toISOString(),
@@ -83,6 +92,14 @@ export async function saveSettings(s: InstituteSettings): Promise<{ error?: stri
     landing_headline_bottom: s.landingHeadlineBottom,
     landing_subhead: s.landingSubhead,
     updated_at: new Date().toISOString(),
-  }).eq("id", true);
-  return error ? { error: error.message } : {};
+  }).eq("id", true).select("product_name");
+
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      error: "The settings were not saved: the database refused the write. " +
+             "This account may no longer have the admin role.",
+    };
+  }
+  return {};
 }

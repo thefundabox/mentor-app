@@ -70,10 +70,26 @@ export async function createAnnouncement(a: Announcement): Promise<{ error?: str
   return error ? { error: error.message } : {};
 }
 
+/**
+ * Delete one.
+ *
+ * `.select()` for the same reason saveSettings needs it: PostgREST answers a
+ * DELETE that matched no rows with 204 and no error, so a delete RLS filtered
+ * out is indistinguishable from one that worked -- and the row vanishes from
+ * the screen while surviving in the database, reappearing on the next load.
+ *
+ * Zero rows can also mean it was already gone, which is harmless, so the
+ * message covers both rather than asserting a cause it cannot know.
+ */
 export async function removeAnnouncement(id: string): Promise<{ error?: string }> {
   if (!supabase) return { error: "Not connected." };
-  const { error } = await supabase.from("announcements").delete().eq("id", id);
-  return error ? { error: error.message } : {};
+  const { data, error } = await supabase
+    .from("announcements").delete().eq("id", id).select("id");
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "That announcement was not deleted — it may already be gone, or this account may not be allowed to delete it." };
+  }
+  return {};
 }
 
 /**
