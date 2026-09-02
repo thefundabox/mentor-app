@@ -15,9 +15,10 @@ import { GuideNote } from "@/components/GuideNote";
  * attempted as a paper of its own.
  *
  * The hand-entered `pyqBank` used to render here as prose cards with the answer
- * one click away. It is gone from the student surfaces: seven demo questions
- * sitting next to 546 real ones made the tab look like it had never been
- * converted. Admin CRUD over that bank is untouched.
+ * one click away. It is gone: seven demo questions sitting next to 546 real
+ * ones made the tab look like it had never been converted. The bank itself has
+ * since been deleted -- the admin editor that fed it now edits the Postgres
+ * `questions` rows these papers come from.
  */
 export function PYQArchive() {
   const { subjects, setRoute, setPyqTarget, currentUser, pyqPointsOf } = useAppState();

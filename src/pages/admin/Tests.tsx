@@ -374,5 +374,3 @@ function TestEditor({ test, onDone, onUpsert }: {
     </div>
   );
 }
-
-/* ==================== PYQ Bank editor ==================== */

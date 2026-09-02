@@ -134,7 +134,8 @@ export async function loadPyqCoverage(): Promise<Record<string, number>> {
 /**
  * One past question, as the admin bank shows it.
  *
- * Deliberately the Postgres shape rather than the legacy `PYQ` type. The old
+ * Deliberately the Postgres shape rather than the prose `PYQ` type that used
+ * to back this screen (since deleted along with the bank). The old
  * admin editor managed `v5_pyqBank` in localStorage -- prose question/answer
  * pairs, twelve demo rows, invisible to every other device -- while the 806
  * real past papers sat in `questions` where that screen never looked. An admin

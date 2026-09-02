@@ -23,13 +23,13 @@ import {
   POINTS, levelFromPoints, xpInLevel, xpToNextLevel, DEFAULT_SUBJECTS,
   DEFAULT_PLAN_TEMPLATES, DEFAULT_TOUR_STEPS,
   QPOOL_MEWAR, FOUNDATION_QS, PLACEMENT_MCQS, DEFAULT_BATCHES, DEFAULT_TESTS, hasRealQuestions,
-  DEFAULT_PYQ_BANK, DEFAULT_CURRENT_AFFAIRS,
+  DEFAULT_CURRENT_AFFAIRS,
 } from "@/data";
 import type {
   AppState, User, Role, Route, QuizResult, ChartState, ChartStatus, DaySlot,
   Override, Attempt, MainsScore, StudentData, PointEvent, PointKind, CommitmentScope,
   SubjectCatalogEntry, Assessment, PlanTemplate, TourStep, Question, Batch, Announcement,
-  Test, TestAttempt, TestSchedule, PYQ, PyqTarget, CurrentAffairsTopic, StudentTopicRecord,
+  Test, TestAttempt, TestSchedule, PyqTarget, CurrentAffairsTopic, StudentTopicRecord,
   SmartSessionRecord,
 } from "@/types";
 import { SCOPE_DAYS } from "@/types";
@@ -164,10 +164,6 @@ interface AppContextValue extends AppState {
     maxScore: number;
     sectionScores: Record<string, { right: number; wrong: number; unattempted: number; marks: number }>;
   }) => void;
-
-  // PYQ bank (admin-managed)
-  upsertPYQ: (p: PYQ) => void;
-  removePYQ: (id: string) => void;
 
   // Current Affairs (admin-managed)
   setCurrentAffairs: (next: CurrentAffairsTopic[]) => void;
@@ -411,7 +407,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tests, setTests] = useLocalStorage<Test[]>("v5_tests", DEFAULT_TESTS);
   const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>("v5_testAttempts", []);
   const [testSchedules, setTestSchedules] = useLocalStorage<TestSchedule[]>("v5_testSchedules", []);
-  const [pyqBank, setPyqBank] = useLocalStorage<PYQ[]>("v5_pyqBank", DEFAULT_PYQ_BANK);
   const [currentAffairs, setCurrentAffairs] = useLocalStorage<CurrentAffairsTopic[]>("v5_currentAffairs", DEFAULT_CURRENT_AFFAIRS);
   const [activeSession, setActiveSession] = useLocalStorage<SessionItem[] | null>("v5_activeSession", null);
   const [activeSessionMeta, setActiveSessionMeta] = useLocalStorage<{ mode: SessionMode; startedAt: number } | null>("v5_activeSessionMeta", null);
@@ -1936,20 +1931,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return testSchedules.filter((s) => s.testId === testId);
   }, [testSchedules]);
 
-  const upsertPYQ = useCallback((p: PYQ) => {
-    setPyqBank((prev) => {
-      const id = p.id || `pyq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
-      const withId = { ...p, id };
-      const i = prev.findIndex((x) => x.id === id);
-      if (i < 0) return [...prev, withId];
-      const next = [...prev]; next[i] = withId; return next;
-    });
-  }, [setPyqBank]);
-
-  const removePYQ = useCallback((id: string) => {
-    setPyqBank((prev) => prev.filter((p) => p.id !== id));
-  }, [setPyqBank]);
-
   /* ---------- Adaptive PR 6: Current Affairs CRUD ----------------------- */
 
   const upsertCurrentAffairs = useCallback((item: CurrentAffairsTopic) => {
@@ -2016,8 +1997,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveTestId, setActiveAttemptId,
     startTestAttempt, saveTestAnswers, finishTestAttempt,
     upsertTestSchedule, removeTestSchedule, schedulesForTest, activeSchedulesForStudent,
-    pyqBank,
-    upsertPYQ, removePYQ,
     currentAffairs, setCurrentAffairs,
     upsertCurrentAffairs, removeCurrentAffairs,
     applyTopicScheduling,

@@ -17,7 +17,8 @@
  *
  * Deferred to later PRs (need additional UI / admin data):
  *   - subject_drill     — needs a subject picker UI
- *   - pyq_mode          — needs to read from pyqBank, different question shape
+ *   - pyq_mode          — needs to read past papers from Postgres (see
+ *                         lib/pyqStore), different question shape
  *   - full_mock_prelims — fixed 150-Q distribution + mock timer
  *   - mains_*           — descriptive question UI (PR 6)
  *

@@ -216,21 +216,6 @@ export interface CurrentAffairsTopic {
   questions?: Question[];
 }
 
-export interface PYQ {
-  /** Optional stable id for admin CRUD; auto-generated if missing. */
-  id?: string;
-  q: string;
-  a: string;
-  year: string;
-  explain: string;
-  /** Subject ids this PYQ belongs to (for filtering). */
-  subjectIds?: string[];
-  /** Optional topic ids for finer filtering. */
-  topicIds?: string[];
-  /** Optional marks for this question. */
-  marks?: number;
-}
-
 export interface MainsPrompt {
   prompt: string;
   rubric: string[];
@@ -674,8 +659,6 @@ export interface AppState {
   testAttempts: TestAttempt[];
   /** Scheduling rules pinning tests to batches with release/close dates. */
   testSchedules: TestSchedule[];
-  /** Admin-managed PYQ archive (year-tagged, searchable). */
-  pyqBank: PYQ[];
   /** Adaptive: admin-managed Current Affairs items. Auto-expire 18 months after dateOfEvent. */
   currentAffairs: CurrentAffairsTopic[];
   loginRoleIntent: Role | null;

@@ -1,6 +1,6 @@
 import { RPSC_SUBJECTS, resolveTopicId } from "./syllabus";
 import { QUESTION_BANKS, buildPlacementSet } from "./questionBanks";
-import type { Subject, SubjectCatalogEntry, Question, PYQ, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
+import type { Subject, SubjectCatalogEntry, Question, MainsPrompt, User, StudentData, DaySlot, PlanTemplate, TourStep, Batch, Test, CurrentAffairsTopic } from "@/types";
 
 /**
  * Default subject catalog. Seeded into v5_subjects on first load.
@@ -600,40 +600,6 @@ export const FOUNDATION_QS: Record<string, Question[]> = {
   ],
 };
 
-export const PYQS_MEWAR: PYQ[] = [
-  {
-    q: "With reference to the medieval history of Rajasthan, consider the following statements about Maharana Pratap: 1) He was crowned at Gogunda. 2) Bhama Shah's financial support enabled his army for several years. 3) The Battle of Dewair was fought in 1572. Which are correct?",
-    a: "1 and 2 only",
-    year: "RAS 2018",
-    explain:
-      "Pratap was crowned at Gogunda (1572); Bhama Shah financed the army; Dewair was in 1582, not 1572.",
-  },
-  {
-    q: "Vijay Stambh at Chittorgarh was built to commemorate the victory of Rana Kumbha over:",
-    a: "Mahmud Khalji of Malwa",
-    year: "RAS 2016",
-    explain: "Built 1448 to mark the 1440 victory.",
-  },
-  {
-    q: "Which Bhil chieftain assisted Maharana Pratap in his struggle against Akbar?",
-    a: "Rana Punja",
-    year: "RAS 2013",
-    explain: "Rana Punja of the Bhils was central to the guerrilla phase.",
-  },
-  {
-    q: "The treaty between Mewar and the British East India Company was signed in the year:",
-    a: "1818",
-    year: "RAS 2021",
-    explain: "Subsidiary alliance under Maharana Bhim Singh.",
-  },
-  {
-    q: "Architect of Kumbhalgarh fort was:",
-    a: "Mandan",
-    year: "RAS 2019",
-    explain: "Court architect of Rana Kumbha and author of Vastumandan.",
-  },
-];
-
 export const MAINS_PROMPT: MainsPrompt = {
   prompt:
     "Examine the strategic, economic and cultural foundations of Mewar's resistance to Mughal expansion under Maharana Pratap. (250 words)",
@@ -1133,53 +1099,6 @@ export const DEFAULT_TESTS: Test[] = [
     ],
     createdAt: Date.now() - 10 * 86400000,
   },
-];
-
-/* ==================== PYQ BANK DEFAULTS ==================== */
-
-/**
- * Default PYQ bank seeded into v5_pyqBank on first load. Admins can
- * extend / edit from the Admin → Questions → PYQ Bank sub-tab.
- *
- * Mewar entries from PYQS_MEWAR are imported and tagged; additional
- * year-spread entries added so the archive's year filter has range.
- */
-export const DEFAULT_PYQ_BANK: PYQ[] = [
-  ...PYQS_MEWAR.map((p, i) => ({
-    ...p,
-    id: `pyq_mewar_${i}`,
-    subjectIds: ["raj-hist"],
-    topicIds: ["mewar"],
-    marks: 2,
-  })),
-  { id: "pyq_polity_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["pol-ind"], topicIds: ["preamble"],
-    q: "The words 'Socialist' and 'Secular' were added to the Preamble by which Constitutional Amendment?",
-    a: "42nd Amendment, 1976",
-    explain: "Indira Gandhi's 42nd Amendment also added 'Integrity' to the preamble — known as the 'Mini-Constitution' amendment." },
-  { id: "pyq_polity_2017_01", year: "RAS 2017", marks: 2, subjectIds: ["pol-ind"], topicIds: ["fund-rights"],
-    q: "Which Article of the Indian Constitution abolishes untouchability?",
-    a: "Article 17",
-    explain: "Article 17 falls under Right to Equality (Articles 14-18) and makes untouchability a punishable offence." },
-  { id: "pyq_geo_2019_01", year: "RAS 2019", marks: 2, subjectIds: ["geo-raj"], topicIds: ["rivers"],
-    q: "Which river is known as the 'Lifeline of Mewar'?",
-    a: "Banas",
-    explain: "Banas originates in the Khamnor hills, flowing through Mewar — a major tributary of the Chambal." },
-  { id: "pyq_geo_2018_01", year: "RAS 2018", marks: 2, subjectIds: ["geo-raj"], topicIds: ["minerals"],
-    q: "Which district of Rajasthan is the largest producer of zinc?",
-    a: "Bhilwara",
-    explain: "Rampura-Agucha mines in Bhilwara are among the largest zinc reserves in the country." },
-  { id: "pyq_econ_2020_01", year: "RAS 2020", marks: 2, subjectIds: ["eco-ind"], topicIds: ["banking"],
-    q: "RBI was nationalised in which year?",
-    a: "1949",
-    explain: "RBI was established 1935, nationalised on 1 January 1949 under the Reserve Bank (Transfer to Public Ownership) Act, 1948." },
-  { id: "pyq_modern_2016_01", year: "RAS 2016", marks: 2, subjectIds: ["ind-hist"], topicIds: ["gandhi-era"],
-    q: "Which session of Indian National Congress is known as the 'Quit India' session?",
-    a: "Bombay session, August 1942",
-    explain: "AICC at Gowalia Tank, 8 August 1942 — Gandhi delivered the 'Do or Die' speech." },
-  { id: "pyq_art_2021_01", year: "RAS 2021", marks: 2, subjectIds: ["raj-hist"], topicIds: ["folk-dances"],
-    q: "Ghoomar is the traditional folk dance of which community?",
-    a: "Bhils",
-    explain: "Originally a Bhil tribal dance; adopted by Rajput women as a courtly performance and now a state symbol." },
 ];
 
 /**
