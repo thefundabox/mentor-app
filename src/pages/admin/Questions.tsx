@@ -17,7 +17,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { conceptLabel } from "@/data";
 import {
   loadPyqPage, loadPyqYears, updatePyq,
-  type AdminPyqRow, type PyqPage, type PyqYear,
+  type AdminPyqRow, type PyqPage, type PyqYear, type ExamFamily,
 } from "@/lib/pyqStore";
 import type { Question, SubjectCatalogEntry } from "@/types";
 
@@ -421,6 +421,7 @@ function QuestionCard({
 function PYQBankEditor() {
   const { subjects } = useAppState();
 
+  const [family, setFamily] = useState<ExamFamily>("ras");
   const [years, setYears] = useState<PyqYear[]>([]);
   const [year, setYear] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -435,7 +436,7 @@ function PYQBankEditor() {
 
   const PAGE = 50;
 
-  useEffect(() => { void loadPyqYears().then(setYears); }, []);
+  useEffect(() => { void loadPyqYears(family).then(setYears); }, [family]);
 
   // Debounced: a keystroke should not be a round trip against 806 rows.
   useEffect(() => {
@@ -445,11 +446,13 @@ function PYQBankEditor() {
 
   // Any filter change starts again at the first page; staying on page 7 of a
   // narrower result set shows an empty screen that looks like no matches.
+  useEffect(() => { setPage(0); setYear(""); }, [family]);
   useEffect(() => { setPage(0); }, [year, subjectId, search]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     const res = await loadPyqPage({
+      family,
       year: year || undefined,
       subjectId: subjectId || undefined,
       search: search || undefined,
@@ -457,7 +460,7 @@ function PYQBankEditor() {
     });
     setData(res);
     setLoading(false);
-  }, [year, subjectId, search, page]);
+  }, [family, year, subjectId, search, page]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -481,6 +484,18 @@ function PYQBankEditor() {
           To add past papers, use the <span className="font-semibold">Import</span> sub-tab —
           set <code className="text-[11px]">source_year</code> on each row.
         </p>
+      </div>
+
+      <div className="flex gap-1 border-b border-slate-200 -mt-1">
+        {([{ id: "ras" as const, label: "RAS" },
+           { id: "other" as const, label: "Other RPSC exams" }]).map((t) => (
+          <button key={t.id} onClick={() => setFamily(t.id)}
+            className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition ${
+              family === t.id ? "border-slate-800 text-slate-900"
+                              : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
@@ -594,6 +609,11 @@ function PyqRowCard({ row, subjects, open, onToggle, onChanged }: {
       <button onClick={onToggle} className="w-full text-left px-4 py-3 flex items-start gap-3">
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 shrink-0 pt-0.5 w-24">
           {row.sourceYear}{row.paperQno ? ` · Q${row.paperQno}` : ""}
+          {row.sourceExam && row.examFamily === "other" && (
+            <span className="block font-semibold normal-case text-[9px] text-slate-400 leading-tight mt-0.5">
+              {row.sourceExam}
+            </span>
+          )}
         </span>
         <span className="flex-1 text-sm text-slate-800 line-clamp-2">{row.q}</span>
         {!row.reviewed && (

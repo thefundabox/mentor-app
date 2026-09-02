@@ -14,6 +14,16 @@
 import { supabase } from "./supabase";
 import type { Question, PyqTarget } from "@/types";
 
+/**
+ * Which exam a past question came from.
+ *
+ * `ras` is the student's own paper. `other` is the rest of the RPSC family --
+ * Sr. Teacher, School Lecturer, Sub Inspector and so on -- whose questions
+ * overlap the syllabus without being RAS questions. They are kept apart so a
+ * frequency claim about "what RPSC asks" is always a claim about one exam.
+ */
+export type ExamFamily = "ras" | "other";
+
 interface PyqRow {
   id: string;
   topic_id: string;
@@ -28,6 +38,8 @@ interface PyqRow {
   source_year: string | null;
   paper_qno: number | null;
   rajasthan_angle: boolean;
+  exam_family?: ExamFamily;
+  source_exam?: string | null;
 }
 
 function toQuestion(r: PyqRow): Question {
@@ -45,6 +57,7 @@ function toQuestion(r: PyqRow): Question {
     sourceYear: r.source_year ?? undefined,
     paperQno: r.paper_qno ?? undefined,
     qHindi: r.q_hindi ?? undefined,
+    sourceExam: r.source_exam ?? undefined,
   };
 }
 
@@ -58,7 +71,9 @@ const subjectPattern = (subjectId: string) => `${subjectId}-m%`;
  * is a random uuid, so the 2024 paper opened with Q130. paper_qno comes from
  * migration 0016.
  */
-export async function loadPyqs(target: PyqTarget, limit = 600): Promise<Question[]> {
+export async function loadPyqs(
+  target: PyqTarget, limit = 600, family: ExamFamily = "ras",
+): Promise<Question[]> {
   if (!supabase) return [];
   // Through unlock_questions, not a direct select. Since 0026 a student can
   // only read rows already unlocked for them, so a plain select returns the
@@ -78,14 +93,15 @@ export async function loadPyqs(target: PyqTarget, limit = 600): Promise<Question
     p_pyq_only: true,
     p_min_tier: null,
     p_limit: limit,
+    p_exam_family: family,
   });
   if (error || !data) return [];
   return (data as PyqRow[]).map(toQuestion);
 }
 
-/** Every released past question, for the archive's browse and filter. */
-export async function loadAllPyqs(): Promise<Question[]> {
-  return loadPyqs({ label: "All past questions" }, 1000);
+/** Every released past question in one exam family, for the archive. */
+export async function loadAllPyqs(family: ExamFamily = "ras"): Promise<Question[]> {
+  return loadPyqs({ label: "All past questions" }, 1000, family);
 }
 
 export interface PyqYear {
@@ -100,13 +116,13 @@ export interface PyqYear {
  * because PostgREST has no grouping and a view for this would be one more
  * migration to keep in step. The projection is one short column.
  */
-export async function loadPyqYears(): Promise<PyqYear[]> {
+export async function loadPyqYears(family: ExamFamily = "ras"): Promise<PyqYear[]> {
   if (!supabase) return [];
   // Counted server-side. What EXISTS is not the content, and a locked bank must
   // still be able to say how big it is -- otherwise a free student is told the
   // 2024 paper has however many questions they happen to have unlocked, which
   // under-reports the product rather than protecting it.
-  const { data, error } = await supabase.rpc("pyq_counts_by_year");
+  const { data, error } = await supabase.rpc("pyq_counts_by_year", { p_family: family });
   if (error || !data) return [];
   return (data as { source_year: string; n: number }[])
     .map((r) => ({ year: r.source_year, count: r.n }))
@@ -119,10 +135,10 @@ export async function loadPyqYears(): Promise<PyqYear[]> {
  * One request for the whole syllabus, so a screen can say "12 past questions"
  * without a round trip per microtheme.
  */
-export async function loadPyqCoverage(): Promise<Record<string, number>> {
+export async function loadPyqCoverage(family: ExamFamily = "ras"): Promise<Record<string, number>> {
   if (!supabase) return {};
   // Counts again, server-side and unaffected by what this student has unlocked.
-  const { data, error } = await supabase.rpc("pyq_counts_by_topic");
+  const { data, error } = await supabase.rpc("pyq_counts_by_topic", { p_family: family });
   if (error || !data) return {};
   const out: Record<string, number> = {};
   for (const row of data as { topic_id: string; n: number }[]) out[row.topic_id] = row.n;
@@ -151,6 +167,8 @@ export interface AdminPyqRow {
   paperQno: number | null;
   difficultyTier: number;
   reviewed: boolean;
+  examFamily: ExamFamily;
+  sourceExam: string | null;
 }
 
 export interface PyqPage {
@@ -160,7 +178,8 @@ export interface PyqPage {
 }
 
 const ADMIN_COLS =
-  "id,topic_id,q,options,correct,why,source_year,paper_qno,difficulty_tier,reviewed";
+  "id,topic_id,q,options,correct,why,source_year,paper_qno,difficulty_tier,reviewed," +
+  "exam_family,source_exam";
 
 /**
  * A filtered page of past questions, counted server-side.
@@ -176,6 +195,7 @@ export async function loadPyqPage(opts: {
   year?: string;
   subjectId?: string;
   search?: string;
+  family?: ExamFamily;
   limit?: number;
   offset?: number;
 } = {}): Promise<PyqPage> {
@@ -188,6 +208,7 @@ export async function loadPyqPage(opts: {
     .select(ADMIN_COLS, { count: "exact" })
     .not("source_year", "is", null);
 
+  if (opts.family) query = query.eq("exam_family", opts.family);
   if (opts.year) query = query.eq("source_year", opts.year);
   if (opts.subjectId) query = query.like("topic_id", `${opts.subjectId}-m%`);
   // Stem only. Searching inside the options array needs a different operator
@@ -205,6 +226,7 @@ export async function loadPyqPage(opts: {
       id: string; topic_id: string; q: string; options: string[]; correct: number;
       why: string | null; source_year: string | null; paper_qno: number | null;
       difficulty_tier: number; reviewed: boolean;
+      exam_family: ExamFamily; source_exam: string | null;
     }[]).map((r) => ({
       id: r.id,
       topicId: r.topic_id,
@@ -216,6 +238,8 @@ export async function loadPyqPage(opts: {
       paperQno: r.paper_qno,
       difficultyTier: r.difficulty_tier,
       reviewed: r.reviewed,
+      examFamily: r.exam_family,
+      sourceExam: r.source_exam,
     })),
     total: count ?? 0,
   };

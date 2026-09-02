@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { ArrowLeft, Search, Trophy, ChevronDown, ChevronUp, Filter, PlayCircle } from "lucide-react";
 import type { Question } from "@/types";
-import { loadAllPyqs, loadPyqYears, type PyqYear } from "@/lib/pyqStore";
+import {
+  loadAllPyqs, loadPyqYears, type PyqYear, type ExamFamily,
+} from "@/lib/pyqStore";
 import { findTopic } from "@/data";
 import { GuideNote } from "@/components/GuideNote";
 
@@ -26,15 +28,24 @@ export function PYQArchive() {
   const [subjectFilter, setSubjectFilter] = useState<string>("");
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
 
+  // Which exam family is being browsed. RPSC sets many papers whose questions
+  // overlap this syllabus; they are worth practising but they are not RAS
+  // questions, and merging them would quietly inflate every "RPSC has asked
+  // this N times" claim the app makes.
+  const [family, setFamily] = useState<ExamFamily>("ras");
+
   const [papers, setPapers] = useState<PyqYear[] | null>(null);
   const [all, setAll] = useState<Question[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void loadPyqYears().then((ys) => { if (!cancelled) setPapers(ys); });
-    void loadAllPyqs().then((qs) => { if (!cancelled) setAll(qs); });
+    setPapers(null);
+    setAll(null);
+    setYearFilter("");
+    void loadPyqYears(family).then((ys) => { if (!cancelled) setPapers(ys); });
+    void loadAllPyqs(family).then((qs) => { if (!cancelled) setAll(qs); });
     return () => { cancelled = true; };
-  }, []);
+  }, [family]);
 
   const subjectLookup = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
 
@@ -107,6 +118,35 @@ export function PYQArchive() {
         so re-reading what caught you out yesterday costs nothing.
       </GuideNote>
 
+      {/* --------------------------------------------------------- exam tabs */}
+      <div className="flex gap-1 border-b border-slate-200 mb-6">
+        {([
+          { id: "ras" as const,   label: "RAS past questions" },
+          { id: "other" as const, label: "Other RPSC exams" },
+        ]).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setFamily(t.id)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              family === t.id
+                ? "border-slate-800 text-slate-900"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {family === "other" && (
+        <p className="mb-6 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+          These come from other RPSC papers &mdash; Sr. Teacher, School Lecturer,
+          Sub Inspector and the rest. They sit on the same syllabus and are worth
+          the practice, but they are not RAS questions and are not counted in any
+          RAS frequency figure.
+        </p>
+      )}
+
       {/* ------------------------------------------------- attemptable papers */}
       <div className="mb-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
@@ -117,8 +157,9 @@ export function PYQArchive() {
 
         {papers !== null && papers.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 text-sm text-slate-600">
-            No past papers have been released yet. An admin releases them from
-            Admin → Questions.
+            {family === "ras"
+              ? "No past papers have been released yet. An admin releases them from Admin → Questions."
+              : "Nothing here yet. Questions from other RPSC papers appear once an admin imports them with a verified answer key."}
           </div>
         )}
 

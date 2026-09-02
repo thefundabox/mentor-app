@@ -59,6 +59,8 @@ export interface Question {
   rajasthanAngle?: boolean;
   /** Adaptive: year of past paper this came from, if any (e.g., "2018"). */
   sourceYear?: string;
+  /** Which paper this came from, e.g. "RAS Prelims". Past questions only. */
+  sourceExam?: string;
   /** Question number on the printed paper. Past papers only. */
   paperQno?: number;
   /** Adaptive: marks for mains items (1/2/5). MCQs default to 1 in scoring code. */
