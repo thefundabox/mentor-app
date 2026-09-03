@@ -16,6 +16,8 @@
  *   type          optional — conceptual|analytical               (default analytical)
  *   question_type optional — mcq_factual|mcq_applied|mcq_reasoning
  *   source_year   optional — set ONLY for genuine past papers
+ *   exam_family   optional — ras|other  (default ras)
+ *   source_exam   optional — the paper's name, e.g. "Sr. Teacher (Sec. Edu.) 2024"
  *   hindi         optional — Hindi rendering of the question
  */
 import { parseCSV } from "./csv";
@@ -35,6 +37,8 @@ export interface ImportRow {
   type: "conceptual" | "analytical";
   question_type: string | null;
   source_year: string | null;
+  exam_family: "ras" | "other";
+  source_exam: string | null;
   rajasthan_angle: boolean;
 }
 
@@ -139,6 +143,11 @@ export function parseQuestionCSV(text: string): ParseResult {
       type: typeRaw === "conceptual" ? "conceptual" : "analytical",
       question_type: get("question_type") || null,
       source_year: get("source_year") || null,
+      // Anything not explicitly marked "other" is this institute's own exam.
+      // Defaulting the other way would quietly file a RAS question under a
+      // foreign paper, which is the one direction that corrupts frequency.
+      exam_family: get("exam_family").trim().toLowerCase() === "other" ? "other" : "ras",
+      source_exam: get("source_exam") || null,
       rajasthan_angle: meta.rajasthan,
     });
   }
@@ -164,6 +173,7 @@ export async function commitQuestions(rows: ImportRow[]): Promise<CommitResult> 
     difficulty_tier: r.difficulty_tier, q: r.q, q_hindi: r.q_hindi,
     options: r.options, correct: r.correct, why: r.why,
     source_year: r.source_year, is_model: !r.source_year,
+    exam_family: r.exam_family, source_exam: r.source_exam,
     rajasthan_angle: r.rajasthan_angle,
   }));
 
@@ -179,5 +189,5 @@ export async function commitQuestions(rows: ImportRow[]): Promise<CommitResult> 
 
 /** A ready-to-fill template, so an admin never has to guess the columns. */
 export const QUESTION_CSV_TEMPLATE =
-  "topic_id,question,option_a,option_b,option_c,option_d,correct,explanation,difficulty,type,question_type\n" +
-  "geo-raj-m102,Which sanctuary is located in Pratapgarh district?,Sitamata,Bassi,Jamwa Ramgarh,Todgarh-Raoli,A,Sitamata WLS lies across Pratapgarh and Chittorgarh.,2,analytical,mcq_factual\n";
+  "topic_id,question,option_a,option_b,option_c,option_d,correct,explanation,difficulty,type,question_type,source_year,exam_family,source_exam\n" +
+  "geo-raj-m102,Which sanctuary is located in Pratapgarh district?,Sitamata,Bassi,Jamwa Ramgarh,Todgarh-Raoli,A,Sitamata WLS lies across Pratapgarh and Chittorgarh.,2,analytical,mcq_factual,,ras,\n";
